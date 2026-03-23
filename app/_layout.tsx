@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '../lib/firebase';
@@ -63,5 +63,14 @@ export default function RootLayout() {
 
   if (!appReady) return null;
 
-  return <Slot />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: 'fade',
+        presentation: 'card',
+        animationDuration: 220,
+      }}
+    />
+  );
 }

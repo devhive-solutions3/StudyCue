@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { useRouter, Link } from 'expo-router';
+import GlowBackground from '../../components/GlowBackground';
+import GlassButton from '../../components/GlassButton';
+import GlassCard from '../../components/GlassCard';
+import StaggeredFadeIn from '../../components/StaggeredFadeIn';
+import { colors } from '../../lib/theme';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -44,114 +49,112 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Create Account</Text>
-      
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+    <GlowBackground>
+      <View style={styles.container}>
+        <StaggeredFadeIn index={0}>
+          <GlassCard style={styles.panel} tintColor="rgba(79,120,255,0.12)">
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Let AI help you stay consistent and actually get things done.</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Full Name"
-        placeholderTextColor="#94a3b8"
-        value={name}
-        onChangeText={setName}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor="#94a3b8"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#94a3b8"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Confirm Password"
-        placeholderTextColor="#94a3b8"
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        secureTextEntry
-      />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign Up</Text>}
-      </TouchableOpacity>
+            <TextInput
+              style={styles.input}
+              placeholder="Full Name"
+              placeholderTextColor={colors.inkMuted}
+              value={name}
+              onChangeText={setName}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={colors.inkMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={colors.inkMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm Password"
+              placeholderTextColor={colors.inkMuted}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
 
-      <View style={styles.links}>
-        <Link href="/(auth)/login" asChild>
-          <TouchableOpacity>
-            <Text style={styles.linkText}>Already have an account? Log In</Text>
-          </TouchableOpacity>
-        </Link>
+            <GlassButton label="Sign Up" onPress={handleRegister} loading={loading} style={styles.button} />
+
+            <View style={styles.links}>
+              <Link href="/(auth)/login" style={styles.linkText}>
+                Already have an account? Log In
+              </Link>
+            </View>
+          </GlassCard>
+        </StaggeredFadeIn>
       </View>
-    </View>
+    </GlowBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     padding: 24,
     justifyContent: 'center',
+  },
+  panel: {
+    padding: 8,
   },
   title: {
     fontSize: 32,
     fontFamily: 'Inter_700Bold',
-    color: '#1E293B',
+    color: colors.ink,
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#64748B',
-    fontFamily: 'Inter_500Medium',
+    color: colors.inkMuted,
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
+    lineHeight: 24,
   },
   input: {
-    backgroundColor: '#F8FAFC',
-    color: '#1E293B',
+    backgroundColor: 'rgba(255,255,255,0.46)',
+    color: colors.ink,
     fontFamily: 'Inter_400Regular',
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.75)',
     borderWidth: 1,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 18,
     marginBottom: 16,
     fontSize: 16,
   },
   button: {
-    backgroundColor: '#22C55E',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
     marginTop: 8,
   },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
   error: {
-    color: '#ef4444',
+    color: colors.danger,
     marginBottom: 16,
     textAlign: 'center',
+    fontFamily: 'Inter_500Medium',
   },
   links: {
     alignItems: 'center',
     marginTop: 24,
   },
   linkText: {
-    color: '#22C55E',
+    color: colors.indigo,
     fontSize: 16,
     fontFamily: 'Inter_500Medium',
   },
