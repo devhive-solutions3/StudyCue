@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { useRouter, Link } from 'expo-router';
+import GlowBackground from '../../components/GlowBackground';
+import GlassButton from '../../components/GlassButton';
+import GlassCard from '../../components/GlassCard';
+import StaggeredFadeIn from '../../components/StaggeredFadeIn';
+import { colors } from '../../lib/theme';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -47,59 +52,61 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>
-        <Text style={styles.studyText}>Study</Text>
-        <Text style={styles.cueText}>Cue</Text>
-      </Text>
-      <Text style={styles.subtitle}>Welcome back</Text>
+    <GlowBackground>
+      <View style={styles.container}>
+        <StaggeredFadeIn index={0}>
+          <GlassCard style={styles.panel} tintColor="rgba(124,98,255,0.12)">
+            <Text style={styles.title}>
+              <Text style={styles.studyText}>Study</Text>
+              <Text style={styles.cueText}>Cue</Text>
+            </Text>
+            <Text style={styles.subtitle}>Study smarter, not harder — with AI on your side.</Text>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor="#94a3b8"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#94a3b8"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={colors.inkMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={colors.inkMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign In</Text>}
-      </TouchableOpacity>
+            <GlassButton label="Sign In" onPress={handleLogin} loading={loading} style={styles.button} />
 
-      <View style={styles.links}>
-        <Link href="/(auth)/register" asChild>
-          <TouchableOpacity>
-            <Text style={styles.linkText}>Create Account</Text>
-          </TouchableOpacity>
-        </Link>
-        <Link href="/(auth)/forgot-password" asChild>
-          <TouchableOpacity>
-            <Text style={styles.linkText}>Forgot Password?</Text>
-          </TouchableOpacity>
-        </Link>
+            <View style={styles.links}>
+              <Link href="/(auth)/register" style={styles.linkText}>
+                Create Account
+              </Link>
+              <Link href="/(auth)/forgot-password" style={styles.linkText}>
+                Forgot Password?
+              </Link>
+            </View>
+          </GlassCard>
+        </StaggeredFadeIn>
       </View>
-    </View>
+    </GlowBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     padding: 24,
     justifyContent: 'center',
+  },
+  panel: {
+    padding: 8,
   },
   title: {
     fontSize: 42,
@@ -114,39 +121,32 @@ const styles = StyleSheet.create({
     color: '#22C55E',
   },
   subtitle: {
-    fontSize: 18,
-    color: '#64748B',
-    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.inkMuted,
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
-    marginBottom: 48,
+    marginBottom: 28,
   },
   input: {
-    backgroundColor: '#F8FAFC',
-    color: '#1E293B',
+    backgroundColor: 'rgba(255,255,255,0.46)',
+    color: colors.ink,
     fontFamily: 'Inter_400Regular',
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.75)',
     borderWidth: 1,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 18,
     marginBottom: 16,
     fontSize: 16,
   },
   button: {
-    backgroundColor: '#22C55E',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
     marginTop: 8,
   },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
   error: {
-    color: '#ef4444',
+    color: colors.danger,
     marginBottom: 16,
     textAlign: 'center',
+    fontFamily: 'Inter_500Medium',
   },
   links: {
     flexDirection: 'row',
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   linkText: {
-    color: '#22C55E',
+    color: colors.indigo,
     fontSize: 14,
     fontFamily: 'Inter_500Medium',
   },

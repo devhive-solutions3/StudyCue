@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { Link } from 'expo-router';
+import GlowBackground from '../../components/GlowBackground';
+import GlassButton from '../../components/GlassButton';
+import GlassCard from '../../components/GlassCard';
+import StaggeredFadeIn from '../../components/StaggeredFadeIn';
+import { colors } from '../../lib/theme';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
@@ -31,97 +36,96 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Reset Password</Text>
-      
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {message ? <Text style={styles.success}>{message}</Text> : null}
+    <GlowBackground>
+      <View style={styles.container}>
+        <StaggeredFadeIn index={0}>
+          <GlassCard style={styles.panel} tintColor="rgba(52,211,153,0.12)">
+            <Text style={styles.title}>Reset Password</Text>
+            <Text style={styles.subtitle}>Secure recovery in the same softer premium system.</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor="#94a3b8"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {message ? <Text style={styles.success}>{message}</Text> : null}
 
-      <TouchableOpacity style={styles.button} onPress={handleReset} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Send Reset Link</Text>}
-      </TouchableOpacity>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={colors.inkMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
 
-      <View style={styles.links}>
-        <Link href="/(auth)/login" asChild>
-          <TouchableOpacity>
-            <Text style={styles.linkText}>Back to Login</Text>
-          </TouchableOpacity>
-        </Link>
+            <GlassButton label="Send Reset Link" onPress={handleReset} loading={loading} style={styles.button} />
+
+            <View style={styles.links}>
+              <Link href="/(auth)/login" style={styles.linkText}>
+                Back to Login
+              </Link>
+            </View>
+          </GlassCard>
+        </StaggeredFadeIn>
       </View>
-    </View>
+    </GlowBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     padding: 24,
     justifyContent: 'center',
+  },
+  panel: {
+    padding: 8,
   },
   title: {
     fontSize: 32,
     fontFamily: 'Inter_700Bold',
-    color: '#1E293B',
+    color: colors.ink,
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#64748B',
-    fontFamily: 'Inter_500Medium',
+    color: colors.inkMuted,
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
+    lineHeight: 24,
   },
   input: {
-    backgroundColor: '#F8FAFC',
-    color: '#1E293B',
+    backgroundColor: 'rgba(255,255,255,0.46)',
+    color: colors.ink,
     fontFamily: 'Inter_400Regular',
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.75)',
     borderWidth: 1,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 18,
     marginBottom: 16,
     fontSize: 16,
   },
   button: {
-    backgroundColor: '#22C55E',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
     marginTop: 8,
   },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
   error: {
-    color: '#ef4444',
+    color: colors.danger,
     marginBottom: 16,
     textAlign: 'center',
+    fontFamily: 'Inter_500Medium',
   },
   success: {
-    color: '#22c55e',
+    color: colors.green,
     marginBottom: 16,
     textAlign: 'center',
+    fontFamily: 'Inter_500Medium',
   },
   links: {
     alignItems: 'center',
     marginTop: 24,
   },
   linkText: {
-    color: '#22C55E',
+    color: colors.indigo,
     fontSize: 16,
     fontFamily: 'Inter_500Medium',
   },

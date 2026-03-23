@@ -1,10 +1,26 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import StaggeredFadeIn from '../../components/StaggeredFadeIn';
+import GlowBackground from '../../components/GlowBackground';
+import GlassButton from '../../components/GlassButton';
+import GlassCard from '../../components/GlassCard';
+import GlassHeader from '../../components/GlassHeader';
+import { colors, radii } from '../../lib/theme';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const overviewCards = [
+    { icon: 'book', iconColor: colors.green, value: '2', label: 'Classes Today' },
+    { icon: 'sparkles', iconColor: colors.purple, value: '92%', label: 'Focus Score' },
+    { icon: 'timer', iconColor: colors.indigo, value: '45m', label: 'Next Focus Block' },
+  ] as const;
+  const activityItems = [
+    'You completed 45 mins of Physics review.',
+    'Your Calculus quiz is 2 days away.',
+    'Cue suggests a 30-minute Biology recap tonight.',
+  ];
 
   const handleCuePress = () => {
     // Navigate to Chat tab or show quick suggestion
@@ -12,135 +28,233 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Good evening, Maria 👋</Text>
-        <Text style={styles.date}>Wednesday, October 25</Text>
-      </View>
+    <GlowBackground>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <StaggeredFadeIn index={0}>
+          <GlassHeader
+            eyebrow="StudyCue"
+            title="Good evening, Maria"
+            subtitle="Wednesday, October 25 • Your calm AI planner for tonight's study sprint."
+            rightSlot={
+              <View style={styles.headerBadge}>
+                <Ionicons name="sparkles" size={18} color={colors.white} />
+              </View>
+            }
+          />
+        </StaggeredFadeIn>
 
-      <TouchableOpacity style={styles.cueButton} onPress={handleCuePress}>
-        <View style={styles.cueContent}>
-          <Ionicons name="sparkles" size={24} color="#0f172a" />
-          <Text style={styles.cueText}>What should I do now?</Text>
-        </View>
-        <Text style={styles.cueSubtext}>Tap to get a smart study suggestion</Text>
-      </TouchableOpacity>
+        <StaggeredFadeIn index={1}>
+          <GlassCard style={styles.heroCard} tintColor="rgba(124,98,255,0.14)">
+            <View style={styles.heroGlow} />
+            <Text style={styles.heroEyebrow}>AI Suggestion</Text>
+            <Text style={styles.heroTitle}>Start with a 45-minute Physics recall block.</Text>
+            <Text style={styles.heroBody}>
+              You have the highest urgency there, and your energy trend says you’re still in a strong focus window.
+            </Text>
+            <GlassButton label="What should I do now?" onPress={handleCuePress} style={styles.heroButton} />
+          </GlassCard>
+        </StaggeredFadeIn>
 
-      <Text style={styles.sectionTitle}>Overview</Text>
-      
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardsRow}>
-        <View style={styles.card}>
-          <Ionicons name="book" size={24} color="#4ade80" />
-          <Text style={styles.cardValue}>2</Text>
-          <Text style={styles.cardLabel}>Classes Today</Text>
-        </View>
-        
-        <View style={styles.card}>
-          <Ionicons name="warning" size={24} color="#f59e0b" />
-          <Text style={styles.cardValue}>Physics</Text>
-          <Text style={styles.cardLabel}>Next Exam (Fri)</Text>
-        </View>
+        <StaggeredFadeIn index={2}>
+          <Text style={styles.sectionTitle}>Dashboard</Text>
+        </StaggeredFadeIn>
 
-        <View style={styles.card}>
-          <Ionicons name="list" size={24} color="#10b981" />
-          <Text style={styles.cardValue}>4</Text>
-          <Text style={styles.cardLabel}>Pending Tasks</Text>
-        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardsRow}>
+          {overviewCards.map((card, index) => (
+            <StaggeredFadeIn key={card.label} index={index + 3}>
+              <GlassCard style={styles.card} tintColor="rgba(255,255,255,0.08)">
+                <View style={[styles.cardIcon, { backgroundColor: `${card.iconColor}22` }]}>
+                  <Ionicons name={card.icon} size={18} color={card.iconColor} />
+                </View>
+                <Text style={styles.cardValue}>{card.value}</Text>
+                <Text style={styles.cardLabel}>{card.label}</Text>
+              </GlassCard>
+            </StaggeredFadeIn>
+          ))}
+        </ScrollView>
+
+        <StaggeredFadeIn index={6}>
+          <GlassCard style={styles.timerCard} tintColor="rgba(52,211,153,0.12)">
+            <View style={styles.timerTopRow}>
+              <View>
+                <Text style={styles.timerLabel}>Deep Work Timer</Text>
+                <Text style={styles.timerValue}>24:18</Text>
+              </View>
+              <View style={styles.timerChip}>
+                <Text style={styles.timerChipText}>Focus</Text>
+              </View>
+            </View>
+            <Text style={styles.timerHint}>Stay on chapter 6 derivations for one uninterrupted session.</Text>
+          </GlassCard>
+        </StaggeredFadeIn>
+
+        <StaggeredFadeIn index={7}>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
+        </StaggeredFadeIn>
+
+        {activityItems.map((activity, index) => (
+          <StaggeredFadeIn key={activity} index={index + 8}>
+            <GlassCard style={styles.activityBox} tintColor="rgba(79,120,255,0.08)">
+              <View style={styles.activityDot} />
+              <Text style={styles.activityText}>{activity}</Text>
+            </GlassCard>
+          </StaggeredFadeIn>
+        ))}
+
+        <View style={styles.bottomPad} />
       </ScrollView>
-
-      <Text style={styles.sectionTitle}>Recent Activity</Text>
-      <View style={styles.activityBox}>
-        <Text style={styles.activityText}>You completed 45 mins of Physics review.</Text>
-      </View>
-    </ScrollView>
+    </GlowBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
-    paddingTop: 48,
+  },
+  content: {
+    paddingTop: 58,
     paddingHorizontal: 20,
   },
-  header: {
+  headerBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCard: {
     marginBottom: 24,
+    minHeight: 220,
   },
-  greeting: {
+  heroGlow: {
+    position: 'absolute',
+    top: -30,
+    right: -30,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(124,98,255,0.2)',
+  },
+  heroEyebrow: {
+    color: colors.indigo,
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  heroTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#f8fafc',
+    lineHeight: 34,
+    fontFamily: 'Inter_700Bold',
+    color: colors.ink,
+    marginBottom: 10,
   },
-  date: {
-    fontSize: 16,
-    color: '#94a3b8',
-    marginTop: 4,
+  heroBody: {
+    fontSize: 15,
+    lineHeight: 23,
+    fontFamily: 'Inter_400Regular',
+    color: colors.inkMuted,
+    marginBottom: 20,
   },
-  cueButton: {
-    backgroundColor: '#4ade80',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 32,
-    elevation: 4,
-    shadowColor: '#4ade80',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  cueContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cueText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginLeft: 12,
-  },
-  cueSubtext: {
-    fontSize: 14,
-    color: '#0f172a',
-    opacity: 0.8,
+  heroButton: {
+    marginTop: 'auto',
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#f8fafc',
+    fontFamily: 'Inter_700Bold',
+    color: colors.ink,
     marginBottom: 16,
   },
   cardsRow: {
     flexDirection: 'row',
-    marginBottom: 32,
+    marginBottom: 20,
   },
   card: {
-    backgroundColor: '#1e293b',
-    padding: 16,
-    borderRadius: 12,
-    width: 140,
+    width: 158,
     marginRight: 16,
+    minHeight: 156,
+  },
+  cardIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 18,
   },
   cardValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#f8fafc',
-    marginTop: 12,
-    marginBottom: 4,
+    fontSize: 24,
+    fontFamily: 'Inter_700Bold',
+    color: colors.ink,
+    marginBottom: 6,
   },
   cardLabel: {
     fontSize: 14,
-    color: '#94a3b8',
+    lineHeight: 20,
+    fontFamily: 'Inter_500Medium',
+    color: colors.inkMuted,
+  },
+  timerCard: {
+    marginBottom: 24,
+  },
+  timerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  timerLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    color: colors.green,
+    marginBottom: 6,
+  },
+  timerValue: {
+    fontSize: 36,
+    fontFamily: 'Inter_700Bold',
+    color: colors.ink,
+  },
+  timerChip: {
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderRadius: radii.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  timerChipText: {
+    color: colors.ink,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+  timerHint: {
+    color: colors.inkMuted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    lineHeight: 22,
   },
   activityBox: {
-    backgroundColor: '#1e293b',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 32,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  activityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.purple,
   },
   activityText: {
-    color: '#cbd5e1',
-    fontSize: 16,
+    color: colors.ink,
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: 'Inter_500Medium',
+    flex: 1,
+  },
+  bottomPad: {
+    height: 120,
   },
 });

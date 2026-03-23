@@ -1,19 +1,32 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
+import { colors, radii, shadows } from '../../lib/theme';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#22C55E',
-        tabBarInactiveTintColor: '#64748B',
+        tabBarActiveTintColor: colors.ink,
+        tabBarInactiveTintColor: 'rgba(16,33,59,0.45)',
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#E2E8F0',
-          paddingBottom: 5,
-          paddingTop: 5,
+          position: 'absolute',
+          left: 18,
+          right: 18,
+          bottom: 20,
+          height: 78,
+          borderTopWidth: 0,
+          paddingBottom: 10,
+          paddingTop: 10,
+          borderRadius: radii.xxl,
+          backgroundColor: 'rgba(255,255,255,0.66)',
+          ...shadows.soft,
+        },
+        tabBarBackground: () => <View style={styles.tabBarGlass} />,
+        tabBarLabelStyle: {
+          fontFamily: 'Inter_500Medium',
+          fontSize: 11,
         },
       }}>
       <Tabs.Screen
@@ -36,21 +49,23 @@ export default function TabLayout() {
           title: 'Cue',
           tabBarIcon: ({ color }) => (
             <View style={{
-              top: -20,
+              top: -18,
               justifyContent: 'center',
               alignItems: 'center',
               width: 60,
               height: 60,
               borderRadius: 30,
-              backgroundColor: '#22C55E',
-              shadowColor: 'rgba(0,0,0,0.1)',
+              backgroundColor: colors.purple,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.38)',
+              shadowColor: colors.purple,
               shadowOffset: {
                 width: 0,
-                height: 4,
+                height: 12,
               },
-              shadowOpacity: 1,
-              shadowRadius: 10,
-              elevation: 5,
+              shadowOpacity: 0.28,
+              shadowRadius: 22,
+              elevation: 8,
             }}>
               <Ionicons name="sparkles" size={28} color="#FFFFFF" />
             </View>
@@ -75,3 +90,13 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = {
+  tabBarGlass: {
+    flex: 1,
+    borderRadius: radii.xxl,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.58)',
+  },
+};
