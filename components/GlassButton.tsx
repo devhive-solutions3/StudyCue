@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle, type TextStyle } from 'react-native';
 import { colors, radii, shadows } from '../lib/theme';
 
 type GlassButtonProps = {
@@ -7,6 +7,7 @@ type GlassButtonProps = {
   onPress: () => void;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
   variant?: 'primary' | 'secondary';
 };
 
@@ -15,6 +16,7 @@ export default function GlassButton({
   onPress,
   loading = false,
   style,
+  textStyle,
   variant = 'primary',
 }: GlassButtonProps) {
   return (
@@ -27,7 +29,7 @@ export default function GlassButton({
       {loading ? (
         <ActivityIndicator color={variant === 'secondary' ? colors.ink : colors.white} />
       ) : (
-        <Text style={[styles.label, variant === 'secondary' ? styles.secondaryLabel : styles.primaryLabel]}>{label}</Text>
+        <Text style={[styles.label, variant === 'secondary' ? styles.secondaryLabel : styles.primaryLabel, textStyle]}>{label}</Text>
       )}
     </TouchableOpacity>
   );

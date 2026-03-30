@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { sendPasswordResetEmail } from 'firebase/auth';
+import { sendPasswordResetEmail } from '@firebase/auth';
 import { auth } from '../../lib/firebase';
 import { Link } from 'expo-router';
 import GlowBackground from '../../components/GlowBackground';

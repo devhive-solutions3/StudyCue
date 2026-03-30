@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User } from '@firebase/auth';
 import { auth } from '../lib/firebase';
 import { initDatabase } from '../lib/db';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
