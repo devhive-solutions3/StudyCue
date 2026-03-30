@@ -14,7 +14,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.StudyCue"
+      "bundleIdentifier": "com.anonymous.StudyCue",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "StudyCue uses your photo library so you can attach images to Cue for study planning context.",
+        "NSPhotoLibraryAddUsageDescription": "StudyCue may save selected study images when needed for your planning workflow."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -31,6 +35,12 @@
       "expo-router",
       "expo-sqlite",
       "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "StudyCue uses your photo library so you can attach images to Cue for study planning context."
+        }
+      ],
       [
         "expo-splash-screen",
         {

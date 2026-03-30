@@ -1,5 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { initializeAuth, inMemoryPersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuth, initializeAuth } from '@firebase/auth';
+import { getReactNativePersistence } from '@firebase/auth/dist/rn/index.js';
 
 const {
   EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -9,6 +11,10 @@ const {
   EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   EXPO_PUBLIC_FIREBASE_APP_ID,
 } = process.env;
+
+// Firebase client config is public by design for web/mobile apps.
+// The sensitive boundary is enforced by Firebase Auth and Security Rules,
+// unlike provider API secrets such as Gemini keys which must stay server-side.
 
 if (
   !EXPO_PUBLIC_FIREBASE_API_KEY ||
@@ -34,8 +40,14 @@ const firebaseConfig = {
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 
-const auth = initializeAuth(app, {
-  persistence: inMemoryPersistence
-});
+const auth = (() => {
+  try {
+    return initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
+  } catch {
+    return getAuth(app);
+  }
+})();
 
 export { auth };

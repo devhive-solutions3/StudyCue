@@ -5,7 +5,7 @@
 StudyCue helps students decide **what to do next**, plan around their class schedule, track real study time, and get AI-powered study suggestions — even without internet.
 
 **AI Assistant:** Cue
-**Stack:** React Native + Expo · Firebase Auth · SQLite · Gemini API · Phi-3 Mini (offline)
+**Stack:** React Native + Expo · Firebase Auth · SQLite · Gemini via backend proxy · Phi-3 Mini (offline)
 
 ---
 
@@ -213,17 +213,19 @@ Scan the QR code with Expo Go, or press `i` for iOS simulator / `a` for Android.
 Create a `.env` file in the root (do **not** commit this):
 
 ```env
-# Firebase config
+# Public Firebase client config
 EXPO_PUBLIC_FIREBASE_API_KEY=your_api_key
 EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
 EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
 
-# Backend proxy URL (your Gemini proxy server)
-EXPO_PUBLIC_AI_PROXY_URL=https://your-backend-proxy.com
+# Public URL of your AI proxy
+EXPO_PUBLIC_AI_PROXY_URL=https://your-backend-proxy.com/api/cue
 ```
 
-> **Do not put the raw Gemini API key in the mobile app.** The Gemini key lives only on the backend proxy server.
+> Firebase config is public in the client by design. The Gemini API key is not. Keep `GEMINI_API_KEY` on the backend only.
 
 ---
 

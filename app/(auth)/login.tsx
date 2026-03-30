@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { signInWithEmailAndPassword } from '@firebase/auth';
 import { auth } from '../../lib/firebase';
-import { useRouter, Link } from 'expo-router';
+import { Link } from 'expo-router';
 import GlowBackground from '../../components/GlowBackground';
 import GlassButton from '../../components/GlassButton';
 import GlassCard from '../../components/GlassCard';
@@ -12,27 +14,32 @@ import { colors } from '../../lib/theme';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const router = useRouter();
 
-  // #region agent log
   useEffect(() => {
-    fetch('http://127.0.0.1:7870/ingest/023ceaa3-2d5e-4c09-b124-cb1b35bfbe5e', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b1399d' },
-      body: JSON.stringify({
-        sessionId: 'b1399d',
-        location: 'app/(auth)/login.tsx:mounted',
-        message: 'LoginScreen mounted',
-        hypothesisId: 'H2',
-        data: {},
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const loadRememberedEmail = async () => {
+      try {
+        const [savedEmail, savedRemember] = await Promise.all([
+          AsyncStorage.getItem('studycue.rememberedEmail'),
+          AsyncStorage.getItem('studycue.rememberMe'),
+        ]);
+
+        const nextRememberMe = savedRemember !== 'false';
+        setRememberMe(nextRememberMe);
+
+        if (savedEmail && nextRememberMe) {
+          setEmail(savedEmail);
+        }
+      } catch (storageError) {
+        console.error('Failed to load remember me preferences', storageError);
+      }
+    };
+
+    void loadRememberedEmail();
   }, []);
-  // #endregion
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -43,6 +50,12 @@ export default function LoginScreen() {
     setError('');
     
     try {
+      await AsyncStorage.setItem('studycue.rememberMe', String(rememberMe));
+      if (rememberMe) {
+        await AsyncStorage.setItem('studycue.rememberedEmail', email.trim());
+      } else {
+        await AsyncStorage.removeItem('studycue.rememberedEmail');
+      }
       await signInWithEmailAndPassword(auth, email, password);
       // Auth state listener in _layout.tsx will redirect us
     } catch (e: any) {
@@ -73,14 +86,38 @@ export default function LoginScreen() {
               autoCapitalize="none"
               keyboardType="email-address"
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={colors.inkMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordWrap}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Password"
+                placeholderTextColor={colors.inkMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                accessibilityRole="button"
+                activeOpacity={0.8}
+                onPress={() => setShowPassword((current) => !current)}
+                style={styles.eyeButton}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={colors.inkMuted}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              accessibilityRole="checkbox"
+              activeOpacity={0.85}
+              onPress={() => setRememberMe((current) => !current)}
+              style={styles.rememberRow}>
+              <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+                {rememberMe ? <Ionicons name="checkmark" size={14} color={colors.white} /> : null}
+              </View>
+              <Text style={styles.rememberText}>Remember me</Text>
+            </TouchableOpacity>
 
             <GlassButton label="Sign In" onPress={handleLogin} loading={loading} style={styles.button} />
 
@@ -138,6 +175,56 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     marginBottom: 16,
     fontSize: 16,
+  },
+  passwordWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.46)',
+    borderColor: 'rgba(255,255,255,0.75)',
+    borderWidth: 1,
+    borderRadius: 18,
+    marginBottom: 14,
+    paddingLeft: 16,
+    paddingRight: 10,
+  },
+  passwordInput: {
+    flex: 1,
+    color: colors.ink,
+    fontFamily: 'Inter_400Regular',
+    paddingVertical: 16,
+    fontSize: 16,
+  },
+  eyeButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(16,33,59,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  checkboxActive: {
+    backgroundColor: colors.indigo,
+    borderColor: colors.indigo,
+  },
+  rememberText: {
+    color: colors.inkMuted,
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
   },
   button: {
     marginTop: 8,
