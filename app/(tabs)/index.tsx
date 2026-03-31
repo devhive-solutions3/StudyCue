@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { auth } from '../../lib/firebase';
@@ -8,6 +8,7 @@ import GlowBackground from '../../components/GlowBackground';
 import GlassButton from '../../components/GlassButton';
 import GlassCard from '../../components/GlassCard';
 import GlassHeader from '../../components/GlassHeader';
+import FocusSessionModal from '../../components/FocusSessionModal';
 import { colors, radii } from '../../lib/theme';
 import {
   AppSnapshot,
@@ -19,6 +20,7 @@ import {
   getCompletedTasks,
   getTodayClasses,
   loadUserAppSnapshot,
+  recordStudySession,
   toggleTaskStatus,
   type TaskItem,
 } from '../../lib/user-app-data';
@@ -35,8 +37,20 @@ const EMPTY_SNAPSHOT: AppSnapshot = {
 export default function HomeScreen() {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState<AppSnapshot>(EMPTY_SNAPSHOT);
-  const [sessionDuration, setSessionDuration] = useState<number>(25);
   const [tasksExpanded, setTasksExpanded] = useState<boolean>(false);
+  const [focusModalVisible, setFocusModalVisible] = useState(false);
+  const [focusTask, setFocusTask] = useState<TaskItem | null>(null);
+  const [sessionDuration, setSessionDuration] = useState<number>(25);
+  const [customDuration, setCustomDuration] = useState<string>('');
+
+  // ─── TIMER STATE ───
+  const [timerActive, setTimerActive] = useState(false);
+  const [timerPaused, setTimerPaused] = useState(false);
+  const [timerEndsAt, setTimerEndsAt] = useState<number | null>(null);
+  const [timerRemainingSecs, setTimerRemainingSecs] = useState<number>(0);
+  const [timerTotalSecs, setTimerTotalSecs] = useState<number>(0);
+  const [timerTaskId, setTimerTaskId] = useState<number | null>(null);
+  const [timerStartedAtIso, setTimerStartedAtIso] = useState<string>('');
 
   const durationOptions = [
     { label: '25 min', value: 25 },
@@ -74,6 +88,81 @@ export default function HomeScreen() {
     };
   }, []);
 
+  // ─── TIMER LOGIC ───
+  useEffect(() => {
+    if (!timerActive || timerPaused || !timerEndsAt) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const left = Math.ceil((timerEndsAt - now) / 1000);
+
+      if (left <= 0) {
+        setTimerRemainingSecs(0);
+        handleEndSession(true); // Completed naturally
+      } else {
+        setTimerRemainingSecs(left);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timerActive, timerPaused, timerEndsAt]);
+
+  const handleStartSession = useCallback((durationMinutes: number, task: TaskItem | null = null) => {
+    setFocusModalVisible(false);
+    
+    const durationSecs = durationMinutes * 60;
+    setTimerTotalSecs(durationSecs);
+    setTimerRemainingSecs(durationSecs);
+    setTimerEndsAt(Date.now() + durationSecs * 1000);
+    setTimerTaskId(task?.id || null);
+    setTimerStartedAtIso(new Date().toISOString());
+    setTimerPaused(false);
+    setTimerActive(true);
+  }, []);
+
+  const handlePauseResume = useCallback(() => {
+    if (timerPaused) {
+      // Resuming: Push the end time forward by the remaining time
+      setTimerEndsAt(Date.now() + timerRemainingSecs * 1000);
+      setTimerPaused(false);
+    } else {
+      // Pausing
+      setTimerPaused(true);
+      setTimerEndsAt(null);
+    }
+  }, [timerPaused, timerRemainingSecs]);
+
+  const handleEndSession = useCallback(async (completedNaturally: boolean) => {
+    setTimerActive(false);
+    setTimerPaused(false);
+    
+    // Calculate actual elapsed focus minutes
+    const actualSeconds = timerTotalSecs - timerRemainingSecs;
+    const actualMinutes = Math.round(actualSeconds / 60);
+
+    // Only record if they actually studied for at least 1 min
+    if (actualMinutes > 0) {
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        try {
+          await recordStudySession(firebaseUser, {
+            taskId: timerTaskId,
+            startedAt: timerStartedAtIso,
+            endedAt: new Date().toISOString(),
+            focusMinutes: actualMinutes,
+            completed: completedNaturally,
+          });
+          
+          // Refresh dashboard
+          const fullrefresh = await loadUserAppSnapshot(firebaseUser);
+          setSnapshot(fullrefresh);
+        } catch (e) {
+          console.error('Failed to log session', e);
+        }
+      }
+    }
+  }, [timerTotalSecs, timerRemainingSecs, timerTaskId, timerStartedAtIso]);
+
   const handleToggleTask = useCallback(async (task: TaskItem) => {
     // Optimistic UI update
     setSnapshot(prev => {
@@ -87,13 +176,17 @@ export default function HomeScreen() {
       await toggleTaskStatus(task.id, task.status);
       const firebaseUser = auth.currentUser;
       if (firebaseUser) {
-        // Full refresh to ensure exact DB precision
         const fullrefresh = await loadUserAppSnapshot(firebaseUser);
         setSnapshot(fullrefresh);
       }
     } catch (e) {
       console.error('Failed to toggle task', e);
     }
+  }, []);
+
+  const handleOpenFocusModal = useCallback((task: TaskItem | null) => {
+    setFocusTask(task);
+    setFocusModalVisible(true);
   }, []);
 
   const displayName = getDisplayName(snapshot.displayName, snapshot.email);
@@ -103,25 +196,17 @@ export default function HomeScreen() {
   const totalFocusMinutes = snapshot.sessions.reduce((sum, session) => sum + (session.focusMinutes ?? 0), 0);
   const activityItems = buildActivityItems(snapshot.tasks, snapshot.sessions);
   const nextTask = pendingTasks[0];
-  const suggestionTitle = nextTask?.title?.trim() || todayClasses[0]?.title?.trim() || null;
-  const suggestionBody = nextTask
-    ? nextTask.dueAt
-      ? `Due ${formatDateOnly(nextTask.dueAt)}. ${nextTask.estimatedMinutes ? `Estimated ${formatMinutes(nextTask.estimatedMinutes)}.` : 'Add a time estimate when you are ready.'}`
-      : nextTask.estimatedMinutes
-        ? `Estimated ${formatMinutes(nextTask.estimatedMinutes)}.`
-        : 'This task is ready whenever you are.'
-    : todayClasses[0]
-      ? 'Before building a study plan, Cue will ask what subject you want to focus on and how much time you have.'
-      : 'No planner suggestions yet. Add your first task or class to start a study plan.';
+
+  // Build contextual subtitle (no email)
+  const subtitleText = pendingTasks.length > 0
+    ? `You have ${pendingTasks.length} pending task${pendingTasks.length === 1 ? '' : 's'}`
+    : 'All caught up! Add tasks to get started.';
 
   const overviewCards = [
     { icon: 'book' as const, iconColor: colors.green, value: String(todayClasses.length), label: 'Classes Today' },
     { icon: 'timer' as const, iconColor: colors.indigo, value: formatMinutes(totalFocusMinutes), label: 'Focus Time' },
+    { icon: 'checkmark-done' as const, iconColor: colors.purple, value: String(completedTasks.length), label: 'Tasks Done' },
   ];
-
-  const handleCuePress = () => {
-    router.navigate('/(tabs)/chat');
-  };
 
   return (
     <GlowBackground>
@@ -130,7 +215,7 @@ export default function HomeScreen() {
           <GlassHeader
             eyebrow="StudyCue"
             title={displayName ? `Welcome back, ${displayName}` : 'Welcome back'}
-            subtitle={snapshot.email ?? 'Your study data appears here once you add classes, tasks, and sessions.'}
+            subtitle={subtitleText}
             rightSlot={
               <View style={styles.headerBadge}>
                 <Ionicons name="sparkles" size={18} color={colors.white} />
@@ -138,7 +223,6 @@ export default function HomeScreen() {
             }
           />
         </StaggeredFadeIn>
-
 
         <StaggeredFadeIn index={2}>
           <Text style={styles.sectionTitle}>Dashboard</Text>
@@ -183,12 +267,24 @@ export default function HomeScreen() {
                         return (
                           <React.Fragment key={task.id}>
                             {showDivider && <View style={styles.taskDivider} />}
-                            <TouchableOpacity onPress={() => handleToggleTask(task)} activeOpacity={0.7} style={[styles.taskRow, isCompleted && styles.taskRowCompleted]}>
-                              <View style={isCompleted ? styles.checkboxChecked : styles.checkboxUnchecked}>
-                                {isCompleted && <Ionicons name="checkmark" size={12} color={colors.white} />}
-                              </View>
+                            <View style={[styles.taskRow, isCompleted && styles.taskRowCompleted]}>
+                              <TouchableOpacity onPress={() => handleToggleTask(task)} activeOpacity={0.7} style={styles.checkboxHitArea}>
+                                <View style={isCompleted ? styles.checkboxChecked : styles.checkboxUnchecked}>
+                                  {isCompleted && <Ionicons name="checkmark" size={12} color={colors.white} />}
+                                </View>
+                              </TouchableOpacity>
                               <Text style={isCompleted ? styles.taskTitleCompleted : styles.taskTitle}>{task.title || 'Untitled task'}</Text>
-                            </TouchableOpacity>
+                              {!isCompleted && (
+                                <TouchableOpacity
+                                  onPress={() => handleOpenFocusModal(task)}
+                                  activeOpacity={0.7}
+                                  style={styles.readyPill}
+                                >
+                                  <Ionicons name="play" size={10} color={colors.purple} />
+                                  <Text style={styles.readyPillText}>Ready</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
                           </React.Fragment>
                         );
                       })}
@@ -213,48 +309,112 @@ export default function HomeScreen() {
           </GlassCard>
         </StaggeredFadeIn>
 
+        {/* Next Task Card — interactive "Ready" */}
         <StaggeredFadeIn index={5}>
-          <Text style={styles.sectionTitle}>Start a focus session</Text>
-          <GlassCard style={styles.timerSetupCard} tintColor="rgba(124,98,255,0.08)">
-            <Text style={styles.timerSetupHint}>Select duration</Text>
-            <View style={styles.durationRow}>
-              {durationOptions.map((opt) => {
-                const isSelected = sessionDuration === opt.value;
-                return (
-                  <GlassButton
-                    key={opt.value}
-                    label={opt.label}
-                    onPress={() => setSessionDuration(opt.value)}
-                    style={[styles.durationPill, isSelected && styles.durationPillSelected]}
-                    textStyle={[styles.durationPillText, isSelected && styles.durationPillTextSelected]}
-                  />
-                );
-              })}
-            </View>
-            <GlassButton
-              label="Start Session"
-              onPress={() => {
-                // Initialize timer flow here later
-                console.log(`Starting session for ${sessionDuration} minutes`);
-              }}
-              style={styles.startButton}
-            />
-          </GlassCard>
-        </StaggeredFadeIn>
-
-        <StaggeredFadeIn index={7}>
           <GlassCard style={styles.timerCard} tintColor="rgba(52,211,153,0.12)">
             <View style={styles.timerTopRow}>
               <View>
                 <Text style={styles.timerLabel}>Next Task</Text>
                 <Text style={styles.timerValue}>{nextTask?.estimatedMinutes ? formatMinutes(nextTask.estimatedMinutes) : 'None'}</Text>
               </View>
-              <View style={styles.timerChip}>
-                <Text style={styles.timerChipText}>{nextTask ? 'Ready' : 'Empty'}</Text>
-              </View>
+              {nextTask ? (
+                <TouchableOpacity
+                  onPress={() => handleOpenFocusModal(nextTask)}
+                  activeOpacity={0.7}
+                  style={styles.readyChip}
+                >
+                  <Ionicons name="play-circle" size={16} color={colors.purple} />
+                  <Text style={styles.readyChipText}>Ready</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.emptyChip}>
+                  <Text style={styles.emptyChipText}>Empty</Text>
+                </View>
+              )}
             </View>
             <Text style={styles.timerHint}>{nextTask?.title?.trim() || 'Add your first task'}</Text>
           </GlassCard>
+        </StaggeredFadeIn>
+
+        {/* Start a focus session OR Active Timer */}
+        <StaggeredFadeIn index={6}>
+          {timerActive ? (
+            <View>
+              <Text style={styles.sectionTitle}>Active Focus Session</Text>
+              <GlassCard style={styles.timerActiveCard} tintColor="rgba(124,98,255,0.12)">
+                <Text style={styles.timerActiveHint}>
+                  {timerPaused ? "Paused" : "Stay Focused"}
+                </Text>
+                
+                <Text style={styles.timerHugeText}>
+                  {String(Math.floor(timerRemainingSecs / 60)).padStart(2, '0')}:
+                  {String(timerRemainingSecs % 60).padStart(2, '0')}
+                </Text>
+
+                <View style={styles.timerControls}>
+                  <GlassButton
+                    label={timerPaused ? "Resume" : "Pause"}
+                    onPress={handlePauseResume}
+                    style={styles.timerSecondaryBtn}
+                    textStyle={styles.timerSecondaryBtnText}
+                  />
+                  <GlassButton
+                    label="End Session"
+                    onPress={() => handleEndSession(false)}
+                    style={styles.timerDangerBtn}
+                  />
+                </View>
+              </GlassCard>
+            </View>
+          ) : (
+            <View>
+              <Text style={styles.sectionTitle}>Start a focus session</Text>
+              <GlassCard style={styles.focusSetupCard} tintColor="rgba(124,98,255,0.08)">
+                <Text style={styles.focusSetupHint}>Select duration</Text>
+                <View style={styles.durationRow}>
+                  {durationOptions.map((opt) => {
+                    const isSelected = sessionDuration === opt.value && customDuration === '';
+                    return (
+                      <GlassButton
+                        key={opt.value}
+                        label={opt.label}
+                        onPress={() => {
+                          setSessionDuration(opt.value);
+                          setCustomDuration('');
+                        }}
+                        style={[styles.durationPill, isSelected && styles.durationPillSelected]}
+                        textStyle={[styles.durationPillText, isSelected && styles.durationPillTextSelected]}
+                      />
+                    );
+                  })}
+                </View>
+                <Text style={styles.focusSetupHint}>Or enter custom minutes</Text>
+                <TextInput
+                  style={styles.customInput}
+                  value={customDuration}
+                  onChangeText={(text) => {
+                    const cleaned = text.replace(/[^0-9]/g, '');
+                    setCustomDuration(cleaned);
+                    if (cleaned) {
+                      setSessionDuration(Number(cleaned));
+                    }
+                  }}
+                  placeholder="e.g. 35"
+                  placeholderTextColor="rgba(0,0,0,0.25)"
+                  keyboardType="number-pad"
+                  maxLength={3}
+                />
+                <GlassButton
+                  label="Start Session"
+                  onPress={() => {
+                    const finalDuration = customDuration ? Number(customDuration) : sessionDuration;
+                    handleStartSession(finalDuration);
+                  }}
+                  style={styles.startButton}
+                />
+              </GlassCard>
+            </View>
+          )}
         </StaggeredFadeIn>
 
         <StaggeredFadeIn index={7}>
@@ -281,6 +441,13 @@ export default function HomeScreen() {
 
         <View style={styles.bottomPad} />
       </ScrollView>
+
+      <FocusSessionModal
+        visible={focusModalVisible}
+        task={focusTask}
+        onClose={() => setFocusModalVisible(false)}
+        onStart={handleStartSession}
+      />
     </GlowBackground>
   );
 }
@@ -327,11 +494,14 @@ const styles = StyleSheet.create({
   taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: 10,
+    gap: 10,
   },
   taskRowCompleted: {
     opacity: 0.6,
+  },
+  checkboxHitArea: {
+    padding: 4,
   },
   checkboxUnchecked: {
     width: 20,
@@ -366,6 +536,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.05)',
     marginVertical: 4,
   },
+  readyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(124,98,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,98,255,0.2)',
+  },
+  readyPillText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.purple,
+  },
   expandButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -393,9 +579,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   card: {
-    width: 158,
-    marginRight: 16,
-    minHeight: 156,
+    width: 148,
+    marginRight: 14,
+    minHeight: 148,
   },
   cardIcon: {
     width: 38,
@@ -439,14 +625,30 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     color: colors.ink,
   },
-  timerChip: {
+  readyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(124,98,255,0.12)',
+    borderRadius: radii.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(124,98,255,0.2)',
+  },
+  readyChipText: {
+    color: colors.purple,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+  },
+  emptyChip: {
     backgroundColor: 'rgba(255,255,255,0.55)',
     borderRadius: radii.pill,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  timerChipText: {
-    color: colors.ink,
+  emptyChipText: {
+    color: colors.inkMuted,
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
   },
@@ -456,11 +658,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-  timerSetupCard: {
+  activityBox: {
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  activityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.purple,
+  },
+  activityText: {
+    color: colors.ink,
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: 'Inter_500Medium',
+    flex: 1,
+  },
+  focusSetupCard: {
     marginBottom: 24,
     padding: 18,
   },
-  timerSetupHint: {
+  focusSetupHint: {
     color: colors.inkMuted,
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
@@ -492,29 +713,60 @@ const styles = StyleSheet.create({
   durationPillTextSelected: {
     color: colors.white,
   },
+  customInput: {
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    fontFamily: 'Inter_500Medium',
+    color: colors.ink,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    marginBottom: 20,
+  },
   startButton: {
     minHeight: 48,
   },
-  activityBox: {
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  activityDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.purple,
-  },
-  activityText: {
-    color: colors.ink,
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: 'Inter_500Medium',
-    flex: 1,
-  },
   bottomPad: {
-    height: 120,
+    height: 130, // Pad for tab bar
+  },
+  timerActiveCard: {
+    marginBottom: 28,
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  timerActiveHint: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.purple,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginBottom: 16,
+  },
+  timerHugeText: {
+    fontSize: 64,
+    fontFamily: 'Inter_700Bold',
+    color: colors.ink,
+    marginBottom: 24,
+    fontVariant: ['tabular-nums'],
+  },
+  timerControls: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  timerSecondaryBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(255,255,255,0.8)',
+  },
+  timerSecondaryBtnText: {
+    color: colors.ink,
+  },
+  timerDangerBtn: {
+    flex: 1,
+    backgroundColor: colors.danger,
+    borderColor: 'transparent',
   },
 });

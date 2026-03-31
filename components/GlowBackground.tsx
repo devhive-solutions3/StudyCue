@@ -25,32 +25,31 @@ const styles = StyleSheet.create({
   },
   glow: {
     position: 'absolute',
-    borderRadius: 999,
-    opacity: 0.9,
+    borderRadius: 9999, // ensures it's perfectly round even when massive
   },
   glowPurple: {
-    top: -60,
-    right: -40,
-    width: 260,
-    height: 260,
-    backgroundColor: 'rgba(124, 98, 255, 0.24)',
+    top: -300,
+    right: -350,
+    width: 700,
+    height: 700,
+    backgroundColor: 'rgba(124, 98, 255, 0.12)', // ambient, softer
   },
   glowBlue: {
-    top: 180,
-    left: -80,
-    width: 240,
-    height: 240,
-    backgroundColor: 'rgba(79, 120, 255, 0.18)',
+    top: 150,
+    left: -350,
+    width: 650,
+    height: 650,
+    backgroundColor: 'rgba(79, 120, 255, 0.10)',
   },
   glowGreen: {
-    bottom: 120,
-    right: -70,
-    width: 220,
-    height: 220,
-    backgroundColor: 'rgba(52, 211, 153, 0.18)',
+    bottom: -150,
+    right: -250,
+    width: 600,
+    height: 600,
+    backgroundColor: 'rgba(52, 211, 153, 0.10)',
   },
   noiseVeil: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.45)', // increased opacity to soften shapes further
   },
 });
