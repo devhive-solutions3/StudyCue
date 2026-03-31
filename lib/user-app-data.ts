@@ -14,6 +14,9 @@ export type ClassItem = {
   startTime: string | null;
   endTime: string | null;
   location: string | null;
+  recurrence: string | null;
+  eventType: string | null;
+  specificDate: string | null;
 };
 
 export type TaskItem = {
@@ -88,7 +91,7 @@ export async function loadUserAppSnapshot(firebaseUser: User): Promise<AppSnapsh
   const localUser = await ensureLocalUser(firebaseUser);
 
   const classes = await db.getAllAsync<ClassItem>(
-    `SELECT id, title, weekday, startTime, endTime, location
+    `SELECT id, title, weekday, startTime, endTime, location, recurrence, eventType, specificDate
      FROM classes
      WHERE userId = ?
      ORDER BY
@@ -237,7 +240,38 @@ export type ParsedClass = {
   startTime: string;
   endTime: string;
   location?: string;
+  eventType?: string;
+  recurrence?: string;
+  specificDate?: string;
 };
+
+export async function recordStudySession(
+  firebaseUser: User,
+  sessionData: {
+    taskId?: number | null;
+    startedAt: string;
+    endedAt: string;
+    focusMinutes: number;
+    completed: boolean;
+  }
+) {
+  const db = await initDatabase();
+  const localUser = await ensureLocalUser(firebaseUser);
+  await db.runAsync(
+    'INSERT INTO study_sessions (userId, taskId, startedAt, endedAt, focusMinutes, completed, sessionType) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [
+      localUser.id,
+      sessionData.taskId || null,
+      sessionData.startedAt,
+      sessionData.endedAt,
+      sessionData.focusMinutes,
+      sessionData.completed ? 1 : 0,
+      'focus',
+    ]
+  );
+}
+
+const ONE_TIME_EVENT_TYPES = new Set(['quiz', 'exam', 'deadline', 'study', 'review', 'test']);
 
 export async function addParsedClasses(firebaseUser: User, parsedClasses: ParsedClass[]) {
   const db = await initDatabase();
@@ -245,8 +279,13 @@ export async function addParsedClasses(firebaseUser: User, parsedClasses: Parsed
 
   for (const item of parsedClasses) {
     if (!item.title || !item.weekday) continue;
+
+    const eventType = item.eventType?.toLowerCase() || 'class';
+    // Smart default: classes are weekly, quizzes/exams/etc are one-time
+    const recurrence = item.recurrence || (ONE_TIME_EVENT_TYPES.has(eventType) ? 'none' : 'weekly');
+
     await db.runAsync(
-      'INSERT INTO classes (userId, title, weekday, startTime, endTime, location) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO classes (userId, title, weekday, startTime, endTime, location, eventType, recurrence, specificDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         localUser.id,
         item.title,
@@ -254,9 +293,78 @@ export async function addParsedClasses(firebaseUser: User, parsedClasses: Parsed
         item.startTime || null,
         item.endTime || null,
         item.location || null,
+        eventType,
+        recurrence,
+        item.specificDate || null,
       ]
     );
   }
+}
+
+export async function updateClassItem(
+  classId: number,
+  updates: {
+    title?: string;
+    location?: string;
+    recurrence?: string;
+    eventType?: string;
+    weekday?: string;
+    startTime?: string;
+    endTime?: string;
+    specificDate?: string | null;
+  }
+) {
+  const db = await initDatabase();
+  const setClauses: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (updates.title !== undefined) {
+    setClauses.push('title = ?');
+    params.push(updates.title);
+  }
+  if (updates.location !== undefined) {
+    setClauses.push('location = ?');
+    params.push(updates.location);
+  }
+  if (updates.recurrence !== undefined) {
+    setClauses.push('recurrence = ?');
+    params.push(updates.recurrence);
+  }
+  if (updates.eventType !== undefined) {
+    setClauses.push('eventType = ?');
+    params.push(updates.eventType);
+  }
+  if (updates.weekday !== undefined) {
+    setClauses.push('weekday = ?');
+    params.push(updates.weekday);
+  }
+  if (updates.startTime !== undefined) {
+    setClauses.push('startTime = ?');
+    params.push(updates.startTime);
+  }
+  if (updates.endTime !== undefined) {
+    setClauses.push('endTime = ?');
+    params.push(updates.endTime);
+  }
+  if (updates.specificDate !== undefined) {
+    setClauses.push('specificDate = ?');
+    params.push(updates.specificDate ?? '');
+  }
+
+  if (setClauses.length === 0) return;
+
+  setClauses.push('updatedAt = CURRENT_TIMESTAMP');
+  params.push(classId);
+
+  await db.runAsync(
+    `UPDATE classes SET ${setClauses.join(', ')} WHERE id = ?`,
+    params
+  );
+}
+
+export async function deleteClassItem(classId: number) {
+  const db = await initDatabase();
+  await db.runAsync('DELETE FROM classes WHERE id = ?', [classId]);
 }
 
 export async function clearAllClasses(firebaseUser: User) {
@@ -297,5 +405,139 @@ export async function toggleTaskStatus(taskId: number, currentStatus: string | n
   const nextStatus = isCompleted ? 'pending' : 'completed';
   
   await db.runAsync('UPDATE tasks SET status = ? WHERE id = ?', [nextStatus, taskId]);
+}
+
+export type UserPreferences = {
+  preferredFocusMinutes: number;
+  preferredBreakMinutes: number;
+  dailyGoalMinutes: number;
+  energyMode: string;
+};
+
+const DEFAULT_PREFERENCES: UserPreferences = {
+  preferredFocusMinutes: 25,
+  preferredBreakMinutes: 5,
+  dailyGoalMinutes: 120,
+  energyMode: 'normal',
+};
+
+export async function loadUserPreferences(localUserId: number): Promise<UserPreferences> {
+  const db = await initDatabase();
+  const row = await db.getFirstAsync<{
+    preferredFocusMinutes: number | null;
+    preferredBreakMinutes: number | null;
+    dailyGoalMinutes: number | null;
+    energyMode: string | null;
+  }>(
+    'SELECT preferredFocusMinutes, preferredBreakMinutes, dailyGoalMinutes, energyMode FROM ai_preferences WHERE userId = ?',
+    [localUserId]
+  );
+
+  if (!row) {
+    return DEFAULT_PREFERENCES;
+  }
+
+  return {
+    preferredFocusMinutes: row.preferredFocusMinutes ?? DEFAULT_PREFERENCES.preferredFocusMinutes,
+    preferredBreakMinutes: row.preferredBreakMinutes ?? DEFAULT_PREFERENCES.preferredBreakMinutes,
+    dailyGoalMinutes: row.dailyGoalMinutes ?? DEFAULT_PREFERENCES.dailyGoalMinutes,
+    energyMode: row.energyMode ?? DEFAULT_PREFERENCES.energyMode,
+  };
+}
+
+export async function updateUserProfile(
+  firebaseUser: User,
+  updates: {
+    displayName?: string;
+    preferredFocusMinutes?: number;
+    dailyGoalMinutes?: number;
+  }
+) {
+  const db = await initDatabase();
+  const localUser = await ensureLocalUser(firebaseUser);
+
+  if (updates.displayName !== undefined) {
+    await db.runAsync(
+      'UPDATE users_local SET displayName = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
+      [updates.displayName, localUser.id]
+    );
+  }
+
+  if (updates.preferredFocusMinutes !== undefined || updates.dailyGoalMinutes !== undefined) {
+    const existing = await db.getFirstAsync<{ id: number }>(
+      'SELECT id FROM ai_preferences WHERE userId = ?',
+      [localUser.id]
+    );
+
+    if (existing) {
+      const setClauses: string[] = [];
+      const params: (string | number)[] = [];
+
+      if (updates.preferredFocusMinutes !== undefined) {
+        setClauses.push('preferredFocusMinutes = ?');
+        params.push(updates.preferredFocusMinutes);
+      }
+      if (updates.dailyGoalMinutes !== undefined) {
+        setClauses.push('dailyGoalMinutes = ?');
+        params.push(updates.dailyGoalMinutes);
+      }
+      setClauses.push('updatedAt = CURRENT_TIMESTAMP');
+      params.push(localUser.id);
+
+      await db.runAsync(
+        `UPDATE ai_preferences SET ${setClauses.join(', ')} WHERE userId = ?`,
+        params
+      );
+    } else {
+      await db.runAsync(
+        'INSERT INTO ai_preferences (userId, preferredFocusMinutes, dailyGoalMinutes) VALUES (?, ?, ?)',
+        [
+          localUser.id,
+          updates.preferredFocusMinutes ?? DEFAULT_PREFERENCES.preferredFocusMinutes,
+          updates.dailyGoalMinutes ?? DEFAULT_PREFERENCES.dailyGoalMinutes,
+        ]
+      );
+    }
+  }
+}
+
+export function computeStudyStreak(sessions: StudySessionItem[]): number {
+  if (sessions.length === 0) return 0;
+
+  const sessionDates = new Set<string>();
+  for (const session of sessions) {
+    if (session.startedAt) {
+      const date = new Date(session.startedAt);
+      if (!Number.isNaN(date.getTime())) {
+        sessionDates.add(
+          `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+        );
+      }
+    }
+  }
+
+  if (sessionDates.size === 0) return 0;
+
+  let streak = 0;
+  const today = new Date();
+  const checkDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  // Check if today has a session; if not, start from yesterday
+  const todayKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+  if (!sessionDates.has(todayKey)) {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  while (true) {
+    const key = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+    if (sessionDates.has(key)) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
 }
 

@@ -85,6 +85,18 @@ export async function initDatabase() {
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // Migrations — safe to re-run (ALTER TABLE errors are caught)
+  try {
+    await db.execAsync(`ALTER TABLE classes ADD COLUMN eventType TEXT DEFAULT 'class'`);
+  } catch (_) {
+    // Column already exists
+  }
+  try {
+    await db.execAsync(`ALTER TABLE classes ADD COLUMN specificDate TEXT`);
+  } catch (_) {
+    // Column already exists
+  }
   
   return db;
 }
