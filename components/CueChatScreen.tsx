@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,7 +20,13 @@ import GlowBackground from './GlowBackground';
 import { colors, radii } from '../lib/theme';
 import { createAttachment, fetchCueResponse, type CueMessage as ApiCueMessage } from '../lib/cue-api';
 import { auth } from '../lib/firebase';
-import { addParsedClasses, clearAllClasses, addParsedTasks, type ParsedClass } from '../lib/user-app-data';
+import {
+  addParsedClasses,
+  clearAllClasses,
+  addParsedTasks,
+  formatCuePlanningContextForPrompt,
+  loadUserAppSnapshot,
+} from '../lib/user-app-data';
 
 type MessageRole = 'user' | 'cue';
 
@@ -47,6 +54,99 @@ function createMessage(role: MessageRole, text: string, imageUri?: string): Chat
   };
 }
 
+function extractFencedJsonBodies(text: string): string[] {
+  const re = /```(?:json)?\s*([\s\S]*?)\s*```/g;
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const s = m[1]?.trim();
+    if (s) out.push(s);
+  }
+  return out;
+}
+
+type CueJsonKind =
+  | 'calendar_array'
+  | 'replace_classes'
+  | 'clear_classes'
+  | 'add_tasks'
+  | 'empty_array'
+  | 'unknown';
+
+function classifyCueJsonCommand(parsed: unknown): CueJsonKind {
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0) return 'empty_array';
+    const row = parsed[0];
+    if (row && typeof row === 'object' && (row as { weekday?: string }).weekday) return 'calendar_array';
+    return 'unknown';
+  }
+  if (parsed && typeof parsed === 'object' && 'action' in parsed) {
+    const o = parsed as { action?: string; classes?: unknown; tasks?: unknown };
+    if (o.action === 'clear_classes') return 'clear_classes';
+    if (o.action === 'replace_classes' && Array.isArray(o.classes)) return 'replace_classes';
+    if (o.action === 'add_tasks' && Array.isArray(o.tasks)) return 'add_tasks';
+  }
+  return 'unknown';
+}
+
+/** True when the user is clearly asking for the calendar/schedule surface, not the to-do list. */
+function userMessagePrefersCalendar(message: string): boolean {
+  const t = message.trim();
+  if (!t) return false;
+  if (/\b(not|instead|only)\b[^.!?]{0,80}\b(todo|to-?do|task\s*list)\b/i.test(t)) return true;
+  if (/\b(calendar|calendar tab|time block|schedule block)\b/i.test(t)) return true;
+  if (/\b(on|to|onto|into|put)[^.!?]{0,40}\b(my\s+)?(calendar|schedule)\b/i.test(t)) return true;
+  return false;
+}
+
+/**
+ * If the model emits several ```json``` blocks, using only the first breaks calendar fixes
+ * when add_tasks appears before a calendar array. Prefer calendar-shaped JSON when the user asked for calendar.
+ */
+function pickJsonCandidateString(
+  cueText: string,
+  latestUserMessage: string
+): { candidate: string | null; calendarIntentButOnlyTasks: boolean; fencedCount: number } {
+  const bodies = extractFencedJsonBodies(cueText);
+  const fencedCount = bodies.length;
+  if (bodies.length === 0) {
+    return { candidate: null, calendarIntentButOnlyTasks: false, fencedCount };
+  }
+
+  const tryParse = (body: string): unknown | null => {
+    try {
+      return JSON.parse(body) as unknown;
+    } catch {
+      return null;
+    }
+  };
+
+  if (userMessagePrefersCalendar(latestUserMessage)) {
+    for (const body of bodies) {
+      const p = tryParse(body);
+      if (!p) continue;
+      const k = classifyCueJsonCommand(p);
+      if (
+        k === 'calendar_array' ||
+        k === 'replace_classes' ||
+        k === 'clear_classes' ||
+        k === 'empty_array'
+      ) {
+        return { candidate: body, calendarIntentButOnlyTasks: false, fencedCount };
+      }
+    }
+    const parsedDefined = bodies.map(tryParse).filter((x): x is NonNullable<typeof x> => x != null);
+    const onlyAddTasks =
+      parsedDefined.length > 0 &&
+      parsedDefined.every((p) => classifyCueJsonCommand(p) === 'add_tasks');
+    if (onlyAddTasks) {
+      return { candidate: null, calendarIntentButOnlyTasks: true, fencedCount };
+    }
+  }
+
+  return { candidate: bodies[0] ?? null, calendarIntentButOnlyTasks: false, fencedCount };
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
 
@@ -69,8 +169,19 @@ export default function CueChatScreen() {
   const [input, setInput] = useState('');
   const [pendingImageUri, setPendingImageUri] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const composerBottomInset = Math.max(insets.bottom, 12) + 104;
-  const messageListBottomPadding = composerBottomInset + 22;
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const composerBottomInset = isKeyboardVisible ? 12 : Math.max(insets.bottom, 12) + 104;
+  const messageListBottomPadding = 22;
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -106,30 +217,71 @@ export default function CueChatScreen() {
 
     try {
       setIsSending(true);
+      const firebaseUser = auth.currentUser;
+      let planningContext: string | undefined;
+      if (firebaseUser) {
+        try {
+          const snapshot = await loadUserAppSnapshot(firebaseUser);
+          planningContext = formatCuePlanningContextForPrompt(snapshot);
+        } catch (snapErr) {
+          console.warn('[Cue Chat] could not load app snapshot for planning context', snapErr);
+        }
+      }
+
       const cueText = await fetchCueResponse({
         history: historyForApi,
         latestUserText: nextText,
         attachment,
+        planningContext,
       });
 
-      const user = auth.currentUser;
+      const jsonPick = pickJsonCandidateString(cueText, nextText);
+
+      // #region agent log
+      const shapePayload = {
+        sessionId: '530b59',
+        runId: 'post-fix',
+        hypothesisId: 'H2-H3',
+        location: 'CueChatScreen.tsx:post-fetchCueResponse',
+        message: 'cue raw response shape',
+        data: {
+          historyLen: historyForApi.length,
+          planningContextLen: planningContext?.length ?? 0,
+          responseLen: cueText?.length ?? 0,
+          hasFencedJson: /\`\`\`(?:json)?\s*[\s\S]*?\`\`\`/.test(cueText),
+          startsWithBracket: cueText.trimStart().startsWith('['),
+          startsWithBrace: cueText.trimStart().startsWith('{'),
+          fencedCount: jsonPick.fencedCount,
+          preferCalendar: userMessagePrefersCalendar(nextText),
+          calendarIntentButOnlyTasks: jsonPick.calendarIntentButOnlyTasks,
+          pickedFence: Boolean(jsonPick.candidate),
+        },
+        timestamp: Date.now(),
+      };
+      fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
+        body: JSON.stringify(shapePayload),
+      }).catch(() => {});
+      if (__DEV__) {
+        console.warn('[CueDebug]', JSON.stringify(shapePayload));
+      }
+      // #endregion
+
+      const user = firebaseUser;
 
       // --- JSON Action Interceptor ---
       // The AI may reply with a JSON command instead of a chat message. We detect
       // that, execute the database action, and show a friendly message instead.
       // If JSON parsing fails for any reason, we fall back to the chat text.
 
-      // Try to extract JSON body from the response
-      let jsonCandidate: string | null = null;
-      const mdMatch = cueText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (mdMatch) {
-        jsonCandidate = mdMatch[1];
-      } else {
-        // No markdown block — try to pull out a raw JSON literal
+      // Try to extract JSON body from the response (multi-fence aware; see pickJsonCandidateString)
+      let jsonCandidate: string | null = jsonPick.candidate;
+      if (!jsonCandidate && !jsonPick.calendarIntentButOnlyTasks) {
         const firstBracket = cueText.indexOf('[');
-        const lastBracket  = cueText.lastIndexOf(']');
-        const firstBrace   = cueText.indexOf('{');
-        const lastBrace    = cueText.lastIndexOf('}');
+        const lastBracket = cueText.lastIndexOf(']');
+        const firstBrace = cueText.indexOf('{');
+        const lastBrace = cueText.lastIndexOf('}');
 
         if (firstBracket !== -1 && lastBracket > firstBracket) {
           jsonCandidate = cueText.substring(firstBracket, lastBracket + 1);
@@ -141,15 +293,57 @@ export default function CueChatScreen() {
       let finalResponseText = cueText;
       let handledAsJson = false;
 
+      if (jsonPick.calendarIntentButOnlyTasks) {
+        finalResponseText =
+          'You asked for the calendar, but I only returned to-do list JSON. Say the weekday plus start and end time in 24-hour form (e.g. Monday 19:00–20:00), or add the block in the Calendar tab.';
+        handledAsJson = true;
+      }
+
       if (jsonCandidate) {
         try {
           const parsed = JSON.parse(jsonCandidate);
 
+          // #region agent log
+          const first = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
+          const parsePayload = {
+            sessionId: '530b59',
+            runId: 'post-fix',
+            hypothesisId: 'H1-H2',
+            location: 'CueChatScreen.tsx:json-parse-ok',
+            message: 'parsed JSON summary',
+            data: {
+              isArray: Array.isArray(parsed),
+              arrayLen: Array.isArray(parsed) ? parsed.length : 0,
+              objectAction: !Array.isArray(parsed) && parsed && typeof parsed === 'object' ? (parsed as any).action : null,
+              commandKind: classifyCueJsonCommand(parsed),
+              firstKeys: first && typeof first === 'object' ? Object.keys(first as object).sort() : [],
+              firstHasWeekday: Boolean((first as any)?.weekday),
+            },
+            timestamp: Date.now(),
+          };
+          fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
+            body: JSON.stringify(parsePayload),
+          }).catch(() => {});
+          if (__DEV__) {
+            console.warn('[CueDebug]', JSON.stringify(parsePayload));
+          }
+          // #endregion
+
           if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].weekday) {
             // Add classes action
             if (user) {
-              await addParsedClasses(user, parsed);
-              finalResponseText = `I successfully added ${parsed.length} classes to your calendar! You can view them in the Calendar tab.`;
+              const { inserted, skipped } = await addParsedClasses(user, parsed);
+              const uniqueSubjects = new Set(parsed.map((p: any) => p.title?.trim().toLowerCase())).size;
+              if (inserted === 0) {
+                finalResponseText =
+                  'I could not add those to your calendar — each block needs a weekday, title, and valid start/end times (24-hour HH:MM). Say the day and times clearly, or add the block manually in the Calendar tab.';
+              } else if (skipped > 0) {
+                finalResponseText = `I added ${inserted} calendar block(s); ${skipped} row(s) were skipped (missing weekday or title). Check the Calendar tab.`;
+              } else {
+                finalResponseText = `I successfully added ${uniqueSubjects} subject${uniqueSubjects === 1 ? '' : 's'} to your calendar! You can view them in the Calendar tab.`;
+              }
             } else {
               finalResponseText = 'You need to be signed in to save classes to your calendar.';
             }
@@ -169,8 +363,16 @@ export default function CueChatScreen() {
             // Replace = clear then add
             if (user) {
               await clearAllClasses(user);
-              await addParsedClasses(user, parsed.classes);
-              finalResponseText = `Done! I replaced your schedule with ${parsed.classes.length} new classes. Check the Calendar tab!`;
+              const { inserted, skipped } = await addParsedClasses(user, parsed.classes);
+              const uniqueSubjects = new Set(parsed.classes.map((p: any) => p.title?.trim().toLowerCase())).size;
+              if (inserted === 0) {
+                finalResponseText =
+                  'I cleared your calendar but could not save the new schedule — each entry needs a weekday and title. Please try again with a full schedule or add events manually.';
+              } else if (skipped > 0) {
+                finalResponseText = `I replaced your schedule with ${inserted} saved block(s); ${skipped} row(s) were skipped (missing weekday or title). Check the Calendar tab.`;
+              } else {
+                finalResponseText = `Done! I replaced your schedule with ${uniqueSubjects} new subject${uniqueSubjects === 1 ? '' : 's'}. Check the Calendar tab!`;
+              }
             } else {
               finalResponseText = 'You need to be signed in to update your calendar.';
             }
@@ -190,6 +392,29 @@ export default function CueChatScreen() {
             finalResponseText = "I couldn't find any classes to extract from that image.";
             handledAsJson = true;
           }
+
+          // #region agent log
+          const handlerPayload = {
+            sessionId: '530b59',
+            runId: 'post-fix',
+            hypothesisId: 'H1',
+            location: 'CueChatScreen.tsx:json-handler-result',
+            message: 'which JSON branch ran',
+            data: {
+              handledAsJson,
+              hadJsonCandidate: true,
+            },
+            timestamp: Date.now(),
+          };
+          fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
+            body: JSON.stringify(handlerPayload),
+          }).catch(() => {});
+          if (__DEV__) {
+            console.warn('[CueDebug]', JSON.stringify(handlerPayload));
+          }
+          // #endregion
         } catch (e) {
           // JSON.parse failed — if the AI gave us mostly JSON-looking output, suppress it
           // to avoid showing raw code to the user.
@@ -199,6 +424,28 @@ export default function CueChatScreen() {
             handledAsJson = true;
           }
           console.warn('[Cue] JSON parse failed:', e);
+          // #region agent log
+          const failPayload = {
+            sessionId: '530b59',
+            runId: 'post-fix',
+            hypothesisId: 'H2',
+            location: 'CueChatScreen.tsx:json-parse-fail',
+            message: 'JSON.parse threw',
+            data: {
+              errName: e instanceof Error ? e.name : 'unknown',
+              candidateLen: jsonCandidate?.length ?? 0,
+            },
+            timestamp: Date.now(),
+          };
+          fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
+            body: JSON.stringify(failPayload),
+          }).catch(() => {});
+          if (__DEV__) {
+            console.warn('[CueDebug]', JSON.stringify(failPayload));
+          }
+          // #endregion
         }
       }
 
@@ -401,10 +648,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   composerShell: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     paddingHorizontal: 16,
     paddingTop: 8,
     backgroundColor: 'rgba(246,247,255,0.75)',
