@@ -10,11 +10,15 @@ import {
   Alert,
   ScrollView,
   Dimensions,
+  FlatList,
+  Keyboard,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../lib/firebase';
-import { Calendar, ICalendarEventBase } from 'react-native-big-calendar';
+import { Calendar, ICalendarEventBase, type EventRenderer } from 'react-native-big-calendar';
 import dayjs from 'dayjs';
 import weekdayPlugin from 'dayjs/plugin/weekday';
 import GlowBackground from '../../components/GlowBackground';
@@ -63,6 +67,24 @@ const RECURRENCE_OPTIONS = [
   { label: 'Weekly', value: 'weekly' },
   { label: 'Monthly', value: 'monthly' },
 ];
+
+function eventTypeLabel(value: string): string {
+  return EVENT_TYPES.find((t) => t.value === value)?.label ?? value;
+}
+
+function recurrenceLabel(value: string): string {
+  return RECURRENCE_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
+/** react-native-big-calendar calls this with (events, date) but CalendarContainer typings only list events[]. */
+function wrapOnPressMoreLabel(
+  fn: (events: ICalendarEventBase[], date: Date) => void
+): (events: ICalendarEventBase[]) => void {
+  return function monthMorePress(events: ICalendarEventBase[]) {
+    const cellDate = (arguments as IArguments)[1] as Date | undefined;
+    fn(events, cellDate ?? dayjs(events[0]?.start).startOf('day').toDate());
+  };
+}
 
 const EVENT_COLORS: Record<string, string> = {
   class: colors.purple,
@@ -115,27 +137,58 @@ function to12h(time24: string): string {
   return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
-/* ─── Event generation ─── */
+function buildCalendarEventDisplayTitle(cls: ClassItem): string {
+  return (cls.title || '') + (cls.location ? `\n📍 ${cls.location}` : '');
+}
 
-function generateCalendarEvents(classes: ClassItem[]): CalendarEvent[] {
+type CalendarEventWithOverlap = CalendarEvent & {
+  overlapCount?: number;
+  overlapPosition?: number;
+};
+
+/* ─── Event generation ─── */
+// viewDate = the month/week currently on screen so we only generate what's needed
+function generateCalendarEvents(
+  classes: ClassItem[],
+  viewDate: dayjs.Dayjs,
+  mode: 'day' | 'week' | 'month',
+): CalendarEvent[] {
   const events: CalendarEvent[] = [];
-  const startRange = dayjs().subtract(1, 'month').startOf('month');
-  const endRange = dayjs().add(6, 'month').endOf('month');
+
+  // Smart window: only generate events for the visible range ± 1 buffer unit.
+  // Month mode = ±1 month. Week/Day = ±4 weeks total. Much smaller than old 7-month range.
+  let startRange: dayjs.Dayjs;
+  let endRange: dayjs.Dayjs;
+  if (mode === 'month') {
+    startRange = viewDate.subtract(1, 'month').startOf('month');
+    endRange = viewDate.add(1, 'month').endOf('month');
+  } else {
+    startRange = viewDate.subtract(2, 'week').startOf('week');
+    endRange = viewDate.add(2, 'week').endOf('week');
+  }
 
   for (const cls of classes) {
     if (!cls.startTime || !cls.endTime) continue;
 
     const recurrence = cls.recurrence || 'weekly';
     const eventType = cls.eventType || 'class';
-    const [startH, startM] = cls.startTime.split(':').map(Number);
-    const [endH, endM] = cls.endTime.split(':').map(Number);
+
+    // Pre-parse times once per class — not inside the push lambda
+    const timeParts = cls.startTime.split(':');
+    const endParts = cls.endTime.split(':');
+    const startH = parseInt(timeParts[0] || '0', 10);
+    const startM = parseInt(timeParts[1] || '0', 10);
+    const endH = parseInt(endParts[0] || '0', 10);
+    const endM = parseInt(endParts[1] || '0', 10);
     if (isNaN(startH) || isNaN(endH)) continue;
+
+    const title = buildCalendarEventDisplayTitle(cls);
 
     const pushEvent = (day: dayjs.Dayjs) => {
       events.push({
-        title: cls.title + (cls.location ? `\n📍 ${cls.location}` : ''),
-        start: day.hour(startH).minute(startM || 0).second(0).toDate(),
-        end: day.hour(endH).minute(endM || 0).second(0).toDate(),
+        title,
+        start: day.hour(startH).minute(startM).second(0).toDate(),
+        end: day.hour(endH).minute(endM).second(0).toDate(),
         classId: cls.id,
         eventType,
         recurrence,
@@ -149,14 +202,13 @@ function generateCalendarEvents(classes: ClassItem[]): CalendarEvent[] {
     };
 
     if (recurrence === 'none') {
-      // If specificDate is set, render exactly on that date
       if (cls.specificDate) {
         const target = dayjs(cls.specificDate);
-        if (target.isValid() && target.isAfter(startRange) && target.isBefore(endRange)) {
+        if (target.isValid() && !target.isBefore(startRange) && target.isBefore(endRange)) {
           pushEvent(target);
         }
       } else {
-        // Fallback: show in ±2 weeks around today on the matching weekday
+        // No specific date — fall back to ±2 weeks around today
         const days = (cls.weekday || '').split(',');
         for (const dayStr of days) {
           const dayIndex = mapWeekdayToNumber[dayStr.trim()];
@@ -171,6 +223,7 @@ function generateCalendarEvents(classes: ClassItem[]): CalendarEvent[] {
         }
       }
     } else if (recurrence === 'weekly') {
+      // Pre-split once, re-use across weeks
       const days = (cls.weekday || '').split(',');
       for (const dayStr of days) {
         const dayIndex = mapWeekdayToNumber[dayStr.trim()];
@@ -193,7 +246,7 @@ function generateCalendarEvents(classes: ClassItem[]): CalendarEvent[] {
           let firstWeekday = monthCursor.startOf('month');
           while (firstWeekday.day() !== dayIndex) firstWeekday = firstWeekday.add(1, 'day');
           const target = firstWeekday.add(weekOfMonth - 1, 'week');
-          if (target.isAfter(startRange) && target.isBefore(endRange) && target.month() === monthCursor.month()) {
+          if (!target.isBefore(startRange) && target.isBefore(endRange) && target.month() === monthCursor.month()) {
             pushEvent(target);
           }
           monthCursor = monthCursor.add(1, 'month');
@@ -211,38 +264,133 @@ const MemoCalendar = React.memo(function MemoCalendar({
   mode,
   currentDate,
   onPressEvent,
+  onPressMoreLabel,
+  calHeight,
 }: {
   events: CalendarEvent[];
   mode: 'day' | 'week' | 'month';
   currentDate: Date;
   onPressEvent: (event: ICalendarEventBase) => void;
+  /** Month only: tap “+N more” to list hidden events for that day */
+  onPressMoreLabel?: (events: ICalendarEventBase[], date: Date) => void;
+  calHeight: number;
 }) {
-  const eventCellStyle = useCallback((event: ICalendarEventBase) => ({
-    backgroundColor: EVENT_COLORS[(event as CalendarEvent).eventType] || colors.purple,
-    borderRadius: 10,
-  }), []);
+  const eventCellStyle = useCallback((event: ICalendarEventBase) => {
+    const e = event as CalendarEvent;
+    const bg = EVENT_COLORS[e.eventType] || colors.purple;
+    return {
+      backgroundColor: bg,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.45)',
+      marginVertical: 1,
+    };
+  }, []);
 
-  const theme = useMemo(() => ({
-    palette: { primary: { main: colors.purple, contrastText: '#fff' } },
-    typography: {
-      fontFamily: 'Inter_400Regular',
-      xs: { fontSize: 10 },
-      sm: { fontSize: 12 },
-      xl: { fontSize: 16 },
-    },
-  }), []);
+  /** Side-by-side columns when the library marks overlaps; default layout only nudges ~14px and one pill covers the other. */
+  const renderTimedEvent: EventRenderer<CalendarEvent> = useCallback((event, touchableOpacityProps) => {
+    const e = event as CalendarEventWithOverlap;
+    const count = Math.max(1, e.overlapCount ?? 1);
+    const pos = Math.min(Math.max(0, e.overlapPosition ?? 0), count - 1);
+    const tp = touchableOpacityProps as typeof touchableOpacityProps & { key?: string };
+    const { key: _libKey, style, ...pressableRest } = tp as any;
+    const flat = StyleSheet.flatten(style) || {};
+    const narrow = count > 1;
+    const columnStyle =
+      narrow
+        ? {
+            width: `${100 / count}%`,
+            left: `${(pos * 100) / count}%`,
+            start: undefined as unknown as undefined,
+            end: undefined as unknown as undefined,
+            right: undefined as unknown as undefined,
+            marginVertical: 0,
+          }
+        : {};
+
+    const timeLine = `${dayjs(e.start).format('HH:mm')} – ${dayjs(e.end).format('HH:mm')}`;
+
+    return (
+      <TouchableOpacity
+        key={`cue-${e.classId}-${e.start.getTime()}`}
+        {...pressableRest}
+        style={[flat, columnStyle]}>
+        <Text
+          style={{
+            fontSize: narrow ? 9 : 12,
+            color: colors.white,
+            fontFamily: 'Inter_400Regular',
+          }}
+          numberOfLines={narrow ? 4 : 8}>
+          {e.title || ''}
+        </Text>
+        <Text
+          style={{
+            fontSize: narrow ? 8 : 10,
+            color: 'rgba(255,255,255,0.92)',
+            fontFamily: 'Inter_400Regular',
+            marginTop: 2,
+          }}
+          numberOfLines={1}>
+          {timeLine}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, []);
+
+  const theme = useMemo(
+    () => ({
+      palette: {
+        primary: { main: colors.purple, contrastText: '#fff' },
+      },
+      eventCellOverlappings: [
+        { main: colors.purple, contrastText: '#fff' },
+        { main: '#f59e0b', contrastText: '#fff' },
+        { main: colors.green, contrastText: '#fff' },
+      ],
+      typography: {
+        fontFamily: 'Inter_400Regular',
+        xs: { fontSize: 10 },
+        sm: { fontSize: 12 },
+        xl: { fontSize: 16 },
+      },
+    }),
+    []
+  );
+
+  // react-native-big-calendar sorts/mutates `events` in place — always pass a fresh copy + shallow row clones.
+  const eventsForCalendar = useMemo(
+    () => events.map((ev) => ({ ...ev })),
+    [events]
+  );
+
+  const pressMoreLabel = useMemo(() => {
+    if (mode !== 'month' || !onPressMoreLabel) return undefined;
+    return wrapOnPressMoreLabel(onPressMoreLabel);
+  }, [mode, onPressMoreLabel]);
 
   return (
     <Calendar
-      events={events}
-      height={600}
+      events={eventsForCalendar}
+      height={calHeight}
       mode={mode}
       date={currentDate}
       swipeEnabled={true}
       showTime={true}
       onPressEvent={onPressEvent}
       eventCellStyle={eventCellStyle}
+      renderEvent={mode === 'month' ? undefined : renderTimedEvent}
       theme={theme}
+      overlapOffset={14}
+      hourRowHeight={mode === 'month' ? undefined : 80}
+      minHour={6}
+      maxHour={21}
+      isEventOrderingEnabled={true}
+      eventMinHeightForMonthView={20}
+      // Fewer inline pills in month so date numbers stay visible; overflow uses “+N more” → day list modal.
+      maxVisibleEventCount={mode === 'month' ? 2 : 999}
+      moreLabel="{moreCount} more"
+      onPressMoreLabel={pressMoreLabel}
     />
   );
 });
@@ -254,9 +402,15 @@ export default function CalendarScreen() {
   const [mode, setMode] = useState<'day' | 'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Edit modal state
+  // Details → edit flow
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [overflowDayModal, setOverflowDayModal] = useState<{
+    visible: boolean;
+    date: Date | null;
+    events: CalendarEvent[];
+  }>({ visible: false, date: null, events: [] });
   const [editTitle, setEditTitle] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editRecurrence, setEditRecurrence] = useState('weekly');
@@ -288,22 +442,60 @@ export default function CalendarScreen() {
     } catch (_) {}
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-    const loadSnapshot = async () => {
-      const firebaseUser = auth.currentUser;
-      if (!firebaseUser) return;
-      try {
-        const nextSnapshot = await loadUserAppSnapshot(firebaseUser);
-        if (isMounted) setSnapshot(nextSnapshot);
-      } catch (_) {}
-    };
-    const interval = setInterval(loadSnapshot, 5000);
-    loadSnapshot();
-    return () => { isMounted = false; clearInterval(interval); };
-  }, []);
+  // Tabs stay mounted: refetch when this screen is focused so Cue (or other tabs) DB changes show without app reload.
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      const loadSnapshot = async () => {
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser) {
+          if (isMounted) setSnapshot(EMPTY_SNAPSHOT);
+          return;
+        }
+        try {
+          const nextSnapshot = await loadUserAppSnapshot(firebaseUser);
+          if (isMounted) setSnapshot(nextSnapshot);
+        } catch (_) {}
+      };
+      void loadSnapshot();
+      return () => {
+        isMounted = false;
+      };
+    }, [])
+  );
 
-  const mappedEvents = useMemo(() => generateCalendarEvents(snapshot.classes), [snapshot.classes]);
+  // ── Windowed event generation ──────────────────────────────────────────────
+  // For MONTH mode: anchor to month-start, recompute only when month/year changes.
+  // For WEEK/DAY mode: anchor to the current WEEK-start, so navigating weeks
+  //   always regenerates the correct ±2-week window. Do NOT use month-start here
+  //   or events outside the first 2 weeks of a month will disappear.
+  const viewAnchorMonth = useMemo(
+    () => dayjs(currentDate).startOf('month'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentDate.getFullYear(), currentDate.getMonth()],
+  );
+
+  const viewAnchorWeek = useMemo(
+    () => dayjs(currentDate).startOf('week'),
+    // Recompute whenever the ISO-week changes (every 7 days)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [Math.floor(currentDate.getTime() / (7 * 24 * 60 * 60 * 1000))],
+  );
+
+  const mappedEvents = useMemo(() => {
+    const raw = generateCalendarEvents(
+      snapshot.classes,
+      mode === 'month' ? viewAnchorMonth : viewAnchorWeek,
+      mode,
+    );
+    // Full start-time order so react-native-big-calendar overlap detection (same slot) is stable; tie-break by row id.
+    return [...raw].sort((a, b) => {
+      const dt = a.start.getTime() - b.start.getTime();
+      if (dt !== 0) return dt;
+      return a.classId - b.classId;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot.classes, mode, mode === 'month' ? viewAnchorMonth : viewAnchorWeek]);
 
   // Navigation
   const navigatePrev = useCallback(() => {
@@ -338,10 +530,7 @@ export default function CalendarScreen() {
     return d.format('ddd, MMM D YYYY');
   }, [currentDate, mode]);
 
-  // ---- Edit ----
-  const handleEventPress = useCallback((event: ICalendarEventBase) => {
-    const e = event as CalendarEvent;
-    setSelectedEvent(e);
+  const fillEditFormFromEvent = useCallback((e: CalendarEvent) => {
     setEditTitle(e.title.split('\n')[0] || '');
     setEditLocation(e.location || '');
     setEditRecurrence(e.recurrence || 'weekly');
@@ -350,7 +539,31 @@ export default function CalendarScreen() {
     setEditStartTime(to12h(e.rawStartTime || '09:00'));
     setEditEndTime(to12h(e.rawEndTime || '10:00'));
     setEditDate(e.specificDate || '');
+  }, []);
+
+  // ---- Details / edit ----
+  const handleEventPress = useCallback((event: ICalendarEventBase) => {
+    const e = event as CalendarEvent;
+    setSelectedEvent(e);
+    setDetailsModalVisible(true);
+  }, []);
+
+  const handleEditFromDetails = useCallback(() => {
+    if (!selectedEvent) return;
+    fillEditFormFromEvent(selectedEvent);
+    setDetailsModalVisible(false);
     setEditModalVisible(true);
+  }, [selectedEvent, fillEditFormFromEvent]);
+
+  const handlePressMoreLabel = useCallback((evts: ICalendarEventBase[], date: Date) => {
+    const sorted = [...(evts as CalendarEvent[])].sort((a, b) => a.start.getTime() - b.start.getTime());
+    setOverflowDayModal({ visible: true, date, events: sorted });
+  }, []);
+
+  const openDetailsFromOverflowList = useCallback((ev: CalendarEvent) => {
+    setOverflowDayModal({ visible: false, date: null, events: [] });
+    setSelectedEvent(ev);
+    setDetailsModalVisible(true);
   }, []);
 
   const handleSaveEvent = useCallback(async () => {
@@ -369,6 +582,7 @@ export default function CalendarScreen() {
       });
       await refreshData();
       setEditModalVisible(false);
+      setDetailsModalVisible(false);
     } catch (e) {
       console.error('Failed to update event', e);
     } finally {
@@ -378,7 +592,8 @@ export default function CalendarScreen() {
 
   const handleDeleteEvent = useCallback(() => {
     if (!selectedEvent) return;
-    Alert.alert('Delete Event', `Remove "${editTitle}"?`, [
+    const nm = (selectedEvent.title.split('\n')[0] || '').trim() || 'this event';
+    Alert.alert('Delete Event', `Remove "${nm}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
@@ -387,11 +602,12 @@ export default function CalendarScreen() {
             await deleteClassItem(selectedEvent.classId);
             await refreshData();
             setEditModalVisible(false);
+            setDetailsModalVisible(false);
           } catch (_) {}
         },
       },
     ]);
-  }, [selectedEvent, editTitle, refreshData]);
+  }, [selectedEvent, refreshData]);
 
   // ---- Add ----
   const handleOpenAddModal = useCallback(() => {
@@ -504,9 +720,80 @@ export default function CalendarScreen() {
             mode={mode}
             currentDate={currentDate}
             onPressEvent={handleEventPress}
+            onPressMoreLabel={handlePressMoreLabel}
+            calHeight={mode === 'month' ? 750 : 600}
           />
         </View>
       </SafeAreaView>
+
+      <EventDetailsModal
+        visible={detailsModalVisible}
+        event={selectedEvent}
+        onClose={() => setDetailsModalVisible(false)}
+        onEdit={handleEditFromDetails}
+        onDelete={handleDeleteEvent}
+      />
+
+      <Modal
+        visible={overflowDayModal.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setOverflowDayModal({ visible: false, date: null, events: [] })}
+      >
+        <Pressable
+          style={fStyles.overlay}
+          onPress={() => setOverflowDayModal({ visible: false, date: null, events: [] })}
+        >
+          <Pressable style={[fStyles.sheet, styles.dayListSheet]} onPress={(e) => e.stopPropagation()}>
+            <View style={fStyles.handleBar} />
+            <View style={fStyles.header}>
+              <View style={[fStyles.headerIcon, { backgroundColor: `${colors.purple}1A` }]}>
+                <Ionicons name="list-outline" size={22} color={colors.purple} />
+              </View>
+              <Text style={fStyles.headerTitle} numberOfLines={2}>
+                {overflowDayModal.date
+                  ? `Schedules · ${dayjs(overflowDayModal.date).format('ddd, MMM D, YYYY')}`
+                  : 'Schedules'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setOverflowDayModal({ visible: false, date: null, events: [] })}
+                style={fStyles.closeBtn}
+              >
+                <Ionicons name="close" size={22} color={colors.inkMuted} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={overflowDayModal.events}
+              keyExtractor={(item) => `cue-${item.classId}-${item.start.getTime()}`}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => {
+                const dot = EVENT_COLORS[item.eventType] || colors.purple;
+                const line = (item.title.split('\n')[0] || '').trim();
+                return (
+                  <TouchableOpacity
+                    style={styles.dayListRow}
+                    onPress={() => openDetailsFromOverflowList(item)}
+                    activeOpacity={0.65}
+                  >
+                    <View style={[styles.dayListDot, { backgroundColor: dot }]} />
+                    <View style={styles.dayListTextCol}>
+                      <Text style={styles.dayListTitle} numberOfLines={2}>
+                        {line}
+                      </Text>
+                      <Text style={styles.dayListSub}>
+                        {dayjs(item.start).format('h:mm A')} – {dayjs(item.end).format('h:mm A')} ·{' '}
+                        {eventTypeLabel(item.eventType || 'class')}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ─── Edit Event Modal ─── */}
       <EventFormModal
@@ -569,6 +856,92 @@ export default function CalendarScreen() {
   );
 }
 
+/* ─── Event details (read-only) → Edit ─── */
+
+function EventDetailsModal({
+  visible,
+  event,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  visible: boolean;
+  event: CalendarEvent | null;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  if (!visible || !event) return null;
+
+  const e = event;
+  const accent = EVENT_COLORS[e.eventType] || colors.purple;
+  const titleLine = (e.title.split('\n')[0] || '').trim();
+  const isOneTime = (e.recurrence || 'weekly') === 'none';
+  const whenDate = dayjs(e.start).format('ddd, MMMM D, YYYY');
+  const timeRange = `${dayjs(e.start).format('h:mm A')} – ${dayjs(e.end).format('h:mm A')}`;
+  const daysStr = e.weekday
+    ? e.weekday
+        .split(',')
+        .map((d) => d.trim())
+        .filter(Boolean)
+        .join(', ')
+    : '';
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={fStyles.overlay} onPress={onClose}>
+        <Pressable style={fStyles.sheet} onPress={(x) => x.stopPropagation()}>
+          <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+            <View style={fStyles.handleBar} />
+
+            <View style={fStyles.header}>
+              <View style={[fStyles.headerIcon, { backgroundColor: `${accent}1A` }]}>
+                <Ionicons name="information-circle-outline" size={22} color={accent} />
+              </View>
+              <Text style={fStyles.headerTitle}>Event details</Text>
+              <TouchableOpacity onPress={onClose} style={fStyles.closeBtn}>
+                <Ionicons name="close" size={22} color={colors.inkMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[fStyles.detailBadge, { backgroundColor: accent }]}>
+              <Text style={fStyles.detailBadgeText}>{eventTypeLabel(e.eventType || 'class')}</Text>
+            </View>
+
+            <Text style={fStyles.detailTitle}>{titleLine || 'Untitled'}</Text>
+            <Text style={fStyles.detailBody}>{whenDate}</Text>
+            <Text style={fStyles.detailMuted}>{timeRange}</Text>
+
+            {e.location ? (
+              <>
+                <Text style={fStyles.label}>Location</Text>
+                <Text style={fStyles.detailBody}>{e.location}</Text>
+              </>
+            ) : null}
+
+            <Text style={fStyles.label}>Recurrence</Text>
+            <Text style={fStyles.detailBody}>{recurrenceLabel(e.recurrence || 'weekly')}</Text>
+            {isOneTime && e.specificDate ? (
+              <Text style={fStyles.detailMuted}>Date: {e.specificDate}</Text>
+            ) : null}
+            {!isOneTime && daysStr ? (
+              <Text style={fStyles.detailMuted}>Days: {daysStr}</Text>
+            ) : null}
+
+            <View style={fStyles.actions}>
+              <GlassButton label="Edit" onPress={onEdit} />
+              <TouchableOpacity onPress={onDelete} style={fStyles.deleteRow}>
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text style={fStyles.deleteText}>Delete Event</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 /* ─── Shared Event Form Modal ─── */
 
 type EventFormModalProps = {
@@ -612,6 +985,31 @@ function EventFormModal(props: EventFormModalProps) {
     submitLabel, onSubmit, loading, onDelete,
   } = props;
 
+  const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (!visible) setKeyboardHeight(0);
+  }, [visible]);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const subShow = Keyboard.addListener(showEvt, (e) => setKeyboardHeight(e.endCoordinates.height));
+    const subHide = Keyboard.addListener(hideEvt, () => setKeyboardHeight(0));
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
+
+  const windowHeight = Dimensions.get('window').height;
+  const sheetMaxHeight = useMemo(() => {
+    if (keyboardHeight <= 0) return windowHeight * 0.84;
+    const aboveKb = windowHeight - keyboardHeight - insets.bottom - 8;
+    return Math.min(windowHeight * 0.84, Math.max(220, aboveKb));
+  }, [keyboardHeight, windowHeight, insets.bottom]);
+
   const accent = EVENT_COLORS[eventType] || colors.purple;
   const isOneTime = recurrence === 'none';
 
@@ -625,9 +1023,21 @@ function EventFormModal(props: EventFormModalProps) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={fStyles.overlay} onPress={onClose}>
-        <Pressable style={fStyles.sheet} onPress={(e) => e.stopPropagation()}>
-          <ScrollView showsVerticalScrollIndicator={false} bounces={false} keyboardShouldPersistTaps="handled">
+      <Pressable
+        style={[fStyles.overlay, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}
+        onPress={onClose}
+      >
+        <Pressable
+          style={[fStyles.sheet, { maxHeight: sheetMaxHeight }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            contentContainerStyle={fStyles.formScrollContent}
+          >
             <View style={fStyles.handleBar} />
 
             {/* Header */}
@@ -811,8 +1221,8 @@ const fStyles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
     paddingBottom: 40,
-    maxHeight: SCREEN_HEIGHT * 0.84,
   },
+  formScrollContent: { flexGrow: 1, paddingBottom: 8 },
   handleBar: { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.12)', alignSelf: 'center', marginTop: 12, marginBottom: 18 },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 },
   headerIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
@@ -852,6 +1262,17 @@ const fStyles = StyleSheet.create({
   deleteText: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: colors.danger },
   cancelRow: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
   cancelText: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: colors.inkMuted },
+  detailBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    marginBottom: 12,
+  },
+  detailBadgeText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: colors.white },
+  detailTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', color: colors.ink, marginBottom: 6 },
+  detailBody: { fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.ink, lineHeight: 22 },
+  detailMuted: { fontSize: 14, fontFamily: 'Inter_500Medium', color: colors.inkMuted, marginTop: 4 },
 });
 
 const styles = StyleSheet.create({
@@ -925,4 +1346,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.6)',
     marginBottom: 110, // keep calendar above the floating tab bar
   },
+
+  dayListSheet: { paddingHorizontal: 0, paddingBottom: 28, maxHeight: SCREEN_HEIGHT * 0.72 },
+  dayListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+    gap: 12,
+  },
+  dayListDot: { width: 10, height: 10, borderRadius: 5 },
+  dayListTextCol: { flex: 1, minWidth: 0 },
+  dayListTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: colors.ink },
+  dayListSub: { fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.inkMuted, marginTop: 4 },
 });

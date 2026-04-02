@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { auth } from '../../lib/firebase';
 import StaggeredFadeIn from '../../components/StaggeredFadeIn';
 import GlowBackground from '../../components/GlowBackground';
@@ -52,6 +52,13 @@ export default function HomeScreen() {
   const [timerTaskId, setTimerTaskId] = useState<number | null>(null);
   const [timerStartedAtIso, setTimerStartedAtIso] = useState<string>('');
 
+  // Refs so the interval callback always reads the latest values (avoids stale closures)
+  const timerTotalSecsRef = useRef(0);
+  const timerRemainingSecsRef = useRef(0);
+  const timerTaskIdRef = useRef<number | null>(null);
+  const timerStartedAtIsoRef = useRef('');
+  const sessionEndingRef = useRef(false); // prevent double-fire
+
   const durationOptions = [
     { label: '25 min', value: 25 },
     { label: '45 min', value: 45 },
@@ -59,10 +66,11 @@ export default function HomeScreen() {
     { label: '2 hr', value: 120 },
   ];
 
-  useEffect(() => {
-    let isMounted = true;
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
 
-    const loadSnapshot = async () => {
+      const loadSnapshot = async () => {
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) {
         if (isMounted) {
@@ -81,14 +89,63 @@ export default function HomeScreen() {
       }
     };
 
-    void loadSnapshot();
+      void loadSnapshot();
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      return () => {
+        isMounted = false;
+      };
+    }, [])
+  );
 
   // ─── TIMER LOGIC ───
+  // Keep refs in sync with state so the interval always sees fresh values
+  useEffect(() => { timerTotalSecsRef.current = timerTotalSecs; }, [timerTotalSecs]);
+  useEffect(() => { timerRemainingSecsRef.current = timerRemainingSecs; }, [timerRemainingSecs]);
+  useEffect(() => { timerTaskIdRef.current = timerTaskId; }, [timerTaskId]);
+  useEffect(() => { timerStartedAtIsoRef.current = timerStartedAtIso; }, [timerStartedAtIso]);
+
+  const handleEndSession = useCallback(async (completedNaturally: boolean) => {
+    if (sessionEndingRef.current) return; // guard against double-fire
+    sessionEndingRef.current = true;
+
+    setTimerActive(false);
+    setTimerPaused(false);
+
+    // Use refs to get accurate values regardless of stale closures
+    const totalSecs = timerTotalSecsRef.current;
+    const remainingSecs = completedNaturally ? 0 : timerRemainingSecsRef.current;
+    const actualSeconds = totalSecs - remainingSecs;
+    const actualMinutes = Math.max(1, Math.round(actualSeconds / 60));
+    const taskId = timerTaskIdRef.current;
+    const startedAt = timerStartedAtIsoRef.current;
+
+    const firebaseUser = auth.currentUser;
+    if (firebaseUser && actualMinutes > 0) {
+      try {
+        await recordStudySession(firebaseUser, {
+          taskId,
+          startedAt,
+          endedAt: new Date().toISOString(),
+          focusMinutes: actualMinutes,
+          completed: completedNaturally,
+        });
+
+        // Auto-complete the linked task when timer finishes naturally
+        if (completedNaturally && taskId !== null) {
+          await toggleTaskStatus(taskId, 'pending'); // mark as completed
+        }
+
+        // Refresh dashboard so Focus Time, Recent Activity and task list update
+        const freshSnapshot = await loadUserAppSnapshot(firebaseUser);
+        setSnapshot(freshSnapshot);
+      } catch (e) {
+        console.error('Failed to log session', e);
+      }
+    }
+
+    sessionEndingRef.current = false;
+  }, []);
+
   useEffect(() => {
     if (!timerActive || timerPaused || !timerEndsAt) return;
 
@@ -98,24 +155,32 @@ export default function HomeScreen() {
 
       if (left <= 0) {
         setTimerRemainingSecs(0);
-        handleEndSession(true); // Completed naturally
+        timerRemainingSecsRef.current = 0;
+        void handleEndSession(true); // Completed naturally
       } else {
         setTimerRemainingSecs(left);
+        timerRemainingSecsRef.current = left;
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timerActive, timerPaused, timerEndsAt]);
+  }, [timerActive, timerPaused, timerEndsAt, handleEndSession]);
 
   const handleStartSession = useCallback((durationMinutes: number, task: TaskItem | null = null) => {
     setFocusModalVisible(false);
-    
+    sessionEndingRef.current = false;
+
     const durationSecs = durationMinutes * 60;
+    timerTotalSecsRef.current = durationSecs;
+    timerRemainingSecsRef.current = durationSecs;
+    timerTaskIdRef.current = task?.id ?? null;
+    timerStartedAtIsoRef.current = new Date().toISOString();
+
     setTimerTotalSecs(durationSecs);
     setTimerRemainingSecs(durationSecs);
     setTimerEndsAt(Date.now() + durationSecs * 1000);
-    setTimerTaskId(task?.id || null);
-    setTimerStartedAtIso(new Date().toISOString());
+    setTimerTaskId(task?.id ?? null);
+    setTimerStartedAtIso(timerStartedAtIsoRef.current);
     setTimerPaused(false);
     setTimerActive(true);
   }, []);
@@ -123,45 +188,14 @@ export default function HomeScreen() {
   const handlePauseResume = useCallback(() => {
     if (timerPaused) {
       // Resuming: Push the end time forward by the remaining time
-      setTimerEndsAt(Date.now() + timerRemainingSecs * 1000);
+      setTimerEndsAt(Date.now() + timerRemainingSecsRef.current * 1000);
       setTimerPaused(false);
     } else {
       // Pausing
       setTimerPaused(true);
       setTimerEndsAt(null);
     }
-  }, [timerPaused, timerRemainingSecs]);
-
-  const handleEndSession = useCallback(async (completedNaturally: boolean) => {
-    setTimerActive(false);
-    setTimerPaused(false);
-    
-    // Calculate actual elapsed focus minutes
-    const actualSeconds = timerTotalSecs - timerRemainingSecs;
-    const actualMinutes = Math.round(actualSeconds / 60);
-
-    // Only record if they actually studied for at least 1 min
-    if (actualMinutes > 0) {
-      const firebaseUser = auth.currentUser;
-      if (firebaseUser) {
-        try {
-          await recordStudySession(firebaseUser, {
-            taskId: timerTaskId,
-            startedAt: timerStartedAtIso,
-            endedAt: new Date().toISOString(),
-            focusMinutes: actualMinutes,
-            completed: completedNaturally,
-          });
-          
-          // Refresh dashboard
-          const fullrefresh = await loadUserAppSnapshot(firebaseUser);
-          setSnapshot(fullrefresh);
-        } catch (e) {
-          console.error('Failed to log session', e);
-        }
-      }
-    }
-  }, [timerTotalSecs, timerRemainingSecs, timerTaskId, timerStartedAtIso]);
+  }, [timerPaused]);
 
   const handleToggleTask = useCallback(async (task: TaskItem) => {
     // Optimistic UI update

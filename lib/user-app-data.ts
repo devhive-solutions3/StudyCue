@@ -49,6 +49,30 @@ export type AppSnapshot = {
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const COMPLETE_STATUSES = new Set(['completed', 'done']);
 
+/** Values persisted to DB and read by Calendar EVENT_COLORS; unknown strings map to "class". */
+const ALLOWED_CALENDAR_EVENT_TYPES = new Set([
+  'class',
+  'study',
+  'quiz',
+  'exam',
+  'deadline',
+  'review',
+  'test',
+]);
+
+export function normalizeCalendarEventType(raw: string | undefined | null): string {
+  const t = (raw ?? '').trim().toLowerCase();
+  if (ALLOWED_CALENDAR_EVENT_TYPES.has(t)) return t;
+  return 'class';
+}
+
+function formatLocalIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 async function ensureLocalUser(firebaseUser: User): Promise<LocalUserRow> {
   const db = await initDatabase();
   const existing = await db.getFirstAsync<LocalUserRow>(
@@ -152,6 +176,49 @@ export function getTodayClasses(classes: ClassItem[], date = new Date()) {
 
 export function getPendingTasks(tasks: TaskItem[]) {
   return tasks.filter((task) => !COMPLETE_STATUSES.has((task.status ?? '').toLowerCase()));
+}
+
+/** Shown to Cue so the model can avoid duplicate or wrong-surface (calendar vs to-do) actions. */
+export function formatCuePlanningContextForPrompt(snapshot: AppSnapshot): string {
+  const now = new Date();
+  const lines: string[] = [
+    '=== USER DATA IN THIS APP (source of truth when deciding what already exists) ===',
+    `Today's date (device local): ${getWeekdayName(now)}, ${formatLocalIsoDate(now)}`,
+    'Calendar eventType values below: class | quiz | exam | deadline | study | review (app colors follow these types).',
+  ];
+
+  if (snapshot.classes.length === 0) {
+    lines.push('Calendar: (no saved entries)');
+  } else {
+    lines.push(`Calendar (${snapshot.classes.length} saved):`);
+    for (const c of snapshot.classes.slice(0, 35)) {
+      if (!c.title?.trim()) continue;
+      const when = [c.weekday, c.startTime, c.endTime].filter(Boolean).join(' ');
+      lines.push(
+        `- ${c.title.trim().slice(0, 72)} | ${when} | ${c.eventType || 'class'}${c.specificDate ? ` | ${c.specificDate}` : ''}`
+      );
+    }
+    if (snapshot.classes.length > 35) {
+      lines.push(`... +${snapshot.classes.length - 35} more calendar rows`);
+    }
+  }
+
+  const pending = getPendingTasks(snapshot.tasks);
+  if (pending.length === 0) {
+    lines.push('To-do (pending): (none)');
+  } else {
+    lines.push(`To-do (pending, ${pending.length}):`);
+    for (const t of pending.slice(0, 30)) {
+      if (!t.title?.trim()) continue;
+      lines.push(`- ${t.title.trim().slice(0, 72)}`);
+    }
+  }
+
+  lines.push(
+    'Before emitting JSON: calendar rows must include the correct "eventType" (quiz/exam/study/review/deadline/class). For read-only questions about this schedule, answer in plain text—no JSON.'
+  );
+
+  return lines.join('\n');
 }
 
 export function getCompletedTasks(tasks: TaskItem[]) {
@@ -273,14 +340,25 @@ export async function recordStudySession(
 
 const ONE_TIME_EVENT_TYPES = new Set(['quiz', 'exam', 'deadline', 'study', 'review', 'test']);
 
-export async function addParsedClasses(firebaseUser: User, parsedClasses: ParsedClass[]) {
+export type AddParsedClassesResult = { inserted: number; skipped: number };
+
+export async function addParsedClasses(
+  firebaseUser: User,
+  parsedClasses: ParsedClass[]
+): Promise<AddParsedClassesResult> {
   const db = await initDatabase();
   const localUser = await ensureLocalUser(firebaseUser);
 
-  for (const item of parsedClasses) {
-    if (!item.title || !item.weekday) continue;
+  let insertedCount = 0;
+  let skippedMissingFields = 0;
 
-    const eventType = item.eventType?.toLowerCase() || 'class';
+  for (const item of parsedClasses) {
+    if (!item.title || !item.weekday) {
+      skippedMissingFields++;
+      continue;
+    }
+
+    const eventType = normalizeCalendarEventType(item.eventType);
     // Smart default: classes are weekly, quizzes/exams/etc are one-time
     const recurrence = item.recurrence || (ONE_TIME_EVENT_TYPES.has(eventType) ? 'none' : 'weekly');
 
@@ -298,7 +376,36 @@ export async function addParsedClasses(firebaseUser: User, parsedClasses: Parsed
         item.specificDate || null,
       ]
     );
+    insertedCount++;
   }
+
+  const result = { inserted: insertedCount, skipped: skippedMissingFields };
+
+  // #region agent log
+  const logPayload = {
+    sessionId: '530b59',
+    runId: 'post-fix',
+    hypothesisId: 'H4',
+    location: 'user-app-data.ts:addParsedClasses',
+    message: 'calendar rows applied',
+    data: {
+      inputLen: parsedClasses.length,
+      insertedCount,
+      skippedMissingFields,
+    },
+    timestamp: Date.now(),
+  };
+  fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
+    body: JSON.stringify(logPayload),
+  }).catch(() => {});
+  if (__DEV__) {
+    console.warn('[CueDebug]', JSON.stringify(logPayload));
+  }
+  // #endregion
+
+  return result;
 }
 
 export async function updateClassItem(
@@ -384,6 +491,7 @@ export async function addParsedTasks(firebaseUser: User, parsedTasks: ParsedTask
   const db = await initDatabase();
   const localUser = await ensureLocalUser(firebaseUser);
 
+  let tasksInserted = 0;
   for (const item of parsedTasks) {
     if (!item.title) continue;
     await db.runAsync(
@@ -396,7 +504,28 @@ export async function addParsedTasks(firebaseUser: User, parsedTasks: ParsedTask
         'pending'
       ]
     );
+    tasksInserted++;
   }
+
+  // #region agent log
+  const taskLogPayload = {
+    sessionId: '530b59',
+    runId: 'post-fix',
+    hypothesisId: 'H1-H3',
+    location: 'user-app-data.ts:addParsedTasks',
+    message: 'todo rows applied',
+    data: { inputLen: parsedTasks.length, tasksInserted },
+    timestamp: Date.now(),
+  };
+  fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
+    body: JSON.stringify(taskLogPayload),
+  }).catch(() => {});
+  if (__DEV__) {
+    console.warn('[CueDebug]', JSON.stringify(taskLogPayload));
+  }
+  // #endregion
 }
 
 export async function toggleTaskStatus(taskId: number, currentStatus: string | null) {

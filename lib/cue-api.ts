@@ -32,11 +32,14 @@ export async function fetchCueResponse(params: {
   attachment?: CueAttachment;
   history: CueMessage[];
   latestUserText: string;
+  /** Calendar + pending todos summary for the model (signed-in users) */
+  planningContext?: string;
 }): Promise<string> {
   const providerParams: ProviderParams = {
     history: params.history,
     latestUserText: params.latestUserText,
     attachment: params.attachment,
+    planningContext: params.planningContext,
   };
 
   // --- Tier 1: Apple Foundation Models (on-device) ---
