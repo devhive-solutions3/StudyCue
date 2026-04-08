@@ -89,12 +89,17 @@ If the user asks to "correct" or "replace" their schedule (e.g. "change 1am to 1
 
 4. ADDING tasks or a to-do list:
 If the user EXPLICITLY CONFIRMS your proposed study guide or tasks, you must return an \`add_tasks\` JSON command (and DO NOT output a regular text list alongside it).
+\nCategory rules for tasks:
+- Each task MAY include optional \`category\` (string). Example: "Class 3", "Personal", "General".
+- Reuse an existing category name when it already fits; do not create one category per task.
+- Create a new category only when multiple tasks logically belong there or no existing category matches.
+- If user mentions a class (e.g. "exam for class 3"), assign those study tasks to that class category.
 \`\`\`json
 {
   "action": "add_tasks",
   "tasks": [
-    { "title": "Review simile and metaphor notes", "estimatedMinutes": 30 },
-    { "title": "Create 10 flashcards", "estimatedMinutes": 15 }
+    { "title": "Review simile and metaphor notes", "estimatedMinutes": 30, "category": "Class 3" },
+    { "title": "Create 10 flashcards", "estimatedMinutes": 15, "category": "Class 3" }
   ]
 }
 \`\`\`

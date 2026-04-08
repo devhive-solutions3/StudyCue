@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from '@firebase/auth';
 import { auth } from '../../lib/firebase';
@@ -16,6 +16,7 @@ import {
   getPendingTasks,
   loadUserAppSnapshot,
   loadUserPreferences,
+  resetUserStudyData,
   updateUserProfile,
 } from '../../lib/user-app-data';
 
@@ -23,6 +24,7 @@ const EMPTY_SNAPSHOT: AppSnapshot = {
   localUserId: null,
   displayName: null,
   email: null,
+  taskCategories: [],
   classes: [],
   tasks: [],
   sessions: [],
@@ -47,6 +49,7 @@ export default function ProfileScreen() {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Edit form state
   const [editName, setEditName] = useState('');
@@ -134,6 +137,39 @@ export default function ProfileScreen() {
       setSaving(false);
     }
   }, [editName, editFocus, editGoal]);
+
+  const handleResetAllSettings = useCallback(() => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser || resetting) return;
+
+    Alert.alert(
+      'Reset All Settings?',
+      'This will permanently delete your class schedule, all past and current to-do tasks, and your focus time history.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setResetting(true);
+              try {
+                await resetUserStudyData(firebaseUser);
+                const nextSnapshot = await loadUserAppSnapshot(firebaseUser);
+                setSnapshot(nextSnapshot);
+                Alert.alert('Reset complete', 'Your class, to-do, and focus history data have been deleted.');
+              } catch (error) {
+                console.error('Failed to reset user data', error);
+                Alert.alert('Reset failed', 'Something went wrong while deleting your data. Please try again.');
+              } finally {
+                setResetting(false);
+              }
+            })();
+          },
+        },
+      ]
+    );
+  }, [resetting]);
 
   const displayName = getDisplayName(snapshot.displayName, snapshot.email);
   const pendingTasks = getPendingTasks(snapshot.tasks).length;
@@ -305,7 +341,27 @@ export default function ProfileScreen() {
           </StaggeredFadeIn>
         )}
 
-        <StaggeredFadeIn index={4}>
+        {!editing && (
+          <StaggeredFadeIn index={4}>
+            <GlassCard style={styles.resetCard} tintColor="rgba(239,91,116,0.08)">
+              <Text style={styles.resetTitle}>Reset All Settings</Text>
+              <Text style={styles.resetDescription}>
+                This clears your class schedule, all to-do tasks, and focus time history.
+              </Text>
+              <TouchableOpacity
+                onPress={handleResetAllSettings}
+                activeOpacity={0.85}
+                disabled={resetting}
+                style={[styles.resetButton, resetting && styles.resetButtonDisabled]}
+              >
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text style={styles.resetButtonText}>{resetting ? 'Resetting...' : 'Reset All Settings'}</Text>
+              </TouchableOpacity>
+            </GlassCard>
+          </StaggeredFadeIn>
+        )}
+
+        <StaggeredFadeIn index={5}>
           <GlassButton label="Sign Out" onPress={handleLogout} variant="secondary" style={styles.signOutButton} />
         </StaggeredFadeIn>
       </ScrollView>
@@ -494,5 +550,41 @@ const styles = StyleSheet.create({
   },
   signOutButton: {
     marginTop: 8,
+  },
+  resetCard: {
+    marginBottom: 16,
+  },
+  resetTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    color: colors.ink,
+    marginBottom: 8,
+  },
+  resetDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: colors.inkMuted,
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(239,91,116,0.35)',
+    backgroundColor: 'rgba(239,91,116,0.08)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  resetButtonDisabled: {
+    opacity: 0.65,
+  },
+  resetButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.danger,
   },
 });

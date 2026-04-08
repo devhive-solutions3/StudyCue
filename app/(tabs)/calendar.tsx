@@ -41,6 +41,7 @@ const EMPTY_SNAPSHOT: AppSnapshot = {
   localUserId: null,
   displayName: null,
   email: null,
+  taskCategories: [],
   classes: [],
   tasks: [],
   sessions: [],

@@ -21,11 +21,18 @@ export type ClassItem = {
 
 export type TaskItem = {
   id: number;
+  categoryId: number | null;
   title: string | null;
   dueAt: string | null;
   estimatedMinutes: number | null;
   status: string | null;
   createdAt: string | null;
+};
+
+export type TaskCategory = {
+  id: number;
+  name: string;
+  slug: string;
 };
 
 export type StudySessionItem = {
@@ -41,6 +48,7 @@ export type AppSnapshot = {
   localUserId: number | null;
   displayName: string | null;
   email: string | null;
+  taskCategories: TaskCategory[];
   classes: ClassItem[];
   tasks: TaskItem[];
   sessions: StudySessionItem[];
@@ -71,6 +79,19 @@ function formatLocalIsoDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+function normalizeCategoryName(raw: string): string {
+  const cleaned = raw.trim().replace(/\s+/g, ' ');
+  return cleaned.length > 0 ? cleaned : 'General';
+}
+
+function slugifyCategoryName(raw: string): string {
+  const normalized = normalizeCategoryName(raw)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || 'general';
 }
 
 async function ensureLocalUser(firebaseUser: User): Promise<LocalUserRow> {
@@ -114,6 +135,14 @@ export async function loadUserAppSnapshot(firebaseUser: User): Promise<AppSnapsh
   const db = await initDatabase();
   const localUser = await ensureLocalUser(firebaseUser);
 
+  const taskCategories = await db.getAllAsync<TaskCategory>(
+    `SELECT id, name, slug
+     FROM task_categories
+     WHERE userId = ?
+     ORDER BY name COLLATE NOCASE ASC`,
+    [localUser.id]
+  );
+
   const classes = await db.getAllAsync<ClassItem>(
     `SELECT id, title, weekday, startTime, endTime, location, recurrence, eventType, specificDate
      FROM classes
@@ -134,7 +163,7 @@ export async function loadUserAppSnapshot(firebaseUser: User): Promise<AppSnapsh
   );
 
   const tasks = await db.getAllAsync<TaskItem>(
-    `SELECT id, title, dueAt, estimatedMinutes, status, createdAt
+    `SELECT id, categoryId, title, dueAt, estimatedMinutes, status, createdAt
      FROM tasks
      WHERE userId = ?
      ORDER BY
@@ -159,6 +188,7 @@ export async function loadUserAppSnapshot(firebaseUser: User): Promise<AppSnapsh
     localUserId: localUser.id,
     displayName: localUser.displayName,
     email: localUser.email,
+    taskCategories,
     classes,
     tasks,
     sessions,
@@ -204,6 +234,15 @@ export function formatCuePlanningContextForPrompt(snapshot: AppSnapshot): string
   }
 
   const pending = getPendingTasks(snapshot.tasks);
+  if (snapshot.taskCategories.length > 0) {
+    lines.push(`Task categories (${snapshot.taskCategories.length}):`);
+    for (const c of snapshot.taskCategories.slice(0, 20)) {
+      lines.push(`- ${c.name}`);
+    }
+  } else {
+    lines.push('Task categories: (none yet)');
+  }
+
   if (pending.length === 0) {
     lines.push('To-do (pending): (none)');
   } else {
@@ -481,23 +520,93 @@ export async function clearAllClasses(firebaseUser: User) {
   await db.runAsync('DELETE FROM classes WHERE userId = ?', [localUser.id]);
 }
 
+/**
+ * Clears the user's study data while keeping account/profile identity intact.
+ * Used by "Reset All Settings" on Profile.
+ */
+export async function resetUserStudyData(firebaseUser: User) {
+  const db = await initDatabase();
+  const localUser = await ensureLocalUser(firebaseUser);
+
+  await db.runAsync('DELETE FROM classes WHERE userId = ?', [localUser.id]);
+  await db.runAsync('DELETE FROM tasks WHERE userId = ?', [localUser.id]);
+  await db.runAsync('DELETE FROM study_sessions WHERE userId = ?', [localUser.id]);
+}
+
 export type ParsedTask = {
   title: string;
   dueAt?: string;
   estimatedMinutes?: number;
+  category?: string;
 };
+
+export async function ensureTaskCategory(
+  firebaseUser: User,
+  categoryName: string
+): Promise<TaskCategory> {
+  const db = await initDatabase();
+  const localUser = await ensureLocalUser(firebaseUser);
+  const normalizedName = normalizeCategoryName(categoryName);
+  const slug = slugifyCategoryName(normalizedName);
+
+  const existing = await db.getFirstAsync<TaskCategory>(
+    `SELECT id, name, slug
+     FROM task_categories
+     WHERE userId = ? AND slug = ?
+     LIMIT 1`,
+    [localUser.id, slug]
+  );
+
+  if (existing) {
+    return existing;
+  }
+
+  const result = await db.runAsync(
+    'INSERT INTO task_categories (userId, name, slug) VALUES (?, ?, ?)',
+    [localUser.id, normalizedName, slug]
+  );
+
+  return {
+    id: result.lastInsertRowId,
+    name: normalizedName,
+    slug,
+  };
+}
 
 export async function addParsedTasks(firebaseUser: User, parsedTasks: ParsedTask[]) {
   const db = await initDatabase();
   const localUser = await ensureLocalUser(firebaseUser);
+  const categoryCache = new Map<string, TaskCategory>();
+
+  let defaultCategory = await db.getFirstAsync<TaskCategory>(
+    `SELECT id, name, slug
+     FROM task_categories
+     WHERE userId = ? AND slug = ?
+     LIMIT 1`,
+    [localUser.id, 'general']
+  );
+  if (!defaultCategory) {
+    defaultCategory = await ensureTaskCategory(firebaseUser, 'General');
+  }
+  categoryCache.set(defaultCategory.slug, defaultCategory);
 
   let tasksInserted = 0;
   for (const item of parsedTasks) {
     if (!item.title) continue;
+
+    const categoryName = item.category?.trim() ? item.category : defaultCategory.name;
+    const categorySlug = slugifyCategoryName(categoryName);
+    let category = categoryCache.get(categorySlug);
+    if (!category) {
+      category = await ensureTaskCategory(firebaseUser, categoryName);
+      categoryCache.set(category.slug, category);
+    }
+
     await db.runAsync(
-      'INSERT INTO tasks (userId, title, dueAt, estimatedMinutes, status) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO tasks (userId, categoryId, title, dueAt, estimatedMinutes, status) VALUES (?, ?, ?, ?, ?, ?)',
       [
         localUser.id,
+        category.id,
         item.title,
         item.dueAt || null,
         item.estimatedMinutes || null,
@@ -528,12 +637,53 @@ export async function addParsedTasks(firebaseUser: User, parsedTasks: ParsedTask
   // #endregion
 }
 
+export async function createTaskCategory(firebaseUser: User, categoryName: string): Promise<TaskCategory> {
+  return ensureTaskCategory(firebaseUser, categoryName);
+}
+
+export async function addManualTask(
+  firebaseUser: User,
+  taskData: {
+    title: string;
+    estimatedMinutes?: number | null;
+    dueAt?: string | null;
+    categoryName?: string;
+  }
+) {
+  const db = await initDatabase();
+  const localUser = await ensureLocalUser(firebaseUser);
+  const category = await ensureTaskCategory(firebaseUser, taskData.categoryName || 'General');
+
+  await db.runAsync(
+    'INSERT INTO tasks (userId, categoryId, title, dueAt, estimatedMinutes, status) VALUES (?, ?, ?, ?, ?, ?)',
+    [
+      localUser.id,
+      category.id,
+      taskData.title.trim(),
+      taskData.dueAt ?? null,
+      taskData.estimatedMinutes ?? null,
+      'pending',
+    ]
+  );
+}
+
 export async function toggleTaskStatus(taskId: number, currentStatus: string | null) {
   const db = await initDatabase();
   const isCompleted = COMPLETE_STATUSES.has((currentStatus ?? '').toLowerCase());
   const nextStatus = isCompleted ? 'pending' : 'completed';
   
   await db.runAsync('UPDATE tasks SET status = ? WHERE id = ?', [nextStatus, taskId]);
+}
+
+export async function reassignTaskCategory(
+  taskId: number,
+  categoryId: number | null
+) {
+  const db = await initDatabase();
+  await db.runAsync(
+    'UPDATE tasks SET categoryId = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
+    [categoryId, taskId]
+  );
 }
 
 export type UserPreferences = {

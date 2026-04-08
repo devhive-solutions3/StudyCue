@@ -47,6 +47,7 @@ export async function initDatabase() {
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId INTEGER,
+      categoryId INTEGER,
       subjectId INTEGER,
       title TEXT,
       dueAt TEXT,
@@ -55,6 +56,15 @@ export async function initDatabase() {
       priority INTEGER,
       status TEXT,
       notes TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS task_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -96,6 +106,21 @@ export async function initDatabase() {
     await db.execAsync(`ALTER TABLE classes ADD COLUMN specificDate TEXT`);
   } catch (_) {
     // Column already exists
+  }
+  try {
+    await db.execAsync(`ALTER TABLE tasks ADD COLUMN categoryId INTEGER`);
+  } catch (_) {
+    // Column already exists
+  }
+  try {
+    await db.execAsync(`CREATE INDEX IF NOT EXISTS idx_task_categories_user_slug ON task_categories (userId, slug)`);
+  } catch (_) {
+    // Ignore index creation issues
+  }
+  try {
+    await db.execAsync(`CREATE INDEX IF NOT EXISTS idx_tasks_user_category ON tasks (userId, categoryId)`);
+  } catch (_) {
+    // Ignore index creation issues
   }
   
   return db;
