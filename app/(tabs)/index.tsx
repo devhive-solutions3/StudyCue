@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { Alert, Modal, Pressable, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { auth } from '../../lib/firebase';
@@ -22,13 +22,18 @@ import {
   loadUserAppSnapshot,
   recordStudySession,
   toggleTaskStatus,
+  addManualTask,
+  createTaskCategory,
+  reassignTaskCategory,
   type TaskItem,
+  type TaskCategory,
 } from '../../lib/user-app-data';
 
 const EMPTY_SNAPSHOT: AppSnapshot = {
   localUserId: null,
   displayName: null,
   email: null,
+  taskCategories: [],
   classes: [],
   tasks: [],
   sessions: [],
@@ -37,11 +42,19 @@ const EMPTY_SNAPSHOT: AppSnapshot = {
 export default function HomeScreen() {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState<AppSnapshot>(EMPTY_SNAPSHOT);
-  const [tasksExpanded, setTasksExpanded] = useState<boolean>(false);
   const [focusModalVisible, setFocusModalVisible] = useState(false);
   const [focusTask, setFocusTask] = useState<TaskItem | null>(null);
   const [sessionDuration, setSessionDuration] = useState<number>(25);
   const [customDuration, setCustomDuration] = useState<string>('');
+  const [taskBoardWidth, setTaskBoardWidth] = useState(0);
+  const [selectedCategoryPage, setSelectedCategoryPage] = useState(0);
+  const [taskModalVisible, setTaskModalVisible] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [manualTaskTitle, setManualTaskTitle] = useState('');
+  const [manualTaskMinutes, setManualTaskMinutes] = useState('');
+  const [manualTaskCategoryId, setManualTaskCategoryId] = useState<number | null>(null);
+  const [manualCategoryName, setManualCategoryName] = useState('');
+  const taskBoardRef = useRef<ScrollView>(null);
 
   // ─── TIMER STATE ───
   const [timerActive, setTimerActive] = useState(false);
@@ -223,6 +236,111 @@ export default function HomeScreen() {
     setFocusModalVisible(true);
   }, []);
 
+  const refreshSnapshot = useCallback(async () => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return;
+    const nextSnapshot = await loadUserAppSnapshot(firebaseUser);
+    setSnapshot(nextSnapshot);
+  }, []);
+
+  const handleOpenAddMenu = useCallback(() => {
+    Alert.alert('Add', 'What do you want to add?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Add Category',
+        onPress: () => {
+          setManualCategoryName('');
+          setCategoryModalVisible(true);
+        },
+      },
+      {
+        text: 'Add Task',
+        onPress: () => {
+          setManualTaskTitle('');
+          setManualTaskMinutes('');
+          setManualTaskCategoryId(snapshot.taskCategories[0]?.id ?? null);
+          setTaskModalVisible(true);
+        },
+      },
+    ]);
+  }, [snapshot.taskCategories]);
+
+  const handleCreateCategory = useCallback(async () => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return;
+    const name = manualCategoryName.trim();
+    if (!name) {
+      Alert.alert('Category name required', 'Please enter a category name.');
+      return;
+    }
+    try {
+      const created = await createTaskCategory(firebaseUser, name);
+      await refreshSnapshot();
+      setCategoryModalVisible(false);
+      setManualTaskCategoryId(created.id);
+    } catch (error) {
+      console.error('Failed to create category', error);
+      Alert.alert('Failed', 'Could not create category right now.');
+    }
+  }, [manualCategoryName, refreshSnapshot]);
+
+  const handleCreateManualTask = useCallback(async () => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return;
+    const title = manualTaskTitle.trim();
+    if (!title) {
+      Alert.alert('Task title required', 'Please enter a task title.');
+      return;
+    }
+    try {
+      await addManualTask(firebaseUser, {
+        title,
+        estimatedMinutes: manualTaskMinutes.trim() ? Number(manualTaskMinutes) : null,
+        categoryName:
+          snapshot.taskCategories.find((c) => c.id === manualTaskCategoryId)?.name ??
+          (manualTaskCategoryId == null ? 'General' : undefined),
+      });
+      await refreshSnapshot();
+      setTaskModalVisible(false);
+    } catch (error) {
+      console.error('Failed to add task', error);
+      Alert.alert('Failed', 'Could not add task right now.');
+    }
+  }, [manualTaskTitle, manualTaskMinutes, snapshot.taskCategories, manualTaskCategoryId, refreshSnapshot]);
+
+  const handleMoveTaskCategory = useCallback(
+    (task: TaskItem) => {
+      const options = snapshot.taskCategories.map((category) => ({
+        text: category.name,
+        onPress: async () => {
+          try {
+            await reassignTaskCategory(task.id, category.id);
+            await refreshSnapshot();
+          } catch (error) {
+            console.error('Failed to move task category', error);
+          }
+        },
+      }));
+
+      Alert.alert(`Move "${task.title || 'task'}"`, 'Select a category', [
+        { text: 'Cancel', style: 'cancel' },
+        ...options,
+        {
+          text: 'Set as Uncategorized',
+          onPress: async () => {
+            try {
+              await reassignTaskCategory(task.id, null);
+              await refreshSnapshot();
+            } catch (error) {
+              console.error('Failed to unassign task category', error);
+            }
+          },
+        },
+      ]);
+    },
+    [snapshot.taskCategories, refreshSnapshot]
+  );
+
   const displayName = getDisplayName(snapshot.displayName, snapshot.email);
   const pendingTasks = getPendingTasks(snapshot.tasks);
   const completedTasks = getCompletedTasks(snapshot.tasks);
@@ -230,6 +348,31 @@ export default function HomeScreen() {
   const totalFocusMinutes = snapshot.sessions.reduce((sum, session) => sum + (session.focusMinutes ?? 0), 0);
   const activityItems = buildActivityItems(snapshot.tasks, snapshot.sessions);
   const nextTask = pendingTasks[0];
+  const hasUncategorizedTasks = snapshot.tasks.some((task) => task.categoryId == null);
+  const taskBoardCategories: Array<{ key: string; label: string; categoryId: number | null; mode: 'all' | 'category' | 'uncategorized' }> = [
+    { key: 'all', label: 'All', categoryId: null, mode: 'all' },
+    ...snapshot.taskCategories.map((c) => ({ key: `cat-${c.id}`, label: c.name, categoryId: c.id, mode: 'category' as const })),
+    ...(hasUncategorizedTasks ? [{ key: 'uncategorized', label: 'Uncategorized', categoryId: null, mode: 'uncategorized' as const }] : []),
+  ];
+  const activeBoardCategory = taskBoardCategories[selectedCategoryPage] ?? taskBoardCategories[0];
+
+  const getTasksForBoardCategory = useCallback(
+    (boardCategory: { mode: 'all' | 'category' | 'uncategorized'; categoryId: number | null }) => {
+      if (boardCategory.mode === 'all') return snapshot.tasks;
+      if (boardCategory.mode === 'uncategorized') return snapshot.tasks.filter((t) => t.categoryId == null);
+      return snapshot.tasks.filter((t) => t.categoryId === boardCategory.categoryId);
+    },
+    [snapshot.tasks]
+  );
+
+  const getCategoryNameFromTask = useCallback(
+    (task: TaskItem) => {
+      if (task.categoryId == null) return 'Uncategorized';
+      const category = snapshot.taskCategories.find((c) => c.id === task.categoryId);
+      return category?.name ?? 'Uncategorized';
+    },
+    [snapshot.taskCategories]
+  );
 
   // Build contextual subtitle (no email)
   const subtitleText = pendingTasks.length > 0
@@ -279,68 +422,119 @@ export default function HomeScreen() {
         <StaggeredFadeIn index={4}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Tasks</Text>
-            <Text style={styles.tasksCount}>{completedTasks.length}/{snapshot.tasks.length} done</Text>
+            <View style={styles.taskHeaderActions}>
+              <Text style={styles.tasksCount}>{completedTasks.length}/{snapshot.tasks.length} done</Text>
+              <TouchableOpacity onPress={handleOpenAddMenu} style={styles.taskAddButton} activeOpacity={0.7}>
+                <Ionicons name="add" size={16} color={colors.white} />
+              </TouchableOpacity>
+            </View>
           </View>
-          <GlassCard style={styles.tasksCard} tintColor="rgba(255,255,255,0.08)">
-            {snapshot.tasks.length === 0 ? (
-              <Text style={styles.emptyTasksText}>No tasks yet. Ask Cue to create a to-do list for your study sessions!</Text>
-            ) : (
-              <View>
-                {(() => {
-                  const maxInitialTasks = 3;
-                  const allTasks = [...pendingTasks, ...completedTasks];
-                  const hasMoreTasks = allTasks.length > maxInitialTasks;
-                  const visibleTasks = tasksExpanded ? allTasks : allTasks.slice(0, maxInitialTasks);
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryTabs}
+            contentContainerStyle={styles.categoryTabsContent}
+          >
+            {taskBoardCategories.map((category, idx) => (
+              <TouchableOpacity
+                key={category.key}
+                onPress={() => {
+                  if (!taskBoardWidth) return;
+                  setSelectedCategoryPage(idx);
+                  taskBoardRef.current?.scrollTo({ x: idx * taskBoardWidth, animated: true });
+                }}
+                style={[styles.categoryTab, selectedCategoryPage === idx && styles.categoryTabActive]}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.categoryTabText, selectedCategoryPage === idx && styles.categoryTabTextActive]}>
+                  {category.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-                  return (
-                    <>
-                      {visibleTasks.map((task, idx) => {
-                        const isCompleted = task.status === 'completed';
-                        const showDivider = isCompleted && idx > 0 && visibleTasks[idx - 1].status !== 'completed';
-
-                        return (
-                          <React.Fragment key={task.id}>
-                            {showDivider && <View style={styles.taskDivider} />}
-                            <View style={[styles.taskRow, isCompleted && styles.taskRowCompleted]}>
-                              <TouchableOpacity onPress={() => handleToggleTask(task)} activeOpacity={0.7} style={styles.checkboxHitArea}>
-                                <View style={isCompleted ? styles.checkboxChecked : styles.checkboxUnchecked}>
-                                  {isCompleted && <Ionicons name="checkmark" size={12} color={colors.white} />}
+          <View
+            style={styles.taskBoardContainer}
+            onLayout={(e) => {
+              const width = e.nativeEvent.layout.width;
+              if (!width) return;
+              setTaskBoardWidth(width);
+            }}
+          >
+            <ScrollView
+              ref={taskBoardRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                if (!taskBoardWidth) return;
+                const page = Math.round(e.nativeEvent.contentOffset.x / taskBoardWidth);
+                setSelectedCategoryPage(page);
+              }}
+            >
+              {taskBoardCategories.map((category) => {
+                const categoryTasks = getTasksForBoardCategory(category);
+                const categoryPending = getPendingTasks(categoryTasks);
+                const categoryCompleted = getCompletedTasks(categoryTasks);
+                const displayTasks = [...categoryPending, ...categoryCompleted];
+                return (
+                  <View key={category.key} style={[styles.taskBoardPage, taskBoardWidth ? { width: taskBoardWidth } : null]}>
+                    <GlassCard style={styles.tasksCard} tintColor="rgba(255,255,255,0.08)">
+                      {displayTasks.length === 0 ? (
+                        <Text style={styles.emptyTasksText}>
+                          No tasks in {category.label}. Tap + to add one.
+                        </Text>
+                      ) : (
+                        <View>
+                          {displayTasks.map((task, idx) => {
+                            const isCompleted = task.status === 'completed';
+                            const showDivider = idx > 0;
+                            return (
+                              <React.Fragment key={task.id}>
+                                {showDivider && <View style={styles.taskDivider} />}
+                                <View style={[styles.taskRow, isCompleted && styles.taskRowCompleted]}>
+                                  <TouchableOpacity onPress={() => handleToggleTask(task)} activeOpacity={0.7} style={styles.checkboxHitArea}>
+                                    <View style={isCompleted ? styles.checkboxChecked : styles.checkboxUnchecked}>
+                                      {isCompleted && <Ionicons name="checkmark" size={12} color={colors.white} />}
+                                    </View>
+                                  </TouchableOpacity>
+                                  <View style={styles.taskTextWrap}>
+                                    <Text style={isCompleted ? styles.taskTitleCompleted : styles.taskTitle}>
+                                      {task.title || 'Untitled task'}
+                                    </Text>
+                                    <Text style={styles.taskCategoryMeta}>{getCategoryNameFromTask(task)}</Text>
+                                  </View>
+                                  <TouchableOpacity
+                                    onPress={() => handleMoveTaskCategory(task)}
+                                    activeOpacity={0.7}
+                                    style={styles.movePill}
+                                  >
+                                    <Ionicons name="swap-horizontal-outline" size={12} color={colors.indigo} />
+                                    <Text style={styles.movePillText}>Move</Text>
+                                  </TouchableOpacity>
+                                  {!isCompleted && (
+                                    <TouchableOpacity
+                                      onPress={() => handleOpenFocusModal(task)}
+                                      activeOpacity={0.7}
+                                      style={styles.readyPill}
+                                    >
+                                      <Ionicons name="play" size={10} color={colors.purple} />
+                                      <Text style={styles.readyPillText}>Ready</Text>
+                                    </TouchableOpacity>
+                                  )}
                                 </View>
-                              </TouchableOpacity>
-                              <Text style={isCompleted ? styles.taskTitleCompleted : styles.taskTitle}>{task.title || 'Untitled task'}</Text>
-                              {!isCompleted && (
-                                <TouchableOpacity
-                                  onPress={() => handleOpenFocusModal(task)}
-                                  activeOpacity={0.7}
-                                  style={styles.readyPill}
-                                >
-                                  <Ionicons name="play" size={10} color={colors.purple} />
-                                  <Text style={styles.readyPillText}>Ready</Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          </React.Fragment>
-                        );
-                      })}
-
-                      {hasMoreTasks && (
-                        <TouchableOpacity 
-                          style={styles.expandButton} 
-                          onPress={() => setTasksExpanded(!tasksExpanded)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.expandButtonText}>
-                            {tasksExpanded ? 'Show less' : `Show ${allTasks.length - maxInitialTasks} more`}
-                          </Text>
-                          <Ionicons name={tasksExpanded ? "chevron-up" : "chevron-down"} size={16} color={colors.purple} />
-                        </TouchableOpacity>
+                              </React.Fragment>
+                            );
+                          })}
+                        </View>
                       )}
-                    </>
-                  );
-                })()}
-              </View>
-            )}
-          </GlassCard>
+                    </GlassCard>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+          <Text style={styles.boardHint}>Swipe left/right to view task categories.</Text>
         </StaggeredFadeIn>
 
         {/* Next Task Card — interactive "Ready" */}
@@ -455,23 +649,23 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Recent Activity</Text>
         </StaggeredFadeIn>
 
-        {activityItems.length > 0 ? (
-          activityItems.map((activity, index) => (
-            <StaggeredFadeIn key={`${activity}-${index}`} index={index + 8}>
-              <GlassCard style={styles.activityBox} tintColor="rgba(79,120,255,0.08)">
+        <StaggeredFadeIn index={8}>
+          <GlassCard style={styles.activityCard} tintColor="rgba(79,120,255,0.08)">
+            {activityItems.length > 0 ? (
+              activityItems.map((activity, index) => (
+                <View key={`${activity}-${index}`} style={[styles.activityRow, index > 0 && styles.activityRowDivider]}>
+                  <View style={styles.activityDot} />
+                  <Text style={styles.activityText}>{activity}</Text>
+                </View>
+              ))
+            ) : (
+              <View style={styles.activityRow}>
                 <View style={styles.activityDot} />
-                <Text style={styles.activityText}>{activity}</Text>
-              </GlassCard>
-            </StaggeredFadeIn>
-          ))
-        ) : (
-          <StaggeredFadeIn index={8}>
-            <GlassCard style={styles.activityBox} tintColor="rgba(79,120,255,0.08)">
-              <View style={styles.activityDot} />
-              <Text style={styles.activityText}>No study sessions yet</Text>
-            </GlassCard>
-          </StaggeredFadeIn>
-        )}
+                <Text style={styles.activityText}>No study sessions yet</Text>
+              </View>
+            )}
+          </GlassCard>
+        </StaggeredFadeIn>
 
         <View style={styles.bottomPad} />
       </ScrollView>
@@ -482,6 +676,69 @@ export default function HomeScreen() {
         onClose={() => setFocusModalVisible(false)}
         onStart={handleStartSession}
       />
+
+      <Modal visible={taskModalVisible} transparent animationType="slide" onRequestClose={() => setTaskModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setTaskModalVisible(false)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Add Task</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={manualTaskTitle}
+              onChangeText={setManualTaskTitle}
+              placeholder="Task title"
+              placeholderTextColor="rgba(0,0,0,0.25)"
+            />
+            <TextInput
+              style={styles.modalInput}
+              value={manualTaskMinutes}
+              onChangeText={(v) => setManualTaskMinutes(v.replace(/[^0-9]/g, ''))}
+              placeholder="Estimated minutes (optional)"
+              placeholderTextColor="rgba(0,0,0,0.25)"
+              keyboardType="number-pad"
+              maxLength={3}
+            />
+            <Text style={styles.modalLabel}>Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalCategoryRow}>
+              {snapshot.taskCategories.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  onPress={() => setManualTaskCategoryId(category.id)}
+                  style={[styles.modalCategoryPill, manualTaskCategoryId === category.id && styles.modalCategoryPillActive]}
+                >
+                  <Text style={[styles.modalCategoryPillText, manualTaskCategoryId === category.id && styles.modalCategoryPillTextActive]}>
+                    {category.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                onPress={() => setManualTaskCategoryId(null)}
+                style={[styles.modalCategoryPill, manualTaskCategoryId == null && styles.modalCategoryPillActive]}
+              >
+                <Text style={[styles.modalCategoryPillText, manualTaskCategoryId == null && styles.modalCategoryPillTextActive]}>
+                  General
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <GlassButton label="Add Task" onPress={handleCreateManualTask} />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={categoryModalVisible} transparent animationType="slide" onRequestClose={() => setCategoryModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setCategoryModalVisible(false)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Add Category</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={manualCategoryName}
+              onChangeText={setManualCategoryName}
+              placeholder="e.g. Class 3"
+              placeholderTextColor="rgba(0,0,0,0.25)"
+            />
+            <GlassButton label="Create Category" onPress={handleCreateCategory} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </GlowBackground>
   );
 }
@@ -521,9 +778,55 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  tasksCard: {
-    marginBottom: 24,
+  taskHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  taskAddButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryTabs: {
+    marginBottom: 10,
+  },
+  categoryTabsContent: {
+    gap: 8,
+    paddingRight: 6,
+  },
+  categoryTab: {
+    paddingHorizontal: 14,
     paddingVertical: 8,
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  categoryTabActive: {
+    backgroundColor: colors.indigo,
+    borderColor: colors.indigo,
+  },
+  categoryTabText: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.ink,
+  },
+  categoryTabTextActive: {
+    color: colors.white,
+  },
+  taskBoardContainer: {
+    marginBottom: 8,
+  },
+  taskBoardPage: {
+    paddingRight: 2,
+  },
+  tasksCard: {
+    paddingVertical: 8,
+    marginBottom: 2,
   },
   taskRow: {
     flexDirection: 'row',
@@ -556,6 +859,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Inter_500Medium',
     color: colors.ink,
+  },
+  taskTextWrap: {
     flex: 1,
   },
   taskTitleCompleted: {
@@ -563,7 +868,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     color: colors.inkMuted,
     textDecorationLine: 'line-through',
-    flex: 1,
+  },
+  taskCategoryMeta: {
+    marginTop: 2,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: colors.inkMuted,
   },
   taskDivider: {
     height: 1,
@@ -586,20 +896,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     color: colors.purple,
   },
-  expandButton: {
+  movePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    marginTop: 4,
-    gap: 6,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(79,120,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(79,120,255,0.2)',
+    marginRight: 6,
   },
-  expandButtonText: {
-    fontSize: 14,
+  movePillText: {
+    fontSize: 11,
     fontFamily: 'Inter_600SemiBold',
-    color: colors.purple,
+    color: colors.indigo,
   },
   emptyTasksText: {
     fontSize: 15,
@@ -607,6 +919,13 @@ const styles = StyleSheet.create({
     color: colors.inkMuted,
     lineHeight: 22,
     paddingVertical: 8,
+  },
+  boardHint: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: colors.inkMuted,
+    marginBottom: 20,
+    marginTop: 2,
   },
   cardsRow: {
     flexDirection: 'row',
@@ -692,11 +1011,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-  activityBox: {
+  activityCard: {
     marginBottom: 12,
+    width: '100%',
+  },
+  activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingVertical: 6,
+  },
+  activityRowDivider: {
+    marginTop: 8,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
   },
   activityDot: {
     width: 10,
@@ -802,5 +1131,64 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.danger,
     borderColor: 'transparent',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.pageTop,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter_700Bold',
+    color: colors.ink,
+  },
+  modalInput: {
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: colors.ink,
+    fontFamily: 'Inter_500Medium',
+  },
+  modalLabel: {
+    fontSize: 12,
+    color: colors.inkMuted,
+    fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  modalCategoryRow: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  modalCategoryPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  modalCategoryPillActive: {
+    backgroundColor: colors.purple,
+    borderColor: colors.purple,
+  },
+  modalCategoryPillText: {
+    fontSize: 13,
+    color: colors.ink,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  modalCategoryPillTextActive: {
+    color: colors.white,
   },
 });
