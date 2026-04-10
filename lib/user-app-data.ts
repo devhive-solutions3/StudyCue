@@ -420,29 +420,13 @@ export async function addParsedClasses(
 
   const result = { inserted: insertedCount, skipped: skippedMissingFields };
 
-  // #region agent log
-  const logPayload = {
-    sessionId: '530b59',
-    runId: 'post-fix',
-    hypothesisId: 'H4',
-    location: 'user-app-data.ts:addParsedClasses',
-    message: 'calendar rows applied',
-    data: {
+  if (__DEV__) {
+    console.warn('[CueDebug] calendar rows applied', {
       inputLen: parsedClasses.length,
       insertedCount,
       skippedMissingFields,
-    },
-    timestamp: Date.now(),
-  };
-  fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
-    body: JSON.stringify(logPayload),
-  }).catch(() => {});
-  if (__DEV__) {
-    console.warn('[CueDebug]', JSON.stringify(logPayload));
+    });
   }
-  // #endregion
 
   return result;
 }
@@ -616,25 +600,9 @@ export async function addParsedTasks(firebaseUser: User, parsedTasks: ParsedTask
     tasksInserted++;
   }
 
-  // #region agent log
-  const taskLogPayload = {
-    sessionId: '530b59',
-    runId: 'post-fix',
-    hypothesisId: 'H1-H3',
-    location: 'user-app-data.ts:addParsedTasks',
-    message: 'todo rows applied',
-    data: { inputLen: parsedTasks.length, tasksInserted },
-    timestamp: Date.now(),
-  };
-  fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
-    body: JSON.stringify(taskLogPayload),
-  }).catch(() => {});
   if (__DEV__) {
-    console.warn('[CueDebug]', JSON.stringify(taskLogPayload));
+    console.warn('[CueDebug] todo rows applied', { inputLen: parsedTasks.length, tasksInserted });
   }
-  // #endregion
 }
 
 export async function createTaskCategory(firebaseUser: User, categoryName: string): Promise<TaskCategory> {

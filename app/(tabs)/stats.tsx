@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../lib/firebase';
 import StaggeredFadeIn from '../../components/StaggeredFadeIn';
@@ -35,6 +36,7 @@ type StatCard = {
 };
 
 export default function StatsScreen() {
+  const insets = useSafeAreaInsets();
   const [snapshot, setSnapshot] = useState<AppSnapshot>(EMPTY_SNAPSHOT);
 
   useEffect(() => {
@@ -108,11 +110,16 @@ export default function StatsScreen() {
     },
   ];
 
+  const statBoardRows: [StatCard, StatCard][] = [
+    [cards[1], cards[2]],
+    [cards[3], cards[4]],
+  ];
+
   return (
     <GlowBackground>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]}
         showsVerticalScrollIndicator={false}
       >
         <StaggeredFadeIn index={0}>
@@ -161,24 +168,35 @@ export default function StatsScreen() {
               </GlassCard>
             </StaggeredFadeIn>
 
-            {/* Stat grid */}
-            <View style={styles.gridRow}>
-              {cards.slice(1).map((card, index) => (
-                <StaggeredFadeIn key={card.label} index={index + 2}>
-                  <GlassCard style={styles.gridCard} tintColor={card.tintColor}>
-                    <View style={[styles.statIconWrap, { backgroundColor: `${card.iconColor}18` }]}>
-                      <Ionicons name={card.icon} size={20} color={card.iconColor} />
-                    </View>
-                    <Text style={styles.statValue}>{card.value}</Text>
-                    <Text style={styles.statLabel}>{card.label}</Text>
-                  </GlassCard>
-                </StaggeredFadeIn>
-              ))}
-            </View>
+            {/* Stat grid — single glass layer (same idea as Tasks on Home: one card, plain rows inside) */}
+            <StaggeredFadeIn index={2}>
+              <GlassCard
+                style={styles.statsBoardCard}
+                contentStyle={styles.statsBoardInner}
+                tintColor="rgba(255,255,255,0.08)">
+                {statBoardRows.map((pair, rowIdx) => (
+                  <View
+                    key={`stats-row-${rowIdx}`}
+                    style={[styles.statsBoardRow, rowIdx === 0 && styles.statsBoardRowDivider]}>
+                    {pair.map((card, colIdx) => (
+                      <View
+                        key={card.label}
+                        style={[styles.statsBoardCell, colIdx === 0 && styles.statsBoardCellDivider]}>
+                        <View style={[styles.statIconWrap, { backgroundColor: `${card.iconColor}18` }]}>
+                          <Ionicons name={card.icon} size={20} color={card.iconColor} />
+                        </View>
+                        <Text style={styles.statValue}>{card.value}</Text>
+                        <Text style={styles.statLabel}>{card.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </GlassCard>
+            </StaggeredFadeIn>
 
             {/* Task progress summary */}
             {snapshot.tasks.length > 0 && (
-              <StaggeredFadeIn index={7}>
+              <StaggeredFadeIn index={3}>
                 <GlassCard style={styles.progressCard} tintColor="rgba(52,211,153,0.06)">
                   <Text style={styles.progressTitle}>Task Progress</Text>
                   <View style={styles.progressBarBg}>
@@ -216,14 +234,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 58,
+    paddingHorizontal: 26,
     paddingBottom: 120,
   },
   /* Empty state */
   emptyCard: {
     alignItems: 'center',
     paddingVertical: 48,
+    marginHorizontal: 4,
   },
   emptyIconWrap: {
     width: 80,
@@ -251,6 +269,7 @@ const styles = StyleSheet.create({
   /* Highlight card */
   highlightCard: {
     marginBottom: 16,
+    marginHorizontal: 4,
   },
   highlightRow: {
     flexDirection: 'row',
@@ -293,18 +312,30 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     color: '#f59e0b',
   },
-  /* Grid */
-  gridRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  /* Stats board — one GlassCard, inner grid (no nested glass tiles) */
+  statsBoardCard: {
     marginBottom: 16,
+    marginHorizontal: 4,
   },
-  gridCard: {
-    width: '47%' as any,
-    flexGrow: 1,
-    minWidth: 150,
-    paddingVertical: 18,
+  statsBoardInner: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  statsBoardRow: {
+    flexDirection: 'row',
+  },
+  statsBoardRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.07)',
+  },
+  statsBoardCell: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+  },
+  statsBoardCellDivider: {
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: 'rgba(0,0,0,0.07)',
   },
   statIconWrap: {
     width: 38,
@@ -328,6 +359,7 @@ const styles = StyleSheet.create({
   /* Progress */
   progressCard: {
     marginBottom: 16,
+    marginHorizontal: 4,
   },
   progressTitle: {
     fontSize: 16,

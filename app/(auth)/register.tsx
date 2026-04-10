@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createUserWithEmailAndPassword, updateProfile } from '@firebase/auth';
 import { auth } from '../../lib/firebase';
+import { PENDING_WELCOME_GREETING_KEY } from '../../lib/home-greeting';
 import { useRouter, Link } from 'expo-router';
 import GlowBackground from '../../components/GlowBackground';
 import GlassButton from '../../components/GlassButton';
@@ -41,6 +43,7 @@ export default function RegisterScreen() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, { displayName: name });
+      await AsyncStorage.setItem(PENDING_WELCOME_GREETING_KEY, '1');
       // Auth state listener in _layout.tsx will redirect us
     } catch (e: any) {
       setError(e.message || 'Failed to create account.');

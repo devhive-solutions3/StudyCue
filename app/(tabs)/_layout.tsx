@@ -1,7 +1,21 @@
 import { Tabs, useRouter, useSegments } from 'expo-router';
+import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, shadows } from '../../lib/theme';
+import { FLOATING_TAB_BAR_BOTTOM, FLOATING_TAB_BAR_HEIGHT } from '../../lib/tab-bar-layout';
+
+/** Middle slot: reserves equal width for the floating Cue FAB (no duplicate tab UI). */
+function CueTabSpacer(props: BottomTabBarButtonProps) {
+  return (
+    <View
+      style={[props.style, styles.cueSpacerSlot]}
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    />
+  );
+}
 
 export default function TabLayout() {
   const router = useRouter();
@@ -15,15 +29,17 @@ export default function TabLayout() {
           headerShown: false,
           tabBarActiveTintColor: colors.ink,
           tabBarInactiveTintColor: 'rgba(16,33,59,0.45)',
+          tabBarItemStyle: styles.tabItemEven,
           tabBarStyle: {
             position: 'absolute',
             left: 18,
             right: 18,
-            bottom: 20,
-            height: 78,
+            bottom: FLOATING_TAB_BAR_BOTTOM,
+            height: FLOATING_TAB_BAR_HEIGHT,
             borderTopWidth: 0,
             paddingBottom: 10,
             paddingTop: 10,
+            paddingHorizontal: 4,
             borderRadius: radii.xxl,
             backgroundColor: 'rgba(255,255,255,0.66)',
             ...shadows.soft,
@@ -46,13 +62,15 @@ export default function TabLayout() {
           options={{
             title: 'Calendar',
             tabBarIcon: ({ color }) => <Ionicons name="calendar" size={24} color={color} />,
-            tabBarItemStyle: styles.leftCenterItem,
           }}
         />
         <Tabs.Screen
           name="chat"
           options={{
-            href: null,
+            title: 'Cue',
+            tabBarIcon: () => <View style={styles.cueSpacerIcon} />,
+            tabBarLabel: () => null,
+            tabBarButton: (p) => <CueTabSpacer {...p} />,
           }}
         />
         <Tabs.Screen
@@ -60,7 +78,6 @@ export default function TabLayout() {
           options={{
             title: 'Stats',
             tabBarIcon: ({ color }) => <Ionicons name="bar-chart" size={24} color={color} />,
-            tabBarItemStyle: styles.rightCenterItem,
           }}
         />
         <Tabs.Screen
@@ -103,17 +120,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.58)',
   },
+  tabItemEven: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 0,
+  },
+  cueSpacerSlot: {
+    flex: 1,
+    minWidth: 0,
+  },
+  cueSpacerIcon: {
+    width: 24,
+    height: 1,
+    opacity: 0,
+  },
   cueOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingBottom: 44,
-  },
-  leftCenterItem: {
-    marginRight: 20,
-  },
-  rightCenterItem: {
-    marginLeft: 20,
   },
   cueButtonWrap: {
     width: 92,
