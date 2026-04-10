@@ -6,6 +6,7 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
 const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash';
+const groqApiKey = process.env.GROQ_API_KEY?.trim();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -85,6 +86,56 @@ app.post('/api/cue', async (req, res) => {
     res.json({ text });
   } catch (error) {
     console.error('[studycue-ai-proxy] Request error', error);
+    res.status(500).json({ error: 'Internal proxy error.' });
+  }
+});
+
+app.post('/api/groq', async (req, res) => {
+  if (!groqApiKey) {
+    res.status(500).json({ error: 'Missing GROQ_API_KEY on the server.' });
+    return;
+  }
+
+  const { messages, model, max_tokens, temperature } = req.body ?? {};
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    res.status(400).json({ error: 'Invalid Groq payload.' });
+    return;
+  }
+
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${groqApiKey}`,
+      },
+      body: JSON.stringify({ model, messages, max_tokens, temperature }),
+    });
+
+    if (response.status === 429) {
+      res.status(429).json({ error: 'Groq rate limit hit.' });
+      return;
+    }
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error('[studycue-ai-proxy] Groq request failed', response.status, errText.slice(0, 200));
+      res.status(502).json({ error: 'Upstream Groq request failed.' });
+      return;
+    }
+
+    const json = await response.json();
+    const text = json?.choices?.[0]?.message?.content?.trim();
+
+    if (!text) {
+      res.status(502).json({ error: 'Groq response was empty.' });
+      return;
+    }
+
+    res.json({ text });
+  } catch (error) {
+    console.error('[studycue-ai-proxy] Groq request error', error);
     res.status(500).json({ error: 'Internal proxy error.' });
   }
 });

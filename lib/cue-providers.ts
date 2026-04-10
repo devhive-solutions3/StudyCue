@@ -208,14 +208,10 @@ export async function appleFoundationModelProvider(
 }
 
 // ---------------------------------------------------------------------------
-// Provider 2: Groq (free cloud, direct API — text + vision)
+// Provider 2: Groq via backend proxy (API key stays server-side)
 // ---------------------------------------------------------------------------
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-// Text-only model — fast, free, great for planning conversations.
 const GROQ_TEXT_MODEL = 'llama-3.3-70b-versatile';
-// Vision model — used when the user attaches an image (class sched, exam sched, etc.).
-// Llama 4 Scout supports base64 image_url content, free on Groq.
 const GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 /** Read a local file URI as a base64-encoded data URL ready for the Groq vision API. */
@@ -227,26 +223,23 @@ async function imageToDataUrl(attachment: { uri: string; mimeType: string }): Pr
 }
 
 /**
- * Calls Groq's OpenAI-compatible API directly from the client.
- * - No image: uses llama-3.3-70b-versatile (fast text model)
- * - Image attached: uses llama-4-scout-17b (vision model), sends image as base64
+ * Calls Groq through the backend proxy so the API key never ships in the app.
+ * The proxy at /api/groq adds the Authorization header server-side.
  *
- * Free tier, no credit card required. Covers all devices Apple Intelligence
- * cannot run on (iPhone 14 and older, Android, simulator, etc.).
- *
- * Returns null if EXPO_PUBLIC_GROQ_API_KEY is not set or the request fails.
+ * Returns null if the proxy URL is not configured or the request fails.
  */
 export async function groqProvider(params: ProviderParams): Promise<string | null> {
-  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY?.trim();
-  if (!apiKey) {
-    console.warn('[Cue] EXPO_PUBLIC_GROQ_API_KEY not set, skipping Groq');
+  const proxyBase = process.env.EXPO_PUBLIC_AI_PROXY_URL?.trim();
+  if (!proxyBase) {
+    console.warn('[Cue] EXPO_PUBLIC_AI_PROXY_URL not set, skipping Groq');
     return null;
   }
+
+  const groqProxyUrl = proxyBase.replace(/\/api\/cue\/?$/, '/api/groq');
 
   const hasImage = Boolean(params.attachment);
   const model = hasImage ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL;
 
-  // Build history messages (text only — prior images aren't re-uploaded)
   const historyMessages = params.history
     .filter((m) => m.text.trim())
     .map((m) => ({
@@ -254,7 +247,6 @@ export async function groqProvider(params: ProviderParams): Promise<string | nul
       content: m.text.trim(),
     }));
 
-  // Build the latest user message — multimodal when an image is present
   let latestUserContent: string | Array<{ type: string; [key: string]: any }>;
 
   if (hasImage) {
@@ -284,22 +276,18 @@ export async function groqProvider(params: ProviderParams): Promise<string | nul
   ];
 
   try {
-    const response = await fetch(GROQ_API_URL, {
+    const response = await fetch(groqProxyUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
         messages,
-        // Vision/schedule extraction can produce large JSON arrays — give it enough room.
         max_tokens: hasImage
           ? 2048
           : params.planningContext?.trim()
             ? 1024
             : 512,
-        temperature: 0.3, // Lower temp = more precise JSON, less hallucination
+        temperature: 0.3,
       }),
     });
 
@@ -309,23 +297,22 @@ export async function groqProvider(params: ProviderParams): Promise<string | nul
     }
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      console.warn('[Cue] Groq request failed', response.status, errText.slice(0, 200));
+      console.warn('[Cue] Groq proxy request failed', response.status);
       return null;
     }
 
     const json = await response.json();
-    const text = json?.choices?.[0]?.message?.content?.trim();
+    const text = json?.text?.trim();
 
     if (!text) {
-      console.warn('[Cue] Groq returned empty content');
+      console.warn('[Cue] Groq proxy returned empty content');
       return null;
     }
 
     console.log(`[Cue] provider: groq (${hasImage ? 'vision' : 'text'})`);
     return text;
   } catch (error: any) {
-    console.warn('[Cue] Groq fetch error, falling back:', error?.message ?? error);
+    console.warn('[Cue] Groq proxy fetch error, falling back:', error?.message ?? error);
     return null;
   }
 }
