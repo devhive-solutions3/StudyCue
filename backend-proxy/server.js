@@ -11,6 +11,15 @@ const groqApiKey = process.env.GROQ_API_KEY?.trim();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+/** Root URL — Fly "visit app" and uptime checks expect 200 here, not 404. */
+app.get('/', (_req, res) => {
+  res.json({
+    ok: true,
+    service: 'studycue-ai-proxy',
+    endpoints: { health: '/health', gemini: 'POST /api/cue', groq: 'POST /api/groq' },
+  });
+});
+
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
