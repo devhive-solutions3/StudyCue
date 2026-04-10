@@ -28,6 +28,7 @@ export default function GlassHeader({ eyebrow, title, subtitle, rightSlot }: Gla
 const styles = StyleSheet.create({
   outer: {
     marginBottom: 18,
+    marginHorizontal: 4,
   },
   inner: {
     paddingVertical: 18,

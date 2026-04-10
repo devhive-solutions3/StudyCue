@@ -1,8 +1,11 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Alert, Modal, Pressable, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth } from '../../lib/firebase';
+import { PENDING_WELCOME_GREETING_KEY } from '../../lib/home-greeting';
 import StaggeredFadeIn from '../../components/StaggeredFadeIn';
 import GlowBackground from '../../components/GlowBackground';
 import GlassButton from '../../components/GlassButton';
@@ -41,7 +44,9 @@ const EMPTY_SNAPSHOT: AppSnapshot = {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [snapshot, setSnapshot] = useState<AppSnapshot>(EMPTY_SNAPSHOT);
+  const [homeGreetingKind, setHomeGreetingKind] = useState<'welcome' | 'welcomeBack'>('welcomeBack');
   const [focusModalVisible, setFocusModalVisible] = useState(false);
   const [focusTask, setFocusTask] = useState<TaskItem | null>(null);
   const [sessionDuration, setSessionDuration] = useState<number>(25);
@@ -106,6 +111,29 @@ export default function HomeScreen() {
 
       return () => {
         isMounted = false;
+      };
+    }, [])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      void (async () => {
+        try {
+          const raw = await AsyncStorage.getItem(PENDING_WELCOME_GREETING_KEY);
+          if (!alive) return;
+          if (raw === '1') {
+            await AsyncStorage.removeItem(PENDING_WELCOME_GREETING_KEY);
+            setHomeGreetingKind('welcome');
+          } else {
+            setHomeGreetingKind('welcomeBack');
+          }
+        } catch {
+          if (alive) setHomeGreetingKind('welcomeBack');
+        }
+      })();
+      return () => {
+        alive = false;
       };
     }, [])
   );
@@ -379,6 +407,15 @@ export default function HomeScreen() {
     ? `You have ${pendingTasks.length} pending task${pendingTasks.length === 1 ? '' : 's'}`
     : 'All caught up! Add tasks to get started.';
 
+  const greetingTitle =
+    homeGreetingKind === 'welcome'
+      ? displayName
+        ? `Welcome, ${displayName}`
+        : 'Welcome'
+      : displayName
+        ? `Welcome back, ${displayName}`
+        : 'Welcome back';
+
   const overviewCards = [
     { icon: 'book' as const, iconColor: colors.green, value: String(todayClasses.length), label: 'Classes Today' },
     { icon: 'timer' as const, iconColor: colors.indigo, value: formatMinutes(totalFocusMinutes), label: 'Focus Time' },
@@ -387,11 +424,14 @@ export default function HomeScreen() {
 
   return (
     <GlowBackground>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]}
+        showsVerticalScrollIndicator={false}>
         <StaggeredFadeIn index={0}>
           <GlassHeader
             eyebrow="StudyCue"
-            title={displayName ? `Welcome back, ${displayName}` : 'Welcome back'}
+            title={greetingTitle}
             subtitle={subtitleText}
             rightSlot={
               <View style={styles.headerBadge}>
@@ -479,7 +519,10 @@ export default function HomeScreen() {
                 const displayTasks = [...categoryPending, ...categoryCompleted];
                 return (
                   <View key={category.key} style={[styles.taskBoardPage, taskBoardWidth ? { width: taskBoardWidth } : null]}>
-                    <GlassCard style={styles.tasksCard} tintColor="rgba(255,255,255,0.08)">
+                    <GlassCard
+                      style={styles.tasksCard}
+                      contentStyle={styles.tasksCardInner}
+                      tintColor="rgba(255,255,255,0.08)">
                       {displayTasks.length === 0 ? (
                         <Text style={styles.emptyTasksText}>
                           No tasks in {category.label}. Tap + to add one.
@@ -748,8 +791,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingTop: 58,
-    paddingHorizontal: 20,
+    paddingHorizontal: 26,
+    paddingBottom: 120,
   },
   headerBadge: {
     width: 42,
@@ -822,17 +865,22 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   taskBoardPage: {
-    paddingRight: 2,
+    paddingRight: 8,
+    paddingLeft: 4,
   },
   tasksCard: {
-    paddingVertical: 8,
-    marginBottom: 2,
+    marginBottom: 6,
+    marginHorizontal: 2,
+  },
+  tasksCardInner: {
+    paddingVertical: 14,
+    paddingHorizontal: 22,
   },
   taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
-    gap: 10,
+    gap: 8,
   },
   taskRowCompleted: {
     opacity: 0.6,
@@ -879,6 +927,7 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(0,0,0,0.05)',
     marginVertical: 4,
+    marginHorizontal: 4,
   },
   readyPill: {
     flexDirection: 'row',
@@ -906,7 +955,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(79,120,255,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(79,120,255,0.2)',
-    marginRight: 6,
+    marginRight: 4,
+    flexShrink: 0,
   },
   movePillText: {
     fontSize: 11,

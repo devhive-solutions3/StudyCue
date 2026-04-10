@@ -1,18 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  FlatList,
   Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  type ListRenderItem,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -27,6 +29,11 @@ import {
   formatCuePlanningContextForPrompt,
   loadUserAppSnapshot,
 } from '../lib/user-app-data';
+import {
+  parseCueCommandFromResponse,
+  type CueCommand,
+} from '../lib/cue-chat-response';
+import { FLOATING_TAB_BAR_BOTTOM } from '../lib/tab-bar-layout';
 
 type MessageRole = 'user' | 'cue';
 
@@ -36,6 +43,10 @@ type ChatMessage = {
   text: string;
   imageUri?: string;
 };
+
+type MessageListItem =
+  | { type: 'message'; key: string; message: ChatMessage }
+  | { type: 'loading'; key: string };
 
 const INITIAL_MESSAGES: ChatMessage[] = [
   {
@@ -52,99 +63,6 @@ function createMessage(role: MessageRole, text: string, imageUri?: string): Chat
     text,
     imageUri,
   };
-}
-
-function extractFencedJsonBodies(text: string): string[] {
-  const re = /```(?:json)?\s*([\s\S]*?)\s*```/g;
-  const out: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const s = m[1]?.trim();
-    if (s) out.push(s);
-  }
-  return out;
-}
-
-type CueJsonKind =
-  | 'calendar_array'
-  | 'replace_classes'
-  | 'clear_classes'
-  | 'add_tasks'
-  | 'empty_array'
-  | 'unknown';
-
-function classifyCueJsonCommand(parsed: unknown): CueJsonKind {
-  if (Array.isArray(parsed)) {
-    if (parsed.length === 0) return 'empty_array';
-    const row = parsed[0];
-    if (row && typeof row === 'object' && (row as { weekday?: string }).weekday) return 'calendar_array';
-    return 'unknown';
-  }
-  if (parsed && typeof parsed === 'object' && 'action' in parsed) {
-    const o = parsed as { action?: string; classes?: unknown; tasks?: unknown };
-    if (o.action === 'clear_classes') return 'clear_classes';
-    if (o.action === 'replace_classes' && Array.isArray(o.classes)) return 'replace_classes';
-    if (o.action === 'add_tasks' && Array.isArray(o.tasks)) return 'add_tasks';
-  }
-  return 'unknown';
-}
-
-/** True when the user is clearly asking for the calendar/schedule surface, not the to-do list. */
-function userMessagePrefersCalendar(message: string): boolean {
-  const t = message.trim();
-  if (!t) return false;
-  if (/\b(not|instead|only)\b[^.!?]{0,80}\b(todo|to-?do|task\s*list)\b/i.test(t)) return true;
-  if (/\b(calendar|calendar tab|time block|schedule block)\b/i.test(t)) return true;
-  if (/\b(on|to|onto|into|put)[^.!?]{0,40}\b(my\s+)?(calendar|schedule)\b/i.test(t)) return true;
-  return false;
-}
-
-/**
- * If the model emits several ```json``` blocks, using only the first breaks calendar fixes
- * when add_tasks appears before a calendar array. Prefer calendar-shaped JSON when the user asked for calendar.
- */
-function pickJsonCandidateString(
-  cueText: string,
-  latestUserMessage: string
-): { candidate: string | null; calendarIntentButOnlyTasks: boolean; fencedCount: number } {
-  const bodies = extractFencedJsonBodies(cueText);
-  const fencedCount = bodies.length;
-  if (bodies.length === 0) {
-    return { candidate: null, calendarIntentButOnlyTasks: false, fencedCount };
-  }
-
-  const tryParse = (body: string): unknown | null => {
-    try {
-      return JSON.parse(body) as unknown;
-    } catch {
-      return null;
-    }
-  };
-
-  if (userMessagePrefersCalendar(latestUserMessage)) {
-    for (const body of bodies) {
-      const p = tryParse(body);
-      if (!p) continue;
-      const k = classifyCueJsonCommand(p);
-      if (
-        k === 'calendar_array' ||
-        k === 'replace_classes' ||
-        k === 'clear_classes' ||
-        k === 'empty_array'
-      ) {
-        return { candidate: body, calendarIntentButOnlyTasks: false, fencedCount };
-      }
-    }
-    const parsedDefined = bodies.map(tryParse).filter((x): x is NonNullable<typeof x> => x != null);
-    const onlyAddTasks =
-      parsedDefined.length > 0 &&
-      parsedDefined.every((p) => classifyCueJsonCommand(p) === 'add_tasks');
-    if (onlyAddTasks) {
-      return { candidate: null, calendarIntentButOnlyTasks: true, fencedCount };
-    }
-  }
-
-  return { candidate: bodies[0] ?? null, calendarIntentButOnlyTasks: false, fencedCount };
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
@@ -164,41 +82,111 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
 export default function CueChatScreen() {
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const tabBarHeight = useBottomTabBarHeight();
+  /** Tab bar is `position: 'absolute'`; reserve space when keyboard is hidden only. */
+  const composerBottomPaddingCollapsed =
+    tabBarHeight + FLOATING_TAB_BAR_BOTTOM + Math.max(insets.bottom, 8) + 12;
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const composerBottomPadding = isKeyboardVisible ? 10 : composerBottomPaddingCollapsed;
+
+  const listRef = useRef<FlatList<MessageListItem>>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
   const [pendingImageUri, setPendingImageUri] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [lastFailedPayload, setLastFailedPayload] = useState<{ text: string; imageUri?: string } | null>(null);
 
-  useEffect(() => {
-    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
+  const items = useMemo<MessageListItem[]>(
+    () => [
+      ...messages.map((message) => ({ type: 'message', key: message.id, message }) as MessageListItem),
+      ...(isSending ? [{ type: 'loading', key: 'cue-loading' } as MessageListItem] : []),
+    ],
+    [isSending, messages]
+  );
+
+  const renderItem = useCallback<ListRenderItem<MessageListItem>>(({ item }) => {
+    if (item.type === 'loading') {
+      return (
+        <View style={[styles.messageRow, styles.messageRowLeft]}>
+          <View style={[styles.messageBubble, styles.cueBubble]}>
+            <Text style={[styles.messageText, styles.cueMessageText]} accessibilityLabel="Cue is typing">
+              Cue is thinking...
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    return <MessageBubble message={item.message} />;
   }, []);
 
-  const composerBottomInset = isKeyboardVisible ? 12 : Math.max(insets.bottom, 12) + 104;
-  const messageListBottomPadding = 22;
+  async function executeCueCommand(command: CueCommand, user: typeof auth.currentUser): Promise<string> {
+    if (command.kind === 'empty_calendar') {
+      return "I couldn't find any classes to extract from that image.";
+    }
+    if (!user) {
+      if (command.kind === 'add_tasks') return 'You need to be signed in to save tasks.';
+      return 'You need to be signed in to update your calendar.';
+    }
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 50);
+    if (command.kind === 'add_calendar') {
+      const { inserted, skipped } = await addParsedClasses(user, command.classes);
+      const uniqueSubjects = new Set(command.classes.map((p) => p.title.trim().toLowerCase())).size;
+      if (inserted === 0) {
+        return 'I could not add those to your calendar. Each block needs weekday, title, and valid HH:MM start/end times.';
+      }
+      if (skipped > 0) {
+        return `I added ${inserted} calendar block(s); ${skipped} row(s) were skipped. Check the Calendar tab.`;
+      }
+      return `I successfully added ${uniqueSubjects} subject${uniqueSubjects === 1 ? '' : 's'} to your calendar.`;
+    }
 
-    return () => clearTimeout(timeout);
-  }, [messages]);
+    if (command.kind === 'clear_classes') {
+      await clearAllClasses(user);
+      return 'Done! All classes have been cleared from your calendar.';
+    }
 
-  const sendMessage = async () => {
-    const nextText = input.trim();
-    if ((!nextText && !pendingImageUri) || isSending) {
+    if (command.kind === 'replace_classes') {
+      await clearAllClasses(user);
+      const { inserted, skipped } = await addParsedClasses(user, command.classes);
+      const uniqueSubjects = new Set(command.classes.map((p) => p.title.trim().toLowerCase())).size;
+      if (inserted === 0) {
+        return 'I cleared your calendar but could not save the new schedule. Please try again with valid day/time entries.';
+      }
+      if (skipped > 0) {
+        return `I replaced your schedule with ${inserted} saved block(s); ${skipped} row(s) were skipped.`;
+      }
+      return `Done! I replaced your schedule with ${uniqueSubjects} subject${uniqueSubjects === 1 ? '' : 's'}.`;
+    }
+
+    await addParsedTasks(user, command.tasks);
+    return `I have successfully added ${command.tasks.length} tasks to your to-do list.`;
+  }
+
+  const sendMessage = async (override?: { text: string; imageUri?: string }) => {
+    const nextText = (override?.text ?? input).trim();
+    const imageUri = override?.imageUri ?? pendingImageUri ?? undefined;
+    if ((!nextText && !imageUri) || isSending) {
       return;
     }
 
-    const userMessage = createMessage('user', nextText, pendingImageUri ?? undefined);
-    const attachment = pendingImageUri ? createAttachment(pendingImageUri) : undefined;
+    const userMessage = createMessage('user', nextText, imageUri);
+    const attachment = imageUri ? createAttachment(imageUri) : undefined;
     const historyForApi: ApiCueMessage[] = messages.map((message) => ({
       role: message.role,
       text: message.text,
@@ -211,12 +199,15 @@ export default function CueChatScreen() {
       attachmentUri: attachment?.uri,
     });
 
-    setMessages((current) => [...current, userMessage]);
-    setInput('');
-    setPendingImageUri(null);
+    if (!override) {
+      setMessages((current) => [...current, userMessage]);
+      setInput('');
+      setPendingImageUri(null);
+    }
 
     try {
       setIsSending(true);
+      setLastFailedPayload(null);
       const firebaseUser = auth.currentUser;
       let planningContext: string | undefined;
       if (firebaseUser) {
@@ -234,239 +225,38 @@ export default function CueChatScreen() {
         attachment,
         planningContext,
       });
-
-      const jsonPick = pickJsonCandidateString(cueText, nextText);
-
-      // #region agent log
-      const shapePayload = {
-        sessionId: '530b59',
-        runId: 'post-fix',
-        hypothesisId: 'H2-H3',
-        location: 'CueChatScreen.tsx:post-fetchCueResponse',
-        message: 'cue raw response shape',
-        data: {
-          historyLen: historyForApi.length,
-          planningContextLen: planningContext?.length ?? 0,
-          responseLen: cueText?.length ?? 0,
-          hasFencedJson: /\`\`\`(?:json)?\s*[\s\S]*?\`\`\`/.test(cueText),
-          startsWithBracket: cueText.trimStart().startsWith('['),
-          startsWithBrace: cueText.trimStart().startsWith('{'),
-          fencedCount: jsonPick.fencedCount,
-          preferCalendar: userMessagePrefersCalendar(nextText),
-          calendarIntentButOnlyTasks: jsonPick.calendarIntentButOnlyTasks,
-          pickedFence: Boolean(jsonPick.candidate),
-        },
-        timestamp: Date.now(),
-      };
-      fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
-        body: JSON.stringify(shapePayload),
-      }).catch(() => {});
-      if (__DEV__) {
-        console.warn('[CueDebug]', JSON.stringify(shapePayload));
-      }
-      // #endregion
-
-      const user = firebaseUser;
-
-      // --- JSON Action Interceptor ---
-      // The AI may reply with a JSON command instead of a chat message. We detect
-      // that, execute the database action, and show a friendly message instead.
-      // If JSON parsing fails for any reason, we fall back to the chat text.
-
-      // Try to extract JSON body from the response (multi-fence aware; see pickJsonCandidateString)
-      let jsonCandidate: string | null = jsonPick.candidate;
-      if (!jsonCandidate && !jsonPick.calendarIntentButOnlyTasks) {
-        const firstBracket = cueText.indexOf('[');
-        const lastBracket = cueText.lastIndexOf(']');
-        const firstBrace = cueText.indexOf('{');
-        const lastBrace = cueText.lastIndexOf('}');
-
-        if (firstBracket !== -1 && lastBracket > firstBracket) {
-          jsonCandidate = cueText.substring(firstBracket, lastBracket + 1);
-        } else if (firstBrace !== -1 && lastBrace > firstBrace) {
-          jsonCandidate = cueText.substring(firstBrace, lastBrace + 1);
-        }
-      }
-
       let finalResponseText = cueText;
-      let handledAsJson = false;
-
-      if (jsonPick.calendarIntentButOnlyTasks) {
+      const parsed = parseCueCommandFromResponse(cueText, nextText);
+      if (parsed.status === 'ok') {
+        finalResponseText = await executeCueCommand(parsed.command, firebaseUser);
+      } else if (parsed.status === 'calendar_intent_tasks_only') {
         finalResponseText =
-          'You asked for the calendar, but I only returned to-do list JSON. Say the weekday plus start and end time in 24-hour form (e.g. Monday 19:00–20:00), or add the block in the Calendar tab.';
-        handledAsJson = true;
-      }
-
-      if (jsonCandidate) {
-        try {
-          const parsed = JSON.parse(jsonCandidate);
-
-          // #region agent log
-          const first = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
-          const parsePayload = {
-            sessionId: '530b59',
-            runId: 'post-fix',
-            hypothesisId: 'H1-H2',
-            location: 'CueChatScreen.tsx:json-parse-ok',
-            message: 'parsed JSON summary',
-            data: {
-              isArray: Array.isArray(parsed),
-              arrayLen: Array.isArray(parsed) ? parsed.length : 0,
-              objectAction: !Array.isArray(parsed) && parsed && typeof parsed === 'object' ? (parsed as any).action : null,
-              commandKind: classifyCueJsonCommand(parsed),
-              firstKeys: first && typeof first === 'object' ? Object.keys(first as object).sort() : [],
-              firstHasWeekday: Boolean((first as any)?.weekday),
-            },
-            timestamp: Date.now(),
-          };
-          fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
-            body: JSON.stringify(parsePayload),
-          }).catch(() => {});
-          if (__DEV__) {
-            console.warn('[CueDebug]', JSON.stringify(parsePayload));
-          }
-          // #endregion
-
-          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].weekday) {
-            // Add classes action
-            if (user) {
-              const { inserted, skipped } = await addParsedClasses(user, parsed);
-              const uniqueSubjects = new Set(parsed.map((p: any) => p.title?.trim().toLowerCase())).size;
-              if (inserted === 0) {
-                finalResponseText =
-                  'I could not add those to your calendar — each block needs a weekday, title, and valid start/end times (24-hour HH:MM). Say the day and times clearly, or add the block manually in the Calendar tab.';
-              } else if (skipped > 0) {
-                finalResponseText = `I added ${inserted} calendar block(s); ${skipped} row(s) were skipped (missing weekday or title). Check the Calendar tab.`;
-              } else {
-                finalResponseText = `I successfully added ${uniqueSubjects} subject${uniqueSubjects === 1 ? '' : 's'} to your calendar! You can view them in the Calendar tab.`;
-              }
-            } else {
-              finalResponseText = 'You need to be signed in to save classes to your calendar.';
-            }
-            handledAsJson = true;
-
-          } else if (parsed && !Array.isArray(parsed) && parsed.action === 'clear_classes') {
-            // Clear all classes action
-            if (user) {
-              await clearAllClasses(user);
-              finalResponseText = 'Done! All classes have been cleared from your calendar.';
-            } else {
-              finalResponseText = 'You need to be signed in to clear your calendar.';
-            }
-            handledAsJson = true;
-
-          } else if (parsed && !Array.isArray(parsed) && parsed.action === 'replace_classes' && Array.isArray(parsed.classes)) {
-            // Replace = clear then add
-            if (user) {
-              await clearAllClasses(user);
-              const { inserted, skipped } = await addParsedClasses(user, parsed.classes);
-              const uniqueSubjects = new Set(parsed.classes.map((p: any) => p.title?.trim().toLowerCase())).size;
-              if (inserted === 0) {
-                finalResponseText =
-                  'I cleared your calendar but could not save the new schedule — each entry needs a weekday and title. Please try again with a full schedule or add events manually.';
-              } else if (skipped > 0) {
-                finalResponseText = `I replaced your schedule with ${inserted} saved block(s); ${skipped} row(s) were skipped (missing weekday or title). Check the Calendar tab.`;
-              } else {
-                finalResponseText = `Done! I replaced your schedule with ${uniqueSubjects} new subject${uniqueSubjects === 1 ? '' : 's'}. Check the Calendar tab!`;
-              }
-            } else {
-              finalResponseText = 'You need to be signed in to update your calendar.';
-            }
-            handledAsJson = true;
-
-          } else if (parsed && !Array.isArray(parsed) && parsed.action === 'add_tasks' && Array.isArray(parsed.tasks)) {
-            // Add tasks action
-            if (user) {
-              await addParsedTasks(user, parsed.tasks);
-              finalResponseText = `I have successfully added ${parsed.tasks.length} tasks to your to-do list! You can review them on the Home tab.`;
-            } else {
-              finalResponseText = 'You need to be signed in to save tasks.';
-            }
-            handledAsJson = true;
-
-          } else if (Array.isArray(parsed) && parsed.length === 0) {
-            finalResponseText = "I couldn't find any classes to extract from that image.";
-            handledAsJson = true;
-          }
-
-          // #region agent log
-          const handlerPayload = {
-            sessionId: '530b59',
-            runId: 'post-fix',
-            hypothesisId: 'H1',
-            location: 'CueChatScreen.tsx:json-handler-result',
-            message: 'which JSON branch ran',
-            data: {
-              handledAsJson,
-              hadJsonCandidate: true,
-            },
-            timestamp: Date.now(),
-          };
-          fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
-            body: JSON.stringify(handlerPayload),
-          }).catch(() => {});
-          if (__DEV__) {
-            console.warn('[CueDebug]', JSON.stringify(handlerPayload));
-          }
-          // #endregion
-        } catch (e) {
-          // JSON.parse failed — if the AI gave us mostly JSON-looking output, suppress it
-          // to avoid showing raw code to the user.
-          const looksLikeJson = jsonCandidate.trim().startsWith('[') || jsonCandidate.trim().startsWith('{');
-          if (looksLikeJson) {
-            finalResponseText = "I had trouble reading that schedule. Please try again, or type out the schedule manually.";
-            handledAsJson = true;
-          }
-          console.warn('[Cue] JSON parse failed:', e);
-          // #region agent log
-          const failPayload = {
-            sessionId: '530b59',
-            runId: 'post-fix',
-            hypothesisId: 'H2',
-            location: 'CueChatScreen.tsx:json-parse-fail',
-            message: 'JSON.parse threw',
-            data: {
-              errName: e instanceof Error ? e.name : 'unknown',
-              candidateLen: jsonCandidate?.length ?? 0,
-            },
-            timestamp: Date.now(),
-          };
-          fetch('http://127.0.0.1:7870/ingest/d80afea3-449e-42fd-b7ab-6ca71d94c133', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '530b59' },
-            body: JSON.stringify(failPayload),
-          }).catch(() => {});
-          if (__DEV__) {
-            console.warn('[CueDebug]', JSON.stringify(failPayload));
-          }
-          // #endregion
-        }
-      }
-
-      // If the AI's full text looks like raw JSON dumped into the chat (even if not parsed),
-      // sanitize it so we never show code blocks to the user.
-      if (!handledAsJson && (cueText.includes('```json') || cueText.includes('```\n['))) {
-        finalResponseText = "I had trouble saving your schedule. Please ask again.";
+          'You asked for calendar changes, but I only got to-do JSON. Please include weekday and HH:MM start/end time in your request.';
+      } else if (parsed.status === 'invalid_json') {
+        finalResponseText = 'I had trouble reading the response format. Please try again.';
+      } else if (parsed.status === 'invalid_payload') {
+        finalResponseText =
+          'I understood this as a command but some required fields are missing or invalid. Please try again with clearer times and titles.';
+      } else if (parsed.status === 'unsupported') {
+        finalResponseText = 'I got an unsupported command format. Please ask again in plain language.';
+      } else if (cueText.includes('```json')) {
+        finalResponseText = 'I had trouble saving your schedule. Please ask again.';
       }
 
       setMessages((current) => [...current, createMessage('cue', finalResponseText)]);
     } catch (error) {
       console.error('[Cue Chat] fallback path', error);
+      const isAuthError = error instanceof Error && /auth|permission|sign in/i.test(error.message);
+      const failMessage = isAuthError
+        ? 'Please sign in first so Cue can save your schedule and tasks.'
+        : attachment
+          ? "I couldn't process that image right now. Please retry with another image."
+          : 'Cue could not respond right now (network/server issue). Please retry.';
       setMessages((current) => [
         ...current,
-        createMessage(
-          'cue',
-          attachment
-            ? "I couldn't process that image. Please try another one."
-            : 'Cue could not respond right now. Please try again.'
-        ),
+        createMessage('cue', failMessage),
       ]);
+      setLastFailedPayload({ text: nextText, imageUri });
     } finally {
       setIsSending(false);
     }
@@ -514,24 +304,38 @@ export default function CueChatScreen() {
         <KeyboardAvoidingView
           style={styles.keyboardShell}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 18 : 0}>
+          keyboardVerticalOffset={0}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Cue</Text>
             <Text style={styles.headerSubtitle}>Study planner</Text>
           </View>
 
-          <ScrollView
-            ref={scrollRef}
+          <FlatList
+            ref={listRef}
             style={styles.messages}
-            contentContainerStyle={[styles.messagesContent, { paddingBottom: messageListBottomPadding }]}
+            contentContainerStyle={styles.messagesContent}
+            data={items}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.key}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled">
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
-            ))}
-          </ScrollView>
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
+          />
 
-          <View style={[styles.composerShell, { paddingBottom: composerBottomInset }]}>
+          <View style={[styles.composerShell, { paddingBottom: composerBottomPadding }]}>
+            {lastFailedPayload ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry last failed message"
+                accessibilityHint="Resend the last failed text and attachment"
+                onPress={() => {
+                  void sendMessage(lastFailedPayload);
+                }}
+                style={styles.retryButton}>
+                <Text style={styles.retryButtonText}>Retry last message</Text>
+              </Pressable>
+            ) : null}
             <View style={styles.composer}>
               {pendingImageUri ? (
                 <View style={styles.attachmentPreview}>
@@ -545,7 +349,12 @@ export default function CueChatScreen() {
                   </Pressable>
                 </View>
               ) : null}
-              <Pressable accessibilityRole="button" accessibilityLabel="Upload image" onPress={handlePickImage} style={styles.iconButton}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Upload image"
+                accessibilityHint="Attach a class schedule or notes screenshot"
+                onPress={handlePickImage}
+                style={styles.iconButton}>
                 <Ionicons name="image-outline" size={20} color={colors.inkMuted} />
               </Pressable>
 
@@ -561,7 +370,10 @@ export default function CueChatScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Send message"
-                onPress={sendMessage}
+                accessibilityHint={isSending ? 'Cue is generating a response' : 'Send your message to Cue'}
+                onPress={() => {
+                  void sendMessage();
+                }}
                 disabled={isSending}
                 style={[styles.sendButton, isSending && styles.sendButtonDisabled]}>
                 <Ionicons name="arrow-up" size={18} color={colors.white} />
@@ -651,6 +463,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     backgroundColor: 'rgba(246,247,255,0.75)',
+    zIndex: 2,
+    elevation: 6,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(124,98,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    marginBottom: 8,
+  },
+  retryButtonText: {
+    color: colors.purple,
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
   },
   composer: {
     minHeight: 64,
