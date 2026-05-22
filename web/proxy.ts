@@ -2,10 +2,18 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
-import { publicEnv } from '@/lib/public-env';
-import { STUDYCUE_COOKIE } from '@/lib/session';
+/** Inline for Edge/proxy bundle — do not import from @/lib (Vercel unsupported module error). */
+const STUDYCUE_COOKIE = 'studycue_fb_id';
 
-const firebaseProjectId = publicEnv('FIREBASE_PROJECT_ID');
+function readFirebaseProjectId(): string {
+  return (
+    process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ??
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??
+    ''
+  ).trim();
+}
+
+const firebaseProjectId = readFirebaseProjectId();
 const firebaseIssuer = firebaseProjectId
   ? `https://securetoken.google.com/${firebaseProjectId}`
   : null;
@@ -26,12 +34,10 @@ async function validateIdToken(idToken: string | undefined): Promise<boolean> {
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const isAppArea = pathname === '/app' || pathname.startsWith('/app/');
-
-  if (!isAppArea) {
+  if (pathname !== '/app' && !pathname.startsWith('/app/')) {
     return NextResponse.next();
   }
 
