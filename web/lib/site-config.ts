@@ -1,14 +1,52 @@
 export const siteTitle = 'StudyCue — Study planner + AI';
 
+const LOCAL_DEV_URL = 'http://localhost:3000';
+
+/** Normalize env values; reject relative paths like `/api/cue`. */
+function toAbsoluteSiteOrigin(raw: string): string | null {
+  const v = raw.trim();
+  if (!v || v.startsWith('/')) return null;
+  try {
+    const href = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+    return new URL(href).origin;
+  } catch {
+    return null;
+  }
+}
+
 export function getSiteUrl(): string {
-  const u = (process.env.EXPO_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL)?.trim();
-  if (!u) return '';
-  return u.replace(/\/$/, '');
+  const candidates = [
+    process.env.EXPO_PUBLIC_SITE_URL,
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_URL,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate?.trim()) continue;
+    const origin = toAbsoluteSiteOrigin(candidate);
+    if (origin) return origin;
+  }
+
+  return '';
+}
+
+/** Always a valid absolute URL for metadataBase / sitemap / robots at build time. */
+export function resolveSiteOrigin(): string {
+  return getSiteUrl() || (process.env.VERCEL === '1' ? inferVercelOrigin() : LOCAL_DEV_URL);
+}
+
+function inferVercelOrigin(): string {
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+  if (host) {
+    const origin = toAbsoluteSiteOrigin(host);
+    if (origin) return origin;
+  }
+  return 'https://study-cue.vercel.app';
 }
 
 export function canonical(path = ''): string {
-  const base = getSiteUrl();
+  const base = resolveSiteOrigin();
   const p = path.startsWith('/') ? path : `/${path}`;
-  if (!base) return p || '/';
   return `${base}${p === '/' ? '' : p}`;
 }

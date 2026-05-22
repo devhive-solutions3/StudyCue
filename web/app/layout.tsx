@@ -4,7 +4,7 @@ import { DM_Sans, DM_Serif_Display } from 'next/font/google';
 import { Providers } from '@/components/Providers';
 
 import './globals.css';
-import { getSiteUrl, siteTitle } from '@/lib/site-config';
+import { resolveSiteOrigin, siteTitle } from '@/lib/site-config';
 
 const dmSans = DM_Sans({
   variable: '--font-dm-sans',
@@ -20,10 +20,8 @@ const dmSerif = DM_Serif_Display({
   display: 'swap',
 });
 
-const base = getSiteUrl() || 'http://localhost:3000';
-
 export const metadata: Metadata = {
-  metadataBase: new URL(base),
+  metadataBase: new URL(resolveSiteOrigin()),
   title: { default: siteTitle, template: '%s · StudyCue' },
   description:
     'Local-first college planner with Pomodoro, calendar, and focused study workflows across mobile and web.',

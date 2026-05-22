@@ -7,7 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { getAllPosts, getPostBySlug } from '@/lib/posts';
-import { canonical, getSiteUrl, siteTitle } from '@/lib/site-config';
+import { canonical, resolveSiteOrigin, siteTitle } from '@/lib/site-config';
 
 export const dynamicParams = false;
 
@@ -36,7 +36,7 @@ export default async function BlogArticlePage(props: { params: Promise<{ slug: s
   const post = getPostBySlug(slug);
   if (!post) notFound();
 
-  const publisherUrl = getSiteUrl() || canonical('/');
+  const publisherUrl = resolveSiteOrigin();
   const ld = {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',

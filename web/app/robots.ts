@@ -1,11 +1,9 @@
 import type { MetadataRoute } from 'next';
 
-import { getSiteUrl } from '@/lib/site-config';
+import { resolveSiteOrigin } from '@/lib/site-config';
 
 export default function robots(): MetadataRoute.Robots {
-  const base =
-    getSiteUrl()?.replace(/\/+$/, '') ||
-    (process.env.NODE_ENV === 'production' ? 'https://study-cue-gamma.vercel.app' : 'http://localhost:3000');
+  const base = resolveSiteOrigin();
 
   return {
     rules: {

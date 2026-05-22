@@ -1,18 +1,10 @@
 import type { MetadataRoute } from 'next';
 
 import { getAllPosts } from '@/lib/posts';
-import { getSiteUrl } from '@/lib/site-config';
-
-function absBase(): string {
-  const u = getSiteUrl();
-  if (u) return u.replace(/\/+$/, '');
-  return process.env.NODE_ENV === 'production'
-    ? 'https://study-cue-gamma.vercel.app'
-    : 'http://localhost:3000';
-}
+import { resolveSiteOrigin } from '@/lib/site-config';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = absBase();
+  const base = resolveSiteOrigin();
 
   const paths = [
     '/',
