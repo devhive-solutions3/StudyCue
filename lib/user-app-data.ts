@@ -1,5 +1,19 @@
 import { User } from '@firebase/auth';
+import { auth } from './firebase';
 import { initDatabase } from './db';
+import type {
+  AppSnapshot,
+  ClassItem,
+  StudySessionItem,
+  TaskCategory,
+  TaskItem,
+} from '../types/studycue';
+
+function notifyMirrorSync(): void {
+  const u = auth.currentUser;
+  if (!u) return;
+  void import('./sync').then((s) => s.scheduleMirrorPush(u));
+}
 
 type LocalUserRow = {
   id: number;
@@ -7,52 +21,13 @@ type LocalUserRow = {
   email: string | null;
 };
 
-export type ClassItem = {
-  id: number;
-  title: string | null;
-  weekday: string | null;
-  startTime: string | null;
-  endTime: string | null;
-  location: string | null;
-  recurrence: string | null;
-  eventType: string | null;
-  specificDate: string | null;
-};
-
-export type TaskItem = {
-  id: number;
-  categoryId: number | null;
-  title: string | null;
-  dueAt: string | null;
-  estimatedMinutes: number | null;
-  status: string | null;
-  createdAt: string | null;
-};
-
-export type TaskCategory = {
-  id: number;
-  name: string;
-  slug: string;
-};
-
-export type StudySessionItem = {
-  id: number;
-  startedAt: string | null;
-  endedAt: string | null;
-  focusMinutes: number | null;
-  completed: number | null;
-  createdAt: string | null;
-};
-
-export type AppSnapshot = {
-  localUserId: number | null;
-  displayName: string | null;
-  email: string | null;
-  taskCategories: TaskCategory[];
-  classes: ClassItem[];
-  tasks: TaskItem[];
-  sessions: StudySessionItem[];
-};
+export type {
+  AppSnapshot,
+  ClassItem,
+  StudySessionItem,
+  TaskCategory,
+  TaskItem,
+} from '../types/studycue';
 
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const COMPLETE_STATUSES = new Set(['completed', 'done']);
@@ -94,7 +69,7 @@ function slugifyCategoryName(raw: string): string {
   return normalized || 'general';
 }
 
-async function ensureLocalUser(firebaseUser: User): Promise<LocalUserRow> {
+export async function ensureLocalUser(firebaseUser: User): Promise<LocalUserRow> {
   const db = await initDatabase();
   const existing = await db.getFirstAsync<LocalUserRow>(
     'SELECT id, displayName, email FROM users_local WHERE firebaseUserId = ?',
@@ -174,14 +149,14 @@ export async function loadUserAppSnapshot(firebaseUser: User): Promise<AppSnapsh
   );
 
   const sessions = await db.getAllAsync<StudySessionItem>(
-    `SELECT id, startedAt, endedAt, focusMinutes, completed, createdAt
+    `SELECT id, subjectId, taskId, startedAt, endedAt, focusMinutes, completed, createdAt
      FROM study_sessions
      WHERE userId = ?
      ORDER BY
        CASE WHEN startedAt IS NULL THEN 1 ELSE 0 END,
        startedAt DESC,
        createdAt DESC`,
-    [localUser.id]
+    [localUser.id],
   );
 
   return {
@@ -375,6 +350,7 @@ export async function recordStudySession(
       'focus',
     ]
   );
+  notifyMirrorSync();
 }
 
 const ONE_TIME_EVENT_TYPES = new Set(['quiz', 'exam', 'deadline', 'study', 'review', 'test']);
@@ -428,6 +404,7 @@ export async function addParsedClasses(
     });
   }
 
+  notifyMirrorSync();
   return result;
 }
 
@@ -490,11 +467,13 @@ export async function updateClassItem(
     `UPDATE classes SET ${setClauses.join(', ')} WHERE id = ?`,
     params
   );
+  notifyMirrorSync();
 }
 
 export async function deleteClassItem(classId: number) {
   const db = await initDatabase();
   await db.runAsync('DELETE FROM classes WHERE id = ?', [classId]);
+  notifyMirrorSync();
 }
 
 export async function clearAllClasses(firebaseUser: User) {
@@ -502,6 +481,7 @@ export async function clearAllClasses(firebaseUser: User) {
   const localUser = await ensureLocalUser(firebaseUser);
 
   await db.runAsync('DELETE FROM classes WHERE userId = ?', [localUser.id]);
+  notifyMirrorSync();
 }
 
 /**
@@ -515,6 +495,7 @@ export async function resetUserStudyData(firebaseUser: User) {
   await db.runAsync('DELETE FROM classes WHERE userId = ?', [localUser.id]);
   await db.runAsync('DELETE FROM tasks WHERE userId = ?', [localUser.id]);
   await db.runAsync('DELETE FROM study_sessions WHERE userId = ?', [localUser.id]);
+  notifyMirrorSync();
 }
 
 export type ParsedTask = {
@@ -550,6 +531,7 @@ export async function ensureTaskCategory(
     [localUser.id, normalizedName, slug]
   );
 
+  notifyMirrorSync();
   return {
     id: result.lastInsertRowId,
     name: normalizedName,
@@ -603,6 +585,8 @@ export async function addParsedTasks(firebaseUser: User, parsedTasks: ParsedTask
   if (__DEV__) {
     console.warn('[CueDebug] todo rows applied', { inputLen: parsedTasks.length, tasksInserted });
   }
+
+  notifyMirrorSync();
 }
 
 export async function createTaskCategory(firebaseUser: User, categoryName: string): Promise<TaskCategory> {
@@ -633,6 +617,7 @@ export async function addManualTask(
       'pending',
     ]
   );
+  notifyMirrorSync();
 }
 
 export async function toggleTaskStatus(taskId: number, currentStatus: string | null) {
@@ -641,6 +626,7 @@ export async function toggleTaskStatus(taskId: number, currentStatus: string | n
   const nextStatus = isCompleted ? 'pending' : 'completed';
   
   await db.runAsync('UPDATE tasks SET status = ? WHERE id = ?', [nextStatus, taskId]);
+  notifyMirrorSync();
 }
 
 export async function reassignTaskCategory(
@@ -652,6 +638,7 @@ export async function reassignTaskCategory(
     'UPDATE tasks SET categoryId = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
     [categoryId, taskId]
   );
+  notifyMirrorSync();
 }
 
 export type UserPreferences = {
@@ -746,6 +733,7 @@ export async function updateUserProfile(
       );
     }
   }
+  notifyMirrorSync();
 }
 
 export function computeStudyStreak(sessions: StudySessionItem[]): number {

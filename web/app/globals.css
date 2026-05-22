@@ -1,0 +1,643 @@
+@import "tailwindcss";
+
+/* ─── StudyCue "Soft Study Dashboard" design tokens ─────────────────────── */
+:root {
+  /* Backgrounds & surfaces */
+  --sc-bg: #F7F6FE;
+  --sc-surface: #FFFFFF;
+  --sc-surface-soft: #F1F0FB;
+  --sc-surface-hover: #ECEAF8;
+
+  /* Borders */
+  --sc-border: #E3E1F2;
+  --sc-border-strong: #CBC7E4;
+
+  /* Text */
+  --sc-text-primary: #1D1A35;
+  --sc-text-secondary: #625F7D;
+  --sc-text-muted: #9A96B4;
+
+  /* Accent (purple) */
+  --sc-accent: #6B63D4;
+  --sc-accent-hover: #534AB7;
+  --sc-accent-soft: #EEEDFE;
+
+  /* Tone palette */
+  --sc-blue-soft: #E8F3FF;
+  --sc-blue: #2F80D8;
+
+  --sc-teal-soft: #E4F7F0;
+  --sc-teal: #17956F;
+
+  --sc-yellow-soft: #FFF4D8;
+  --sc-yellow: #B7791F;
+
+  --sc-danger-soft: #FDECEC;
+  --sc-danger: #D94A4A;
+
+  --sc-pink-soft: #FFEAF5;
+  --sc-pink: #D9468F;
+
+  /* Radius scale */
+  --sc-radius-sm: 12px;
+  --sc-radius-md: 16px;
+  --sc-radius-lg: 24px;
+  --sc-radius-xl: 32px;
+  --sc-radius-pill: 999px;
+
+  /* Shadow scale */
+  --sc-shadow-sm: 0 4px 12px rgba(81, 70, 145, 0.06);
+  --sc-shadow-md: 0 18px 45px rgba(81, 70, 145, 0.12);
+  --sc-shadow-accent: 0 12px 32px rgba(107, 99, 212, 0.24);
+  --sidebar-w: 252px;
+
+  /* ─── Legacy aliases ─────────────────────────────────────────────────── */
+  /* These map the older token names that existing components still read
+     (bg-surface / text-text-primary / border-border / shadow-[var(--shadow-sm)]
+     / var(--accent) / var(--ink) / var(--purple) / etc.) onto the new SC
+     palette so the whole app picks up the rebrand without per-file edits. */
+  --bg: var(--sc-bg);
+  --surface: var(--sc-surface);
+  --surface-2: var(--sc-surface-soft);
+  --border: var(--sc-border);
+  --border-strong: var(--sc-border-strong);
+  --text-primary: var(--sc-text-primary);
+  --text-secondary: var(--sc-text-secondary);
+  --text-muted: var(--sc-text-muted);
+  --accent: var(--sc-accent);
+  --accent-hover: var(--sc-accent-hover);
+  --accent-light: var(--sc-accent-soft);
+  --shadow-sm: var(--sc-shadow-sm);
+  --shadow-md: var(--sc-shadow-md);
+  --shadow-accent: var(--sc-shadow-accent);
+  --shadow-soft: var(--sc-shadow-sm);
+  --shadow-glow: var(--sc-shadow-accent);
+  --radius-sm: var(--sc-radius-sm);
+  --radius-md: var(--sc-radius-md);
+  --radius-lg: var(--sc-radius-lg);
+  --radius-xl: var(--sc-radius-lg);
+  --radius-xxl: var(--sc-radius-xl);
+  --radius-pill: var(--sc-radius-pill);
+  --purple: var(--sc-accent);
+  --indigo: var(--sc-blue);
+  --green: var(--sc-teal);
+  --mint: var(--sc-teal-soft);
+  --blush: var(--sc-accent-soft);
+  --ink: var(--sc-text-primary);
+  --ink-muted: var(--sc-text-secondary);
+  --line: var(--sc-border);
+  --glass: rgba(255, 255, 255, 0.66);
+  --glass-strong: rgba(255, 255, 255, 0.76);
+  --danger: var(--sc-danger);
+  --page-top: var(--sc-bg);
+  --page-bottom: var(--sc-bg);
+}
+
+/* ─── Tailwind theme wiring (Tailwind v4 @theme inline) ─────────────────── */
+@theme inline {
+  /* Fonts */
+  --font-sans: var(--font-dm-sans, var(--font-inter, "DM Sans"), "Inter", system-ui, -apple-system, sans-serif);
+  --font-serif: var(--font-dm-serif, "DM Serif Display"), Georgia, serif;
+  --font-display: var(--font-dm-serif, "DM Serif Display"), Georgia, serif;
+
+  /* Core */
+  --color-bg: var(--sc-bg);
+  --color-surface: var(--sc-surface);
+  --color-surface-2: var(--sc-surface-soft);
+  --color-surface-soft: var(--sc-surface-soft);
+  --color-surface-hover: var(--sc-surface-hover);
+  --color-border: var(--sc-border);
+  --color-border-strong: var(--sc-border-strong);
+  --color-text-primary: var(--sc-text-primary);
+  --color-text-secondary: var(--sc-text-secondary);
+  --color-text-muted: var(--sc-text-muted);
+
+  /* Accent */
+  --color-accent: var(--sc-accent);
+  --color-accent-light: var(--sc-accent-soft);
+  --color-accent-soft: var(--sc-accent-soft);
+  --color-accent-hover: var(--sc-accent-hover);
+
+  /* Tone shortcuts */
+  --color-purple: var(--sc-accent);
+  --color-indigo: var(--sc-blue);
+  --color-green: var(--sc-teal);
+  --color-mint: var(--sc-teal-soft);
+  --color-blush: var(--sc-accent-soft);
+  --color-danger: var(--sc-danger);
+  --color-pink: var(--sc-pink);
+
+  /* Map legacy numeric purples to SC accent ramp so existing
+     `bg-purple-50 text-purple-600` style classes pick up the rebrand. */
+  --color-purple-50: var(--sc-accent-soft);
+  --color-purple-100: var(--sc-accent-soft);
+  --color-purple-200: #D8D4F7;
+  --color-purple-400: #8C84E4;
+  --color-purple-500: var(--sc-accent);
+  --color-purple-600: var(--sc-accent);
+  --color-purple-700: var(--sc-accent-hover);
+  --color-purple-800: var(--sc-accent-hover);
+  --color-purple-900: #2D2683;
+
+  /* Map legacy blues -> SC blue */
+  --color-blue-50: var(--sc-blue-soft);
+  --color-blue-100: var(--sc-blue-soft);
+  --color-blue-200: #C5DEF7;
+  --color-blue-500: var(--sc-blue);
+  --color-blue-600: var(--sc-blue);
+  --color-blue-700: #245FAB;
+
+  /* Map legacy teals -> SC teal */
+  --color-teal-50: var(--sc-teal-soft);
+  --color-teal-100: var(--sc-teal-soft);
+  --color-teal-200: #BFEBDA;
+  --color-teal-500: var(--sc-teal);
+  --color-teal-600: var(--sc-teal);
+  --color-teal-700: #0F7156;
+
+  /* Map legacy rose -> SC danger */
+  --color-rose-50: var(--sc-danger-soft);
+  --color-rose-100: var(--sc-danger-soft);
+  --color-rose-200: #F4C8C8;
+  --color-rose-500: var(--sc-danger);
+  --color-rose-600: var(--sc-danger);
+  --color-rose-700: #B23A3A;
+
+  /* Map legacy yellow/amber -> SC yellow */
+  --color-amber-50: var(--sc-yellow-soft);
+  --color-amber-100: var(--sc-yellow-soft);
+  --color-amber-600: var(--sc-yellow);
+  --color-yellow-50: var(--sc-yellow-soft);
+  --color-yellow-100: var(--sc-yellow-soft);
+  --color-yellow-600: var(--sc-yellow);
+
+  /* Legacy neutral grays -> SC neutrals */
+  --color-gray-50: var(--sc-surface);
+  --color-gray-100: var(--sc-surface-soft);
+  --color-gray-200: var(--sc-border);
+  --color-gray-300: var(--sc-border-strong);
+  --color-gray-400: var(--sc-text-muted);
+  --color-gray-500: var(--sc-text-muted);
+  --color-gray-600: var(--sc-text-secondary);
+  --color-gray-700: var(--sc-text-secondary);
+  --color-gray-800: var(--sc-text-primary);
+  --color-gray-900: var(--sc-text-primary);
+}
+
+/* ─── Dark mode overrides ─────────────────────────────────────────────────── */
+html.dark {
+  --sc-bg: #0F0E1A;
+  --sc-surface: #171625;
+  --sc-surface-soft: #222034;
+  --sc-surface-hover: #2A2740;
+
+  --sc-border: #2D2A42;
+  --sc-border-strong: #47435F;
+
+  --sc-text-primary: #F7F5FF;
+  --sc-text-secondary: #C8C4DD;
+  --sc-text-muted: #8C88A6;
+
+  --sc-accent: #A099FF;
+  --sc-accent-hover: #B9B4FF;
+  --sc-accent-soft: #27224D;
+
+  --sc-blue-soft: #14283D;
+  --sc-blue: #8EC8FF;
+
+  --sc-teal-soft: #102D27;
+  --sc-teal: #8BEBCB;
+
+  --sc-yellow-soft: #352B15;
+  --sc-yellow: #F4C86A;
+
+  --sc-danger-soft: #351B23;
+  --sc-danger: #FF8A9A;
+
+  --sc-pink-soft: #35172B;
+  --sc-pink: #FF8CCF;
+
+  --sc-shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.28);
+  --sc-shadow-md: 0 18px 45px rgba(0, 0, 0, 0.35);
+  --sc-shadow-accent: 0 10px 30px rgba(160, 153, 255, 0.24);
+
+  /* glass surfaces become opaque dark cards in dark mode */
+  --glass: var(--sc-surface);
+  --glass-strong: var(--sc-surface);
+}
+
+html.dark body {
+  color-scheme: dark;
+}
+
+/* ─── Base resets ────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+html {
+  background: var(--sc-bg);
+}
+
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--sc-text-primary);
+  font-family: var(--font-dm-sans), "DM Sans", "Inter", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5 {
+  letter-spacing: -0.01em;
+}
+
+/* Soft radial accent backdrop applied to <body> so it sits behind every page
+   without forcing a layout container. Light = purple + blue glow, Dark = dim
+   purple only. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 82% 6%, rgba(107, 99, 212, 0.16), transparent 31%),
+    radial-gradient(circle at 52% 100%, rgba(47, 128, 216, 0.08), transparent 34%),
+    var(--sc-bg);
+}
+
+html.dark body::before {
+  background:
+    radial-gradient(circle at 82% 6%, rgba(160, 153, 255, 0.18), transparent 31%),
+    radial-gradient(circle at 52% 100%, rgba(47, 128, 216, 0.07), transparent 36%),
+    var(--sc-bg);
+}
+
+/* Make sure any direct page content sits above the ambient backdrop */
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Reusable primitives ───────────────────────────────────────────────── */
+.glass-card {
+  background: var(--sc-surface);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-lg);
+  box-shadow: var(--sc-shadow-sm);
+}
+
+.glass-card-sm {
+  background: var(--sc-surface);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-md);
+  box-shadow: var(--sc-shadow-sm);
+}
+
+.sc-card {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-lg);
+  box-shadow: var(--sc-shadow-sm);
+  overflow: hidden;
+  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+html.dark .sc-card {
+  background: rgba(23, 22, 37, 0.88);
+}
+.sc-card:hover {
+  box-shadow: var(--sc-shadow-md);
+  border-color: var(--sc-border-strong);
+}
+
+.sc-surface-soft {
+  background: var(--sc-surface-soft);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-md);
+}
+
+/* Primary pill / button used by GlassButton & legacy components */
+.btn-pill-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sc-accent);
+  color: #fff;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  box-shadow: var(--sc-shadow-accent);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+.btn-pill-primary:hover {
+  background: var(--sc-accent-hover);
+  transform: translateY(-1px);
+}
+.btn-pill-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.btn-pill-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sc-surface);
+  color: var(--sc-text-primary);
+  border: 1px solid var(--sc-border);
+  border-radius: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.btn-pill-secondary:hover {
+  background: var(--sc-surface-soft);
+  border-color: var(--sc-border-strong);
+}
+.btn-pill-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.sc-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--sc-accent);
+  color: #fff;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  min-height: 42px;
+  padding: 0 17px;
+  box-shadow: var(--sc-shadow-accent);
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+.sc-btn-primary:hover { background: var(--sc-accent-hover); transform: translateY(-1px); }
+.sc-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.sc-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--sc-surface);
+  color: var(--sc-text-primary);
+  border: 1px solid var(--sc-border);
+  border-radius: 14px;
+  min-height: 42px;
+  padding: 0 17px;
+  font-weight: 800;
+  box-shadow: var(--sc-shadow-sm);
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.sc-btn-secondary:hover { background: var(--sc-surface-soft); border-color: var(--sc-border-strong); }
+
+/* Input primitive (used in auth pages) */
+.sc-input {
+  width: 100%;
+  min-height: 46px;
+  background: var(--sc-surface-soft);
+  color: var(--sc-text-primary);
+  border: 1px solid var(--sc-border);
+  border-radius: 13px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.sc-input::placeholder { color: var(--sc-text-muted); }
+.sc-input:focus {
+  border-color: var(--sc-accent);
+  box-shadow: 0 0 0 4px rgba(107, 99, 212, 0.12);
+}
+html.dark .sc-input:focus {
+  box-shadow: 0 0 0 4px rgba(160, 153, 255, 0.12);
+}
+
+.sc-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sc-text-muted);
+}
+
+/* Focus ring helper anyone can drop on */
+.sc-focus-ring:focus-visible {
+  outline: none;
+  border-color: var(--sc-accent);
+  box-shadow: 0 0 0 3px rgba(107, 99, 212, 0.18);
+}
+html.dark .sc-focus-ring:focus-visible {
+  box-shadow: 0 0 0 3px rgba(160, 153, 255, 0.22);
+}
+
+.sc-page-title {
+  font-size: clamp(30px, 3vw, 42px);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.sc-app-page {
+  width: min(1280px, calc(100vw - 96px));
+  margin: 0 auto;
+}
+
+.sc-app-page-wide {
+  width: min(1520px, calc(100vw - 96px));
+  margin: 0 auto;
+}
+
+.sc-hero-title {
+  font-family: var(--font-dm-serif), "DM Serif Display", Georgia, serif;
+  font-size: clamp(42px, 4vw, 66px);
+  line-height: 0.94;
+  letter-spacing: -0.05em;
+}
+
+.sc-panel {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-lg);
+  box-shadow: var(--sc-shadow-sm);
+  overflow: hidden;
+}
+
+html.dark .sc-panel {
+  background: rgba(23, 22, 37, 0.88);
+}
+
+.sc-panel-header {
+  min-height: 58px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--sc-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sc-panel-body {
+  padding: 18px 20px 20px;
+}
+
+.sc-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--sc-accent-soft);
+  color: var(--sc-accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sc-soft-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border-radius: 14px;
+  padding: 0 17px;
+  background: var(--sc-accent-soft);
+  color: var(--sc-accent);
+  font-weight: 800;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.sc-soft-button:hover {
+  background: var(--sc-surface-hover);
+  transform: translateY(-1px);
+}
+
+.sc-floating-cue {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  width: 88px;
+  height: 88px;
+  border-radius: 999px;
+  border: 1px solid var(--sc-border);
+  background: var(--sc-surface);
+  z-index: 70;
+  box-shadow:
+    0 14px 34px rgba(107, 99, 212, 0.18),
+    0 0 0 9px rgba(107, 99, 212, 0.08);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.sc-floating-cue:hover {
+  transform: translateY(-3px) scale(1.045);
+}
+
+html.dark .sc-floating-cue {
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.40),
+    0 0 0 9px rgba(160, 153, 255, 0.08),
+    0 0 34px rgba(160, 153, 255, 0.30);
+}
+
+@media (max-width: 900px) {
+  .sc-app-page,
+  .sc-app-page-wide {
+    width: 100%;
+  }
+
+  .sc-floating-cue {
+    width: 78px;
+    height: 78px;
+    right: 18px;
+    bottom: 92px;
+  }
+}
+
+/* Nicer scrollbars on webkit */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--sc-border-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--sc-accent);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* Day / week time grid — duration-based event blocks */
+.calendar-week-grid {
+  border: 1px solid var(--sc-border);
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--sc-surface);
+}
+
+.calendar-time-column {
+  background: var(--sc-surface-soft);
+  border-right: 1px solid var(--sc-border);
+}
+
+.calendar-time-slot {
+  padding: 8px;
+  border-bottom: 1px solid var(--sc-border);
+  color: var(--sc-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  box-sizing: border-box;
+}
+
+.calendar-day-column {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(76px - 1px),
+    var(--sc-border) 76px
+  );
+  box-sizing: border-box;
+}
+
+.calendar-event-block {
+  position: absolute;
+  z-index: 2;
+  border-radius: 12px;
+  padding: 8px 10px;
+  overflow: hidden;
+  text-align: left;
+  box-shadow: var(--sc-shadow-sm);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.calendar-event-block:hover {
+  z-index: 3;
+  box-shadow: var(--sc-shadow-md);
+}
+
+.calendar-event-title {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.calendar-event-time {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+}

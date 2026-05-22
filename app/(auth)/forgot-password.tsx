@@ -5,6 +5,7 @@ import { auth } from '../../lib/firebase';
 import { Link } from 'expo-router';
 import GlowBackground from '../../components/GlowBackground';
 import GlassButton from '../../components/GlassButton';
+import { authScreenLayoutStyles } from '../../lib/auth-layout-styles';
 import GlassCard from '../../components/GlassCard';
 import StaggeredFadeIn from '../../components/StaggeredFadeIn';
 import { colors } from '../../lib/theme';
@@ -37,9 +38,9 @@ export default function ForgotPasswordScreen() {
 
   return (
     <GlowBackground>
-      <View style={styles.container}>
-        <StaggeredFadeIn index={0}>
-          <GlassCard style={styles.panel} tintColor="rgba(52,211,153,0.12)">
+      <View style={authScreenLayoutStyles.outer}>
+        <StaggeredFadeIn index={0} style={authScreenLayoutStyles.cardWrap}>
+          <GlassCard tintColor="rgba(52,211,153,0.12)">
             <Text style={styles.title}>Reset Password</Text>
             <Text style={styles.subtitle}>Secure recovery in the same softer premium system.</Text>
 
@@ -71,14 +72,6 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-  },
-  panel: {
-    padding: 8,
-  },
   title: {
     fontSize: 32,
     fontFamily: 'Inter_700Bold',

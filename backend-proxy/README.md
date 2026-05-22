@@ -19,14 +19,19 @@ Minimal Express proxy for Cue AI requests.
 The Expo app should point `EXPO_PUBLIC_AI_PROXY_URL` to:
 
 ```txt
-http://localhost:3000/api/cue
+http://localhost:3001/api/cue
 ```
+
+(Use port **3001** so it does not clash with Next.js on **3000**.)
+
+For **web** local dev, prefer built-in Next routes: set `NEXT_PUBLIC_AI_PROXY_URL=/api/cue` and put `GROQ_API_KEY` / `GEMINI_API_KEY` in `web/.env.local` (no separate proxy process required).
 
 ## Server env vars
 
-- `GEMINI_API_KEY`: secret, server-only
+- `GROQ_API_KEY`: secret, server-only (Groq vision + text)
+- `GEMINI_API_KEY`: secret, server-only (fallback)
 - `GEMINI_MODEL`: optional, server-only
-- `PORT`: optional
+- `PORT`: optional (default **3001**)
 
 ## Deploy later
 

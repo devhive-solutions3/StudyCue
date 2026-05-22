@@ -12,6 +12,7 @@ import GlassButton from '../../components/GlassButton';
 import GlassCard from '../../components/GlassCard';
 import GlassHeader from '../../components/GlassHeader';
 import FocusSessionModal from '../../components/FocusSessionModal';
+import CloudMigrationCard from '../../components/CloudMigrationCard';
 import { colors, radii } from '../../lib/theme';
 import {
   AppSnapshot,
@@ -76,6 +77,20 @@ export default function HomeScreen() {
   const timerTaskIdRef = useRef<number | null>(null);
   const timerStartedAtIsoRef = useRef('');
   const sessionEndingRef = useRef(false); // prevent double-fire
+
+  const reloadSnapshot = useCallback(async () => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      setSnapshot(EMPTY_SNAPSHOT);
+      return;
+    }
+    try {
+      const nextSnapshot = await loadUserAppSnapshot(firebaseUser);
+      setSnapshot(nextSnapshot);
+    } catch (error) {
+      console.error('Reload snapshot failed', error);
+    }
+  }, []);
 
   const durationOptions = [
     { label: '25 min', value: 25 },
@@ -439,6 +454,10 @@ export default function HomeScreen() {
               </View>
             }
           />
+        </StaggeredFadeIn>
+
+        <StaggeredFadeIn index={1}>
+          <CloudMigrationCard onDataChanged={reloadSnapshot} />
         </StaggeredFadeIn>
 
         <StaggeredFadeIn index={2}>

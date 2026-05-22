@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Alert, View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
+import { Modal, Alert, View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from '@firebase/auth';
 import { auth } from '../../lib/firebase';
@@ -9,9 +9,9 @@ import GlassButton from '../../components/GlassButton';
 import GlassCard from '../../components/GlassCard';
 import GlassHeader from '../../components/GlassHeader';
 import { colors, radii } from '../../lib/theme';
+import { reauthenticateThenDeleteFirebaseUser } from '../../lib/account-deletion';
+import type { AppSnapshot, UserPreferences } from '../../lib/user-app-data';
 import {
-  AppSnapshot,
-  UserPreferences,
   getDisplayName,
   getPendingTasks,
   loadUserAppSnapshot,
@@ -50,6 +50,9 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // Edit form state
   const [editName, setEditName] = useState('');
@@ -170,6 +173,39 @@ export default function ProfileScreen() {
       ]
     );
   }, [resetting]);
+
+  const isPasswordLogin =
+    auth.currentUser?.providerData?.some((p) => p.providerId === 'password') ?? false;
+
+  const handleOpenDeleteAccount = useCallback(() => {
+    const u = auth.currentUser;
+    if (!u?.email || !isPasswordLogin) {
+      Alert.alert(
+        'Delete account',
+        'Deleting from the mobile app requires an email/password sign-in for now. Use the web app profile or Firebase Console otherwise.',
+      );
+      return;
+    }
+    setDeletePassword('');
+    setDeleteModalVisible(true);
+  }, [isPasswordLogin]);
+
+  const handleConfirmDeleteAccount = useCallback(async () => {
+    if (!deletePassword.trim()) {
+      Alert.alert('Password required', 'Enter your StudyCue password to confirm.');
+      return;
+    }
+    setDeletingAccount(true);
+    try {
+      await reauthenticateThenDeleteFirebaseUser(deletePassword);
+      setDeleteModalVisible(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert('Delete failed', msg);
+    } finally {
+      setDeletingAccount(false);
+    }
+  }, [deletePassword]);
 
   const displayName = getDisplayName(snapshot.displayName, snapshot.email);
   const pendingTasks = getPendingTasks(snapshot.tasks).length;
@@ -361,10 +397,58 @@ export default function ProfileScreen() {
           </StaggeredFadeIn>
         )}
 
-        <StaggeredFadeIn index={5}>
+        {!editing && (
+          <StaggeredFadeIn index={5}>
+            <GlassCard style={styles.resetCard} tintColor="rgba(16,33,59,0.06)">
+              <Text style={styles.resetTitle}>Delete account</Text>
+              <Text style={styles.resetDescription}>
+                Permanently deletes your Firebase account, cloud mirror, and local SQLite data for StudyCue on this device.
+              </Text>
+              <TouchableOpacity onPress={handleOpenDeleteAccount} activeOpacity={0.85} style={styles.resetButton}>
+                <Ionicons name="warning-outline" size={16} color={colors.danger} />
+                <Text style={styles.resetButtonText}>Delete my account...</Text>
+              </TouchableOpacity>
+            </GlassCard>
+          </StaggeredFadeIn>
+        )}
+
+        <StaggeredFadeIn index={6}>
           <GlassButton label="Sign Out" onPress={handleLogout} variant="secondary" style={styles.signOutButton} />
         </StaggeredFadeIn>
       </ScrollView>
+
+      <Modal transparent animationType="fade" visible={deleteModalVisible}>
+        <View style={styles.modalBackdrop}>
+          <GlassCard style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Confirm delete</Text>
+            <Text style={styles.modalSub}>Enter your password to permanently delete your account.</Text>
+            <TextInput
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              secureTextEntry
+              placeholder="Password"
+              style={styles.modalInput}
+              placeholderTextColor="rgba(0,0,0,0.3)"
+              autoCapitalize="none"
+            />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity
+                onPress={() => setDeleteModalVisible(false)}
+                style={styles.modalCancel}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => void handleConfirmDeleteAccount()}
+                disabled={deletingAccount}
+                style={styles.modalDelete}
+              >
+                <Text style={styles.modalDeleteText}>{deletingAccount ? 'Deleting...' : 'Delete forever'}</Text>
+              </TouchableOpacity>
+            </View>
+          </GlassCard>
+        </View>
+      </Modal>
     </GlowBackground>
   );
 }
@@ -587,4 +671,50 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     color: colors.danger,
   },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.45)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    padding: 20,
+    borderRadius: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter_700Bold',
+    color: colors.ink,
+    marginBottom: 8,
+  },
+  modalSub: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: colors.inkMuted,
+    marginBottom: 14,
+    lineHeight: 20,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 12,
+    padding: 14,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+  },
+  modalBtns: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 14,
+    marginTop: 20,
+  },
+  modalCancel: { paddingVertical: 10 },
+  modalCancelText: { fontFamily: 'Inter_600SemiBold', color: colors.inkMuted },
+  modalDelete: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: colors.danger,
+  },
+  modalDeleteText: { fontFamily: 'Inter_700Bold', color: colors.white, fontSize: 14 },
 });

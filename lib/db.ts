@@ -1,11 +1,16 @@
 import * as SQLite from 'expo-sqlite';
+import { Platform } from 'react-native';
 
 export async function initDatabase() {
   const db = await SQLite.openDatabaseAsync('studycue.db');
-  
-  await db.execAsync(`
-    PRAGMA journal_mode = WAL;
 
+
+  // WAL is ideal on native, but can break SQLite WASM workers on web.
+  if (Platform.OS !== 'web') {
+    await db.execAsync(`PRAGMA journal_mode = WAL;`);
+  }
+
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS users_local (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       firebaseUserId TEXT UNIQUE,

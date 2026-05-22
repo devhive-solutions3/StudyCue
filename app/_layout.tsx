@@ -57,6 +57,11 @@ export default function RootLayout() {
   }, [appReady, user, segments, router]);
 
   useEffect(() => {
+    if (!appReady || !user) return;
+    void import('../lib/sync').then((m) => m.scheduleMirrorPush(user));
+  }, [appReady, user]);
+
+  useEffect(() => {
     if (!appReady) return;
     void SplashScreen.hideAsync().catch(() => {});
   }, [appReady]);

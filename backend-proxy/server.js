@@ -3,7 +3,7 @@ import cors from 'cors';
 import express from 'express';
 
 const app = express();
-const port = Number(process.env.PORT || 3000);
+const port = Number(process.env.PORT || 3001);
 const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
 const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash';
 const groqApiKey = process.env.GROQ_API_KEY?.trim();
@@ -37,14 +37,28 @@ app.post('/api/cue', async (req, res) => {
     return;
   }
 
+  const hasImagePart =
+    Array.isArray(latestUserMessage.parts) &&
+    latestUserMessage.parts.some((part) => part && typeof part === 'object' && part.inlineData);
+
+  const requestedMax =
+    typeof req.body?.maxOutputTokens === 'number' && Number.isFinite(req.body.maxOutputTokens)
+      ? Math.round(req.body.maxOutputTokens)
+      : null;
+  const maxOutputTokens = requestedMax
+    ? Math.min(8192, Math.max(256, requestedMax))
+    : hasImagePart
+      ? 2048
+      : 1024;
+
   const requestBody = {
     system_instruction: {
       parts: [{ text: typeof systemInstruction === 'string' ? systemInstruction : '' }],
     },
     contents: [...history, latestUserMessage],
     generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 300,
+      temperature: 0.3,
+      maxOutputTokens,
     },
   };
 
