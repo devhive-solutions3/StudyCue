@@ -14,11 +14,14 @@ The Auth user directory is shared with the Expo mobile client automatically.
 
 1. **Google Cloud Console** → **APIs & Services** → **Credentials**.
 2. **Create credentials** → **OAuth client ID** → **Application type: Web application**.
-3. Under **Authorized JavaScript origins**, add:
+3. Under **Authorized JavaScript origins**, add (separate from Firebase **Authorized domains**):
 
    - `http://localhost:3000`
    - `https://study-cue-gamma.vercel.app`
-   - `https://studycue.<your-apex-domain>` (after DNS is attached)
+   - `https://studycue.solutionsdevhive.com` (your production custom domain)
+   - `https://studycue.<your-apex-domain>` (any other apex you attach)
+
+   Missing origins here breaks **Continue with Google** on that hostname even when Firebase Auth domains are allowlisted.
 
 4. Authorized redirect URIs for Firebase Hosted-style auth helpers (if Firebase suggests them):
 

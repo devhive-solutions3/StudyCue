@@ -2,13 +2,22 @@
 
 ## Custom domain DNS (DevHive Baby Domain Solutions)
 
-Ensure a **CNAME** record exists:
+Use the **project-specific** CNAME from **project study-cue only** → **Domains** → `studycue.solutionsdevhive.com` → **Learn more**.
 
-| Type   | Host      | Target                 | TTL |
-|--------|-----------|-------------------------|-----|
-| CNAME  | `studycue` | `cname.vercel-dns.com` | 300 |
+**Do not** reuse the `www` / `@` target (`fa50cc6b38b7fb22.vercel-dns-017.com`) — that hostname serves **DevHive Solutions**, not StudyCue. Pointing `studycue` there yields **Valid** in the wrong sense and edge **`NOT_FOUND`**.
 
-Confirm the **full hostname** (`studycue.<your-root-domain>`) resolves with `dig` or your registrar’s DNS checker.
+| Type   | Host       | Target                                                        | TTL |
+|--------|------------|---------------------------------------------------------------|-----|
+| CNAME  | `studycue` | *(copy from study-cue → Domains → Learn more — unique hash)* | 300 |
+
+Verify:
+
+```bash
+dig +short studycue.solutionsdevhive.com CNAME
+# must match the CNAME shown on the study-cue project domain card — NOT cname.vercel-dns.com, NOT www’s fa50cc6b… target.
+```
+
+In Vercel Domains, status must be **Valid Configuration** (not “DNS Change Recommended”). Then **Refresh**.
 
 ## Vercel — project **study-cue**
 
@@ -30,4 +39,10 @@ Confirm the **full hostname** (`studycue.<your-root-domain>`) resolves with `dig
 
 6. Confirm Production URL shows **StudyCue** (not another product). Working default: `https://study-cue.vercel.app` only after the correct Git deploy.
 
-**404 on custom domain** (`studycue.solutionsdevhive.com`) with `x-vercel-error: NOT_FOUND` = domain not added to this project, or DNS points to Vercel without a matching deployment.
+**404 `NOT_FOUND` on custom domain** (`x-vercel-error: NOT_FOUND`) — Vercel edge received the hostname but could not map it to a deployment. Common causes:
+
+1. **Wrong CNAME** — `studycue` still points to `cname.vercel-dns.com` while the project expects `fa50cc6b38b7fb22.vercel-dns-017.com`.
+2. Domain not added on project **study-cue**, or Domains status not **Valid**.
+3. **Stale / skipped** Production deploy (build ~2s) — redeploy `main` with Root Directory `web`.
+
+This is **not** a missing Next.js page; the request never reaches your app.

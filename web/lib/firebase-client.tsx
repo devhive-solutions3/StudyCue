@@ -266,12 +266,57 @@ export function useWebAuth(): AuthCtx {
   return ctx;
 }
 
+/** Mobile Safari / in-app browsers block popups; COOP breaks Firebase popup polling. */
+export function shouldUseGoogleRedirect(): boolean {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod|Android|Mobile/i.test(ua)) return true;
+  if (/Safari/i.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|Edg/i.test(ua)) return true;
+  return false;
+}
+
+export async function signInGoogleRedirect() {
+  const { auth } = getFirebase();
+  const provider = new GoogleAuthProvider();
+  auth.languageCode = 'en';
+  const { signInWithRedirect } = await import('firebase/auth');
+  await signInWithRedirect(auth, provider);
+}
+
 export async function signInGooglePopup() {
   const { auth } = getFirebase();
   const provider = new GoogleAuthProvider();
   auth.languageCode = 'en';
   const { signInWithPopup } = await import('firebase/auth');
   await signInWithPopup(auth, provider);
+}
+
+/** Popup on desktop; redirect on mobile/Safari (and when popup is blocked). */
+export async function signInGoogleWeb(): Promise<'popup-complete' | 'redirect-started'> {
+  if (shouldUseGoogleRedirect()) {
+    await signInGoogleRedirect();
+    return 'redirect-started';
+  }
+  try {
+    await signInGooglePopup();
+    return 'popup-complete';
+  } catch (e) {
+    const code =
+      e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';
+    if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
+      await signInGoogleRedirect();
+      return 'redirect-started';
+    }
+    throw e;
+  }
+}
+
+/** Call once on login/register mount after returning from Google OAuth redirect. */
+export async function completeGoogleRedirectSignIn(): Promise<boolean> {
+  const { auth } = getFirebase();
+  const { getRedirectResult } = await import('firebase/auth');
+  const result = await getRedirectResult(auth);
+  return !!result?.user;
 }
 
 export async function signInEmail(email: string, password: string) {

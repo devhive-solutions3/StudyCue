@@ -6,6 +6,8 @@ export {
   WebAuthProvider,
   useWebAuth,
   signInGooglePopup,
+  signInGoogleWeb,
+  completeGoogleRedirectSignIn,
   signInEmail,
   registerEmail,
   sendPasswordReset,

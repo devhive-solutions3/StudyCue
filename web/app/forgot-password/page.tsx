@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import * as React from 'react';
 
+import { authErrorMessage } from '@/lib/auth-error-message';
 import { sendPasswordReset } from '@/lib/firebase-client';
 
 export default function ForgotPasswordPage() {
@@ -17,8 +18,8 @@ export default function ForgotPasswordPage() {
     try {
       await sendPasswordReset(email.trim());
       setMsg(`If ${email.trim()} matches an email/password login, recovery mail was sent.`);
-    } catch {
-      setMsg('Could not start reset — validate email casing.');
+    } catch (e) {
+      setMsg(authErrorMessage(e, 'reset'));
     } finally {
       setBusy(false);
     }

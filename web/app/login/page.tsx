@@ -6,13 +6,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { Suspense } from 'react';
 
+import { authErrorMessage } from '@/lib/auth-error-message';
 import {
   clearRememberedEmail,
   readRememberMe,
   readRememberedEmail,
   setAuthPersistence,
+  completeGoogleRedirectSignIn,
   signInEmail,
-  signInGooglePopup,
+  signInGoogleWeb,
   useWebAuth,
   writeRememberMe,
   writeRememberedEmail,
@@ -40,7 +42,29 @@ function LoginForm() {
   const [password, setPassword] = React.useState('');
   const [rememberMe, setRememberMe] = React.useState(true);
   const [err, setErr] = React.useState<string | null>(null);
-  const [busy, setBusy] = React.useState(false);
+  const [busyGoogle, setBusyGoogle] = React.useState(false);
+  const [busyEmail, setBusyEmail] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const signedIn = await completeGoogleRedirectSignIn();
+        if (cancelled || !signedIn) return;
+        persistRememberMe(rememberMe, email.trim());
+        await syncSessionCookie();
+        router.replace(next.startsWith('/') ? next : '/app');
+      } catch (e) {
+        if (!cancelled) {
+          setErr(authErrorMessage(e, 'google'));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on return from Google redirect
+  }, []);
 
   React.useEffect(() => {
     const remembered = readRememberMe();
@@ -67,36 +91,41 @@ function LoginForm() {
   }
 
   async function onGoogle() {
-    setBusy(true);
+    setBusyGoogle(true);
     setErr(null);
     try {
       persistRememberMe(rememberMe, email.trim());
       await setAuthPersistence(rememberMe);
-      await signInGooglePopup();
+      const mode = await signInGoogleWeb();
+      if (mode === 'redirect-started') return;
       await syncSessionCookie();
       router.replace(next.startsWith('/') ? next : `/app`);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Google login failed.');
+      setErr(authErrorMessage(e, 'google'));
     } finally {
-      setBusy(false);
+      setBusyGoogle(false);
     }
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setErr(null);
+    const trimmed = email.trim();
+    if (!trimmed || !password) {
+      setErr('Enter your email and password.');
+      return;
+    }
+    setBusyEmail(true);
     try {
-      const trimmed = email.trim();
       persistRememberMe(rememberMe, trimmed);
       await setAuthPersistence(rememberMe);
       await signInEmail(trimmed, password);
       await syncSessionCookie();
       router.replace(next.startsWith('/') ? next : `/app`);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Email/password failed.');
+      setErr(authErrorMessage(e, 'login'));
     } finally {
-      setBusy(false);
+      setBusyEmail(false);
     }
   }
 
@@ -137,11 +166,11 @@ function LoginForm() {
 
         <button
           type="button"
-          disabled={busy}
+          disabled={busyGoogle}
           onClick={() => void onGoogle()}
           className="sc-btn-secondary sc-focus-ring mt-8 w-full disabled:opacity-40"
         >
-          Continue with Google
+          {busyGoogle ? 'Opening Google…' : 'Continue with Google'}
         </button>
 
         <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-4">
@@ -177,10 +206,10 @@ function LoginForm() {
           </label>
           <button
             type="submit"
-            disabled={busy}
+            disabled={busyEmail}
             className="sc-btn-primary sc-focus-ring w-full disabled:opacity-40"
           >
-            Sign in with email
+            {busyEmail ? 'Signing in…' : 'Sign in with email'}
           </button>
         </form>
 

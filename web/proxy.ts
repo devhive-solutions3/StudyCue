@@ -5,11 +5,14 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 /** Inline for Edge/proxy bundle — do not import from @/lib (Vercel unsupported module error). */
 const STUDYCUE_COOKIE = 'studycue_fb_id';
 
+/** Public project id — same fallback as `firebase-client` when Vercel env is missing. */
+const FIREBASE_PROJECT_ID_FALLBACK = 'studycue-3d831';
+
 function readFirebaseProjectId(): string {
   return (
     process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ??
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??
-    ''
+    FIREBASE_PROJECT_ID_FALLBACK
   ).trim();
 }
 

@@ -5,7 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { Suspense } from 'react';
 
-import { registerEmail, signInGooglePopup, useWebAuth } from '@/lib/firebase-client';
+import { authErrorMessage } from '@/lib/auth-error-message';
+import {
+  completeGoogleRedirectSignIn,
+  registerEmail,
+  signInGoogleWeb,
+  useWebAuth,
+} from '@/lib/firebase-client';
 
 export default function RegisterPage() {
   return (
@@ -29,8 +35,26 @@ function RegisterForm() {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
+  const [busyGoogle, setBusyGoogle] = React.useState(false);
+  const [busyEmail, setBusyEmail] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const signedIn = await completeGoogleRedirectSignIn();
+        if (cancelled || !signedIn) return;
+        await syncSessionCookie();
+        router.replace(next.startsWith('/') ? next : '/app');
+      } catch (e) {
+        if (!cancelled) setErr(authErrorMessage(e, 'google'));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (ready && user) {
@@ -39,16 +63,17 @@ function RegisterForm() {
   }, [ready, user, next, router]);
 
   async function onGoogle() {
-    setBusy(true);
+    setBusyGoogle(true);
     setErr(null);
     try {
-      await signInGooglePopup();
+      const mode = await signInGoogleWeb();
+      if (mode === 'redirect-started') return;
       await syncSessionCookie();
       router.replace(next.startsWith('/') ? next : '/app');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Google failed.');
+      setErr(authErrorMessage(e, 'google'));
     } finally {
-      setBusy(false);
+      setBusyGoogle(false);
     }
   }
 
@@ -59,15 +84,15 @@ function RegisterForm() {
       setErr('Passwords do not match.');
       return;
     }
-    setBusy(true);
+    setBusyEmail(true);
     try {
       await registerEmail(email.trim(), password, name.trim() || (email.split('@')[0] ?? 'Planner'));
       await syncSessionCookie();
       router.replace(next.startsWith('/') ? next : '/app');
     } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : 'Signup failed.');
+      setErr(authErrorMessage(ex, 'register'));
     } finally {
-      setBusy(false);
+      setBusyEmail(false);
     }
   }
 
@@ -107,11 +132,11 @@ function RegisterForm() {
 
         <button
           type="button"
-          disabled={busy}
+          disabled={busyGoogle}
           onClick={() => void onGoogle()}
           className="sc-btn-secondary sc-focus-ring mt-8 w-full disabled:opacity-40"
         >
-          Continue with Google
+          {busyGoogle ? 'Opening Google…' : 'Continue with Google'}
         </button>
 
         <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-4">
@@ -145,11 +170,11 @@ function RegisterForm() {
             className="sc-input"
           />
           <button
-            disabled={busy}
+            disabled={busyEmail}
             type="submit"
             className="sc-btn-primary sc-focus-ring w-full disabled:opacity-40"
           >
-            Create account
+            {busyEmail ? 'Creating account…' : 'Create account'}
           </button>
         </form>
 
