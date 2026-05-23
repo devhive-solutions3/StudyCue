@@ -1,0 +1,22 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - heading "StudyCue" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Sign in to open your StudyCue dashboard on web.
+    - button "Continue with Google" [ref=e6] [cursor=pointer]
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - text: Email
+        - textbox [ref=e9]
+      - generic [ref=e10]:
+        - text: Password
+        - textbox [ref=e11]
+      - generic [ref=e12]:
+        - checkbox "Remember me on this device (auto sign-out after 24 hours)" [checked] [ref=e13]
+        - generic [ref=e14]: Remember me on this device (auto sign-out after 24 hours)
+      - button "Sign in with email" [ref=e15] [cursor=pointer]
+    - generic [ref=e16]:
+      - link "Need an account?" [ref=e17] [cursor=pointer]:
+        - /url: /register
+      - link "Forgot password" [ref=e18] [cursor=pointer]:
+        - /url: /forgot-password
+  - alert [ref=e19]

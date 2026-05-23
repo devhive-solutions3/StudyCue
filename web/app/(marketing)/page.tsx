@@ -41,7 +41,7 @@ export default function LandingPage() {
           Web cockpit · Mobile and desktop · Ads only on marketing
         </p>
         <h1 className="text-balance font-serif text-4xl tracking-tight text-text-primary sm:text-6xl md:text-[3.65rem]">
-          The study planner built for ADHD brains and packed semesters.
+          The study planner built for busy students and packed semesters.
         </h1>
         <p className="mx-auto max-w-2xl text-lg text-text-secondary">
           Keep everything on-device in the Expo app — then open the mirrored web dashboard when you&apos;re deep in
