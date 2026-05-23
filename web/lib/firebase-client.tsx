@@ -89,6 +89,7 @@ export type FirebaseUserLite = {
 
 type AuthCtx = {
   ready: boolean;
+  authLoading: boolean;
   user: FirebaseUserLite | null;
   logout: () => Promise<void>;
   /** Post-login cookie for middleware */
@@ -256,7 +257,7 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ ready, user, logout, syncSessionCookie, getIdToken }),
+    () => ({ ready, authLoading: !ready, user, logout, syncSessionCookie, getIdToken }),
     [ready, user, logout, syncSessionCookie, getIdToken],
   );
 

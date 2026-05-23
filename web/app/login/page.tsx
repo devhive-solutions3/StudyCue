@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { Suspense } from 'react';
 
@@ -33,9 +33,10 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
+  const router = useRouter();
   const sp = useSearchParams();
-  const next = sp.get('next') || '/app';
-  const { ready, user, syncSessionCookie } = useWebAuth();
+  const next = React.useMemo(() => normalizeNextPath(sp.get('next')), [sp]);
+  const { ready, authLoading, user, syncSessionCookie } = useWebAuth();
   const redirectingRef = React.useRef(false);
   const initialRememberMe = React.useMemo(() => readRememberMe(), []);
   const initialEmail = React.useMemo(
@@ -57,8 +58,8 @@ function LoginForm() {
         const signedIn = await completeGoogleRedirectSignIn();
         if (cancelled || !signedIn) return;
         persistRememberMe(rememberMe, email.trim());
-        await syncSessionCookie();
-        redirectToApp(next);
+        void syncSessionCookie().catch(() => {});
+        router.replace(next);
       } catch (e) {
         if (!cancelled) {
           setErr(authErrorMessage(e, 'google'));
@@ -72,24 +73,12 @@ function LoginForm() {
   }, []);
 
   React.useEffect(() => {
-    if (!ready || !user || redirectingRef.current) return;
+    if (!ready || authLoading || !user || redirectingRef.current) return;
 
     redirectingRef.current = true;
-    void (async () => {
-      try {
-        await syncSessionCookie();
-        redirectToApp(next);
-      } catch (e) {
-        redirectingRef.current = false;
-        setErr(authErrorMessage(e, 'login'));
-      }
-    })();
-  }, [ready, user, next, syncSessionCookie]);
-
-  function redirectToApp(target: string) {
-    const path = target.startsWith('/') ? target : '/app';
-    window.location.assign(path);
-  }
+    void syncSessionCookie().catch(() => {});
+    router.replace(next);
+  }, [ready, authLoading, user, next, router, syncSessionCookie]);
 
   function persistRememberMe(value: boolean, emailValue: string) {
     writeRememberMe(value);
@@ -108,8 +97,8 @@ function LoginForm() {
       await setAuthPersistence(rememberMe);
       const mode = await signInGoogleWeb();
       if (mode === 'redirect-started') return;
-      await syncSessionCookie();
-      redirectToApp(next);
+      void syncSessionCookie().catch(() => {});
+      router.replace(next);
     } catch (e) {
       setErr(authErrorMessage(e, 'google'));
     } finally {
@@ -130,8 +119,8 @@ function LoginForm() {
       persistRememberMe(rememberMe, trimmed);
       await setAuthPersistence(rememberMe);
       await signInEmail(trimmed, password);
-      await syncSessionCookie();
-      redirectToApp(next);
+      void syncSessionCookie().catch(() => {});
+      router.replace(next);
     } catch (e) {
       setErr(authErrorMessage(e, 'login'));
     } finally {
@@ -237,4 +226,14 @@ function LoginForm() {
       </div>
     </div>
   );
+}
+
+function normalizeNextPath(next: string | null): string {
+  const fallback = '/app/dashboard';
+  if (!next || !next.startsWith('/')) return fallback;
+  if (next === '/login' || next.startsWith('/login?')) return fallback;
+  if (next === '/register' || next.startsWith('/register?')) return fallback;
+  if (next === '/forgot-password' || next.startsWith('/forgot-password?')) return fallback;
+  if (!next.startsWith('/app')) return fallback;
+  return next;
 }

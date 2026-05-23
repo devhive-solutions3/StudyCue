@@ -1,5 +1,8 @@
 'use client';
 
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+
 import GlowBackground from '@/components/layout/GlowBackground';
 import { TransitionCard } from '@/components/layout/AppTransitionOverlay';
 import DashboardShell from '@/components/dashboard/DashboardShell';
@@ -44,7 +47,16 @@ function MirrorGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function AppWorkspaceProviders({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { ready, user } = useWebAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const { ready, authLoading, user } = useWebAuth();
+  const redirectingRef = useRef(false);
+
+  useEffect(() => {
+    if (!ready || authLoading || user || redirectingRef.current) return;
+    redirectingRef.current = true;
+    router.replace(`/login?next=${encodeURIComponent(pathname || '/app')}`);
+  }, [ready, authLoading, user, pathname, router]);
 
   if (!ready) {
     return (
@@ -58,10 +70,8 @@ export default function AppWorkspaceProviders({ children }: Readonly<{ children:
   if (!user) {
     return (
       <FullscreenStatus
-        title="Session expired"
-        detail="Your secure session is no longer active. Please sign in again to reopen the workspace."
-        actionHref="/login"
-        actionLabel="Back to login"
+        title="Opening your dashboard"
+        detail="Checking your account and sending you to the correct sign-in route."
       />
     );
   }
