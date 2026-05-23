@@ -294,23 +294,23 @@ function TimedCalendarGrid({
   const isWeek = dayIsos.length > 1;
 
   return (
-    <div className="max-h-[720px] overflow-auto pr-1">
-      <div className="calendar-week-grid min-w-[760px]">
-        <div className={isWeek ? 'grid grid-cols-[86px_repeat(7,minmax(0,1fr))]' : 'grid grid-cols-[86px_minmax(300px,1fr)]'}>
+    <div className="max-h-[720px] min-w-0 max-w-full overflow-y-auto overflow-x-hidden pr-1">
+      <div className="calendar-week-grid min-w-0 max-w-full">
+        <div className={isWeek ? 'grid grid-cols-[72px_repeat(7,minmax(0,1fr))] sm:grid-cols-[86px_repeat(7,minmax(0,1fr))]' : 'grid grid-cols-[72px_minmax(0,1fr)] sm:grid-cols-[86px_minmax(0,1fr)]'}>
           <div />
           {dayIsos.map((iso) => (
             <button
               key={`head-${iso}`}
               type="button"
               onClick={() => onSelectDay(iso)}
-              className={`border-b border-border p-3 text-center text-xs font-extrabold ${iso === selectedIso ? 'text-accent' : 'text-text-muted'}`}
+              className={`min-w-0 border-b border-border px-1 py-3 text-center text-[11px] font-extrabold sm:px-3 sm:text-xs ${iso === selectedIso ? 'text-accent' : 'text-text-muted'}`}
             >
               {DAY_LABELS[dateFromIso(iso).getDay()]} {dateFromIso(iso).getDate()}
             </button>
           ))}
         </div>
         <div className="flex">
-          <div className="calendar-time-column w-[86px] shrink-0">
+          <div className="calendar-time-column w-[72px] shrink-0 sm:w-[86px]">
             {HOURS.map((hour) => (
               <div key={hour} className="calendar-time-slot" style={{ height: HOUR_HEIGHT }}>
                 {timeLabel(`${String(hour).padStart(2, '0')}:00`)}
@@ -490,15 +490,15 @@ export default function MonthCalendarBoard() {
         : `${MONTHS[month]} ${year}`;
 
   return (
-    <div className="sc-app-page-wide">
+    <div className="sc-app-page-wide w-full min-w-0 max-w-full">
       <div className="mb-[18px] flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">Schedule planner</p>
           <h1 className="sc-page-title mt-1 text-text-primary">Calendar</h1>
           <p className="mt-1 text-sm text-text-secondary">Day, week, and month view with recurring classes, event colors, and conflict checks.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="rounded-full border border-border bg-surface-2 p-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-wrap rounded-full border border-border bg-surface-2 p-1">
             {(['day', 'week', 'month'] as CalendarView[]).map((view) => (
               <button
                 key={view}
@@ -517,8 +517,8 @@ export default function MonthCalendarBoard() {
         </div>
       </div>
 
-      <div className="grid gap-[18px] xl:grid-cols-[minmax(0,1.8fr)_350px]">
-        <section className="sc-panel overflow-hidden rounded-[28px]">
+      <div className="grid w-full min-w-0 max-w-full gap-[18px] xl:grid-cols-[minmax(0,1.8fr)_minmax(280px,350px)]">
+        <section className="sc-panel min-w-0 overflow-hidden rounded-[28px]">
           <header className="sc-panel-header">
             <button type="button" onClick={() => move(-1)} className="rounded-[12px] px-3 py-2 text-xs font-extrabold text-text-muted hover:bg-surface-2">
               &lt;
@@ -533,7 +533,7 @@ export default function MonthCalendarBoard() {
           </header>
           <div className="p-4 md:p-6">
             {calendarView === 'month' ? (
-              <div className="grid grid-cols-7 gap-[9px] text-center">
+              <div className="grid min-w-0 grid-cols-7 gap-[9px] text-center">
                 {DAY_LABELS.map((d) => (
                   <span key={d} className="py-1 text-xs font-medium text-text-muted">{d}</span>
                 ))}
@@ -570,7 +570,7 @@ export default function MonthCalendarBoard() {
           </div>
         </section>
 
-        <aside className="space-y-[18px]">
+        <aside className="min-w-0 space-y-[18px]">
           <section className="sc-panel rounded-[24px] p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-extrabold text-text-primary">Selected Day</h3>

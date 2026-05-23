@@ -181,7 +181,7 @@ export default function StatsRoutePage() {
   const chartData = totals.map((minutes, idx) => ({ day: labels[idx], minutes }));
 
   return (
-    <div className="sc-app-page space-y-6">
+    <div className="sc-app-page w-full min-w-0 max-w-full space-y-6">
       {/* Header */}
       <div>
         <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">Insights</p>
@@ -190,8 +190,8 @@ export default function StatsRoutePage() {
       </div>
 
       {/* Hero card – Total Focus Time + Streak */}
-      <div className="flex min-h-[128px] flex-wrap items-center justify-between gap-5 rounded-[28px] border border-border bg-surface px-7 py-6 shadow-[var(--shadow-sm)]">
-        <div className="flex items-center gap-5">
+      <div className="flex min-h-[128px] w-full min-w-0 max-w-full flex-wrap items-center justify-between gap-5 rounded-[28px] border border-border bg-surface px-5 py-6 shadow-[var(--shadow-sm)] md:px-7">
+        <div className="flex min-w-0 items-center gap-5">
         <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[20px] bg-accent/10">
           <svg
             width="28"
@@ -208,7 +208,7 @@ export default function StatsRoutePage() {
             <polyline points="12 6 12 12 16 14" />
           </svg>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-[clamp(42px,4vw,48px)] font-extrabold leading-none tracking-[-0.055em] text-text-primary">{formatFocusTime(totalMinutes)}</p>
           <p className="mt-0.5 text-sm text-text-muted">Total Focus Time (last 30 days)</p>
         </div>
@@ -298,7 +298,7 @@ export default function StatsRoutePage() {
 
       {/* Recommendation */}
       {recommendation && (
-        <div className="flex items-start gap-4 rounded-[22px] border border-border bg-surface px-[22px] py-[18px] shadow-[var(--shadow-sm)]">
+        <div className="flex min-w-0 items-start gap-4 rounded-[22px] border border-border bg-surface px-[22px] py-[18px] shadow-[var(--shadow-sm)]">
           <span className="text-3xl">{recommendation.emoji}</span>
           <div>
             <p className="text-sm font-semibold text-text-primary">Quick tip for you</p>

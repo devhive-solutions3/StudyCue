@@ -37,27 +37,52 @@ function applyTheme(theme: AppTheme) {
   }
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<AppTheme>('system');
+function subscribeToSystemTheme(onChange: () => void) {
+  if (typeof window === 'undefined') return () => {};
 
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as AppTheme | null;
-    if (stored === 'light' || stored === 'dark' || stored === 'system') {
-      setThemeState(stored);
-      applyTheme(stored);
-    } else {
-      applyTheme('system');
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const mediaHandler = () => onChange();
+  const windowHandler = () => onChange();
+  const visibilityHandler = () => {
+    if (!document.hidden) onChange();
+  };
+
+  if (typeof mq.addEventListener === 'function') {
+    mq.addEventListener('change', mediaHandler);
+  } else if (typeof mq.addListener === 'function') {
+    mq.addListener(mediaHandler);
+  }
+
+  window.addEventListener('focus', windowHandler);
+  window.addEventListener('pageshow', windowHandler);
+  document.addEventListener('visibilitychange', visibilityHandler);
+
+  return () => {
+    if (typeof mq.removeEventListener === 'function') {
+      mq.removeEventListener('change', mediaHandler);
+    } else if (typeof mq.removeListener === 'function') {
+      mq.removeListener(mediaHandler);
     }
-  }, []);
+    window.removeEventListener('focus', windowHandler);
+    window.removeEventListener('pageshow', windowHandler);
+    document.removeEventListener('visibilitychange', visibilityHandler);
+  };
+}
+
+function readInitialTheme(): AppTheme {
+  if (typeof window === 'undefined') return 'system';
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setThemeState] = useState<AppTheme>(readInitialTheme);
 
   useEffect(() => {
     applyTheme(theme);
 
     if (theme === 'system') {
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const handler = () => applyTheme('system');
-      mq.addEventListener('change', handler);
-      return () => mq.removeEventListener('change', handler);
+      return subscribeToSystemTheme(() => applyTheme('system'));
     }
   }, [theme]);
 

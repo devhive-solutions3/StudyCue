@@ -505,8 +505,8 @@ export default function FocusRoutePage() {
         </div>
       </div>
     )}
-    <div className="mx-auto max-w-[1040px] space-y-[22px]">
-      <section className="sc-panel min-h-[520px] rounded-[32px] p-[34px] shadow-[var(--sc-shadow-md)]">
+    <div className="mx-auto w-full min-w-0 max-w-full md:max-w-[1040px] space-y-[22px]">
+      <section className="sc-panel min-h-[520px] w-full min-w-0 max-w-full rounded-[32px] p-6 shadow-[var(--sc-shadow-md)] md:p-[34px]">
         <div className="text-center">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-text-muted">Focus timer</p>
           <h1 className="sc-page-title mt-2 text-text-primary">Start a focus session</h1>

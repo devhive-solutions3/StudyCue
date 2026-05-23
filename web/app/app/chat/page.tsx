@@ -173,9 +173,9 @@ export default function ChatRoutePage() {
   const canSend = Boolean(input.trim() || pendingImage) && !busy;
 
   return (
-    <div className="mx-auto grid max-w-[1080px] gap-6 xl:grid-cols-[minmax(0,1.55fr)_360px]">
+    <div className="mx-auto grid w-full min-w-0 max-w-full gap-6 xl:max-w-[1080px] xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,360px)]">
       <section
-        className="flex min-h-[640px] flex-col overflow-hidden"
+        className="flex min-h-[640px] min-w-0 flex-col overflow-hidden"
         style={{
           background: 'color-mix(in srgb, var(--sc-surface) 88%, transparent)',
           border: '1px solid var(--sc-border)',
@@ -265,7 +265,7 @@ export default function ChatRoutePage() {
             ) : (
               <div key={`${idx}-user`} className="flex justify-end">
                 <div
-                  className="max-w-[85%] px-4 py-3.5"
+                  className="max-w-[85%] min-w-0 px-4 py-3.5"
                   style={{
                     background: 'var(--sc-accent)',
                     color: 'white',

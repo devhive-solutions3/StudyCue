@@ -47,9 +47,9 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
   return (
     <GlowBackground>
-      <div className="min-h-[100vh] text-text-primary">
+      <div className="min-h-[100vh] max-w-full overflow-x-clip text-text-primary">
         <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} brand={brand} />
-        <div className="md:ml-[var(--sidebar-w)]">
+        <div className="min-w-0 max-w-full md:ml-[var(--sidebar-w)]">
           <AppTopbar
             pageTitle={title}
             syncState={syncState}
@@ -57,7 +57,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             onSyncNow={() => void mirror.persistNow()}
             onOpenSidebar={() => setSidebarOpen(true)}
           />
-          <main className="mx-auto w-full max-w-[1520px] px-4 py-6 pb-28 md:px-[38px] md:py-[34px] md:pb-[100px]">
+          <main className="mx-auto w-full min-w-0 max-w-full px-4 py-6 pb-28 md:px-8 md:py-[34px] md:pb-[100px] xl:max-w-[1520px]">
             {children}
           </main>
         </div>

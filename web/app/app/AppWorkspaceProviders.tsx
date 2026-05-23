@@ -1,5 +1,7 @@
 'use client';
 
+import GlowBackground from '@/components/layout/GlowBackground';
+import { TransitionCard } from '@/components/layout/AppTransitionOverlay';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import { DashboardUiProvider } from '@/context/dashboard-ui';
 import { MirrorProvider, useMirror } from '@/context/mirror-context';
@@ -9,8 +11,19 @@ function MirrorGate({ children }: { children: React.ReactNode }) {
   const m = useMirror();
   if (m.loading) {
     return (
-      <div className="flex min-h-[55vh] items-center justify-center text-sm text-text-secondary">
-        Loading your synced planner…
+      <div className="flex min-h-[55vh] items-center justify-center px-4">
+        <div className="w-full max-w-[560px] rounded-[24px] border border-border bg-surface px-6 py-6 shadow-[var(--sc-shadow-sm)]">
+          <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-text-muted">Workspace</p>
+          <h2 className="mt-2 font-serif text-2xl text-text-primary">Syncing your planner</h2>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            Your dashboard shell is ready. StudyCue is loading your cloud snapshot and recent activity now.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <div className="h-14 animate-pulse rounded-[18px] bg-surface-2" />
+            <div className="h-24 animate-pulse rounded-[18px] bg-surface-2" />
+            <div className="h-24 animate-pulse rounded-[18px] bg-surface-2" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -35,20 +48,21 @@ export default function AppWorkspaceProviders({ children }: Readonly<{ children:
 
   if (!ready) {
     return (
-      <div className="flex min-h-[100vh] items-center justify-center bg-slate-950 text-white/70">
-        Preparing your session...
-      </div>
+      <FullscreenStatus
+        title="Opening your dashboard"
+        detail="Checking your session and restoring your planner shell."
+      />
     );
   }
 
   if (!user) {
     return (
-      <div className="flex min-h-[100vh] flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center text-white">
-        <p>You need an active session to open `/app`. Your secure cookie may have expired.</p>
-        <a href="/login" className="rounded-xl bg-white/10 px-5 py-2 text-white hover:bg-white/20">
-          Log in again
-        </a>
-      </div>
+      <FullscreenStatus
+        title="Session expired"
+        detail="Your secure session is no longer active. Please sign in again to reopen the workspace."
+        actionHref="/login"
+        actionLabel="Back to login"
+      />
     );
   }
 
@@ -60,5 +74,37 @@ export default function AppWorkspaceProviders({ children }: Readonly<{ children:
         </DashboardShell>
       </DashboardUiProvider>
     </MirrorProvider>
+  );
+}
+
+function FullscreenStatus({
+  title,
+  detail,
+  actionHref,
+  actionLabel,
+}: {
+  title: string;
+  detail: string;
+  actionHref?: string;
+  actionLabel?: string;
+}) {
+  return (
+    <GlowBackground>
+      <div className="flex min-h-[100vh] items-center justify-center px-6">
+        <div className="w-full max-w-[420px]">
+          <TransitionCard title={title} detail={detail} />
+          {actionHref && actionLabel ? (
+            <div className="mt-4 flex justify-center">
+              <a
+                href={actionHref}
+                className="rounded-[14px] border border-border bg-surface px-5 py-2.5 text-sm font-medium text-text-secondary hover:bg-surface-2"
+              >
+                {actionLabel}
+              </a>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </GlowBackground>
   );
 }

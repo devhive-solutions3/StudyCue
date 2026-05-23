@@ -43,7 +43,7 @@ export default function AppTopbar({
         WebkitBackdropFilter: 'blur(18px) saturate(135%)',
       }}
     >
-      <div className="mx-auto flex min-h-[76px] max-w-[1520px] items-center gap-3 px-4 md:px-[38px]">
+      <div className="mx-auto flex min-h-[76px] w-full min-w-0 max-w-full flex-wrap items-center gap-3 px-4 py-3 md:px-8 xl:max-w-[1520px]">
         <button
           type="button"
           onClick={onOpenSidebar}
@@ -58,7 +58,7 @@ export default function AppTopbar({
           <IconGlyph name="menu" />
         </button>
         <h1
-          className="text-[22px] font-extrabold tracking-[-0.04em]"
+          className="min-w-0 text-[22px] font-extrabold tracking-[-0.04em]"
           style={{ color: 'var(--sc-text-primary)' }}
         >
           {pageTitle}
@@ -66,7 +66,7 @@ export default function AppTopbar({
         <p className="hidden text-[12.5px] md:block" style={{ color: 'var(--sc-text-muted)' }}>
           {todayLabel()}
         </p>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
           <span
             className="rounded-full px-[14px] py-[9px] text-[12px] font-extrabold"
             style={statusStyle}

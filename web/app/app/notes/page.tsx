@@ -282,7 +282,7 @@ export default function NotesRoutePage() {
   }
 
   return (
-    <div className="sc-app-page space-y-5">
+    <div className="sc-app-page w-full min-w-0 max-w-full space-y-5">
       <div>
         <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">Study notes</p>
         <h1 className="sc-page-title text-text-primary">Notes</h1>
@@ -322,8 +322,8 @@ export default function NotesRoutePage() {
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-[270px_minmax(0,1fr)]">
-        <aside className="sc-panel p-3">
+      <div className="grid w-full min-w-0 max-w-full gap-4 md:grid-cols-[minmax(0,270px)_minmax(0,1fr)]">
+        <aside className="sc-panel min-w-0 p-3">
           <p className="px-2 pb-2 text-xs text-text-muted">Folders</p>
           <div className="space-y-1">
             {folders.length === 0 ? (
@@ -358,7 +358,7 @@ export default function NotesRoutePage() {
           </div>
         </aside>
 
-        <section className="sc-panel p-5">
+        <section className="sc-panel min-w-0 p-5">
           <p className="text-sm font-extrabold text-text-primary">
             {selectedFolder ? `Files in ${selectedFolder.name}` : 'Choose a folder'}
           </p>

@@ -146,7 +146,7 @@ export default function TasksRoutePage() {
   }
 
   return (
-    <div className="sc-app-page space-y-[22px]">
+    <div className="sc-app-page w-full min-w-0 max-w-full space-y-[22px]">
       <div className="mb-[22px] flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">Task planner</p>
@@ -184,8 +184,8 @@ export default function TasksRoutePage() {
         ))}
       </div>
 
-      <div className="grid gap-[18px] xl:grid-cols-[minmax(0,1.6fr)_320px]">
-        <section className="sc-panel rounded-[24px]">
+      <div className="grid w-full min-w-0 max-w-full gap-[18px] xl:grid-cols-[minmax(0,1.6fr)_minmax(260px,320px)]">
+        <section className="sc-panel min-w-0 rounded-[24px]">
           <div className="sc-panel-header">
             <h2 className="text-base font-extrabold text-text-primary">Open Tasks</h2>
             <button type="button" onClick={() => setModalMode('choice')} className="sc-btn-primary rounded-[14px] px-5 py-2 text-sm">+ Add</button>
@@ -215,7 +215,7 @@ export default function TasksRoutePage() {
           </div>
         </section>
 
-        <section className="sc-panel h-fit rounded-[24px] p-6">
+        <section className="sc-panel min-w-0 h-fit rounded-[24px] p-6">
           <h2 className="text-base font-extrabold text-text-primary">Task Logic</h2>
           <p className="mt-4 text-xs leading-relaxed text-text-muted">
             Same as mobile: Add opens a choice modal. Add Task uses title, estimated minutes, and category chips.

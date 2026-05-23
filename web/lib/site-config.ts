@@ -1,6 +1,7 @@
 export const siteTitle = 'StudyCue — Study planner + AI';
 
 const LOCAL_DEV_URL = 'http://localhost:3000';
+const PRODUCTION_SITE_URL = 'https://studycue.solutionsdevhive.com';
 
 /** Normalize env values; reject relative paths like `/api/cue`. */
 function toAbsoluteSiteOrigin(raw: string): string | null {
@@ -42,7 +43,7 @@ function inferVercelOrigin(): string {
     const origin = toAbsoluteSiteOrigin(host);
     if (origin) return origin;
   }
-  return 'https://study-cue.vercel.app';
+  return PRODUCTION_SITE_URL;
 }
 
 export function canonical(path = ''): string {
