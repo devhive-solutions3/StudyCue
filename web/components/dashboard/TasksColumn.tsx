@@ -91,7 +91,7 @@ export default function TasksColumn({ mirror }: { mirror: CloudMirrorV1 }) {
             {open ? 'Close' : 'Add task'}
           </button>
         </div>
-        <div className="flex gap-2 overflow-x-auto border-b border-border px-5 py-3">
+        <div className="flex flex-wrap gap-2 border-b border-border px-5 py-3">
           {(['All', 'Today', 'Upcoming', 'Overdue', 'Done'] as const).map((tab) => (
             <button
               key={tab}

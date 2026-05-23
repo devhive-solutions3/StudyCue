@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { Suspense } from 'react';
 
@@ -26,10 +26,10 @@ export default function RegisterPage() {
 }
 
 function RegisterForm() {
-  const router = useRouter();
   const sp = useSearchParams();
   const next = sp.get('next') || '/app';
   const { ready, user, syncSessionCookie } = useWebAuth();
+  const redirectingRef = React.useRef(false);
 
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -46,7 +46,7 @@ function RegisterForm() {
         const signedIn = await completeGoogleRedirectSignIn();
         if (cancelled || !signedIn) return;
         await syncSessionCookie();
-        router.replace(next.startsWith('/') ? next : '/app');
+        redirectToApp(next);
       } catch (e) {
         if (!cancelled) setErr(authErrorMessage(e, 'google'));
       }
@@ -54,13 +54,28 @@ function RegisterForm() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on return from Google redirect
   }, []);
 
   React.useEffect(() => {
-    if (ready && user) {
-      router.replace(next.startsWith('/') ? next : '/app');
-    }
-  }, [ready, user, next, router]);
+    if (!ready || !user || redirectingRef.current) return;
+
+    redirectingRef.current = true;
+    void (async () => {
+      try {
+        await syncSessionCookie();
+        redirectToApp(next);
+      } catch (e) {
+        redirectingRef.current = false;
+        setErr(authErrorMessage(e, 'register'));
+      }
+    })();
+  }, [ready, user, next, syncSessionCookie]);
+
+  function redirectToApp(target: string) {
+    const path = target.startsWith('/') ? target : '/app';
+    window.location.assign(path);
+  }
 
   async function onGoogle() {
     setBusyGoogle(true);
@@ -69,7 +84,7 @@ function RegisterForm() {
       const mode = await signInGoogleWeb();
       if (mode === 'redirect-started') return;
       await syncSessionCookie();
-      router.replace(next.startsWith('/') ? next : '/app');
+      redirectToApp(next);
     } catch (e) {
       setErr(authErrorMessage(e, 'google'));
     } finally {
@@ -88,7 +103,7 @@ function RegisterForm() {
     try {
       await registerEmail(email.trim(), password, name.trim() || (email.split('@')[0] ?? 'Planner'));
       await syncSessionCookie();
-      router.replace(next.startsWith('/') ? next : '/app');
+      redirectToApp(next);
     } catch (ex) {
       setErr(authErrorMessage(ex, 'register'));
     } finally {

@@ -93,6 +93,17 @@
   --page-bottom: var(--sc-bg);
 }
 
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  min-width: 0;
+}
+
 /* ─── Tailwind theme wiring (Tailwind v4 @theme inline) ─────────────────── */
 @theme inline {
   /* Fonts */
@@ -452,12 +463,16 @@ html.dark .sc-focus-ring:focus-visible {
 }
 
 .sc-app-page {
-  width: min(1280px, calc(100vw - 96px));
+  width: 100%;
+  max-width: 1280px;
+  min-width: 0;
   margin: 0 auto;
 }
 
 .sc-app-page-wide {
-  width: min(1520px, calc(100vw - 96px));
+  width: 100%;
+  max-width: 1520px;
+  min-width: 0;
   margin: 0 auto;
 }
 
@@ -488,6 +503,8 @@ html.dark .sc-panel {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .sc-panel-body {
@@ -555,6 +572,7 @@ html.dark .sc-floating-cue {
   .sc-app-page,
   .sc-app-page-wide {
     width: 100%;
+    max-width: 100%;
   }
 
   .sc-floating-cue {

@@ -14,8 +14,8 @@ export default function AppHomePage() {
   const openTasks = mirror.tasks.filter((task) => !['done', 'completed'].includes((task.status ?? '').toLowerCase())).length;
 
   return (
-    <div className="space-y-[18px]">
-      <section className="relative grid min-h-[300px] overflow-hidden rounded-[32px] border border-border bg-surface p-[30px] shadow-[var(--sc-shadow-md)] xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="w-full min-w-0 max-w-full space-y-[18px]">
+      <section className="relative grid min-h-[300px] w-full min-w-0 max-w-full overflow-hidden rounded-[32px] border border-border bg-surface p-6 shadow-[var(--sc-shadow-md)] lg:p-[30px] xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full"
@@ -37,7 +37,7 @@ export default function AppHomePage() {
             <span className="sc-badge bg-teal-50 text-teal-600">{mirror.sessions.length} focus sessions</span>
           </div>
         </div>
-        <div className="relative z-10 mt-8 min-h-[210px] rounded-[24px] p-6 text-white shadow-[var(--sc-shadow-accent)] xl:mt-0" style={{ background: 'linear-gradient(135deg, var(--sc-accent), #988FFF)' }}>
+        <div className="relative z-10 mt-8 min-w-0 rounded-[24px] p-6 text-white shadow-[var(--sc-shadow-accent)] xl:mt-0 xl:min-h-[210px]" style={{ background: 'linear-gradient(135deg, var(--sc-accent), #988FFF)' }}>
           <p className="text-[12px] font-extrabold uppercase tracking-[0.18em] text-white/70">Focus cue</p>
           <h3 className="mt-4 text-3xl font-extrabold tracking-[-0.04em]">Ready for your next session?</h3>
           <p className="mt-3 text-sm text-white/78">Use Cue to turn the next task into a study plan, then start your timer.</p>
@@ -56,9 +56,9 @@ export default function AppHomePage() {
 
       <StatsGrid mirror={mirror} />
 
-      <div className="grid gap-[18px] [grid-template-columns:1fr] xl:[grid-template-columns:minmax(0,1.7fr)_370px]">
+      <div className="grid w-full min-w-0 max-w-full gap-[18px] [grid-template-columns:minmax(0,1fr)] xl:[grid-template-columns:minmax(0,1.7fr)_minmax(300px,370px)]">
         <TasksColumn mirror={mirror} />
-        <div className="space-y-[18px]">
+        <div className="min-w-0 space-y-[18px]">
           <NextTaskCard mirror={mirror} />
           <MiniCalendar mirror={mirror} />
           <QuickActions />

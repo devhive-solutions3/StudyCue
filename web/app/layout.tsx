@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { DM_Sans, DM_Serif_Display } from 'next/font/google';
+import Script from 'next/script';
 
 import { Providers } from '@/components/Providers';
 
@@ -40,14 +41,27 @@ export const metadata: Metadata = {
   },
 };
 
+const themeBootScript = `
+  try {
+    var key = 'studycue.theme';
+    var stored = window.localStorage.getItem(key);
+    var theme = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+    var dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', dark);
+  } catch (e) {}
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${dmSerif.variable} h-full antialiased`}>
+    <html lang="en" suppressHydrationWarning className={`${dmSans.variable} ${dmSerif.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-bg text-text-primary">
+        <Script id="studycue-theme-boot" strategy="beforeInteractive">
+          {themeBootScript}
+        </Script>
         <Providers>{children}</Providers>
       </body>
     </html>

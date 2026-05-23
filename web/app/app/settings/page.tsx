@@ -163,7 +163,7 @@ export default function SettingsRoutePage() {
     .toUpperCase() || 'SC';
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-10">
+    <div className="mx-auto w-full min-w-0 max-w-full space-y-6 pb-10 md:max-w-2xl">
       {/* Header */}
       <div>
         <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">Workspace</p>
@@ -192,7 +192,7 @@ export default function SettingsRoutePage() {
         <h2 className="text-base font-semibold text-text-primary">Profile</h2>
 
         {/* Avatar picker */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <button
             type="button"
             onClick={() => avatarInputRef.current?.click()}

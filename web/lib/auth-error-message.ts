@@ -58,6 +58,12 @@ const MESSAGES: Record<string, Partial<Record<AuthErrorContext, string>>> = {
     login: 'Email sign-in is not enabled for this app. Try Continue with Google.',
     register: 'Email sign-up is not available right now. Try Continue with Google.',
   },
+  'auth/unauthorized-continue-uri': {
+    reset: 'Password reset is not configured for this website domain yet. Add this domain in Firebase Auth settings.',
+  },
+  'auth/missing-continue-uri': {
+    reset: 'Password reset is missing its return URL configuration. Check the Firebase Auth email action settings.',
+  },
 };
 
 const DEFAULTS: Record<AuthErrorContext, string> = {

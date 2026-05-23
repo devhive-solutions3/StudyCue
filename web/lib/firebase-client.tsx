@@ -158,12 +158,15 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
     const u = auth.currentUser;
     if (!u) return;
     const token = await u.getIdToken();
-    await fetch('/api/session', {
+    const res = await fetch('/api/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ idToken: token }),
       credentials: 'same-origin',
     });
+    if (!res.ok) {
+      throw new Error(`Session cookie sync failed (${res.status})`);
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -337,7 +340,19 @@ export async function registerEmail(email: string, password: string, displayName
 export async function sendPasswordReset(email: string) {
   const { auth } = getFirebase();
   const { sendPasswordResetEmail } = await import('firebase/auth');
-  await sendPasswordResetEmail(auth, email);
+  const continueUrl =
+    typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
+
+  await sendPasswordResetEmail(
+    auth,
+    email,
+    continueUrl
+      ? {
+          url: continueUrl,
+          handleCodeInApp: false,
+        }
+      : undefined,
+  );
 }
 
 export async function deleteMirrorDocument(uid: string) {
