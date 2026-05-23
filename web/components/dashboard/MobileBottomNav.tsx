@@ -16,12 +16,12 @@ const LINKS = [
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
-  const { focusLocked } = useDashboardUi();
+  const { focusLocked, openFocusLockModal } = useDashboardUi();
 
   function guardNavigation(event: MouseEvent<HTMLAnchorElement>, href: string) {
     if (focusLocked && href !== '/app/focus') {
       event.preventDefault();
-      window.alert('Please focus on your studies for now or end the session.');
+      openFocusLockModal();
     }
   }
   return (

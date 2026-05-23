@@ -9,6 +9,9 @@ type Ui = {
   signalNewTask: () => void;
   focusLocked: boolean;
   setFocusLocked: (locked: boolean) => void;
+  focusLockModalOpen: boolean;
+  openFocusLockModal: () => void;
+  closeFocusLockModal: () => void;
 };
 
 const UiCtx = createContext<Ui | null>(null);
@@ -17,7 +20,10 @@ export function DashboardUiProvider({ children }: { children: ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [newTaskSignal, setSignal] = useState(0);
   const [focusLocked, setFocusLocked] = useState(false);
+  const [focusLockModalOpen, setFocusLockModalOpen] = useState(false);
   const signalNewTask = useCallback(() => setSignal((x) => x + 1), []);
+  const openFocusLockModal = useCallback(() => setFocusLockModalOpen(true), []);
+  const closeFocusLockModal = useCallback(() => setFocusLockModalOpen(false), []);
 
   const value = useMemo(
     () =>
@@ -28,8 +34,11 @@ export function DashboardUiProvider({ children }: { children: ReactNode }) {
         signalNewTask,
         focusLocked,
         setFocusLocked,
+        focusLockModalOpen,
+        openFocusLockModal,
+        closeFocusLockModal,
       }) satisfies Ui,
-    [commandOpen, newTaskSignal, signalNewTask, focusLocked],
+    [closeFocusLockModal, commandOpen, focusLockModalOpen, newTaskSignal, openFocusLockModal, signalNewTask, focusLocked],
   );
 
   return <UiCtx.Provider value={value}>{children}</UiCtx.Provider>;

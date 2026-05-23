@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useDashboardUi } from '@/context/dashboard-ui';
 
 export default function AddTaskFab() {
-  const { focusLocked } = useDashboardUi();
+  const { focusLocked, openFocusLockModal } = useDashboardUi();
   return (
     <Link
       href="/app/chat"
@@ -14,10 +14,10 @@ export default function AddTaskFab() {
       onClick={(event) => {
         if (focusLocked) {
           event.preventDefault();
-          window.alert('Please focus on your studies for now or end the session.');
+          openFocusLockModal();
         }
       }}
-      className="sc-floating-cue inline-flex items-center justify-center overflow-visible"
+      className="sc-floating-cue hidden items-center justify-center overflow-visible md:inline-flex"
     >
       <Image
         src="/cue-icon-light.png"
