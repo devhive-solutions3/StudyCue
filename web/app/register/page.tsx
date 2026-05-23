@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { Suspense } from 'react';
 
@@ -26,9 +26,10 @@ export default function RegisterPage() {
 }
 
 function RegisterForm() {
+  const router = useRouter();
   const sp = useSearchParams();
-  const next = sp.get('next') || '/app';
-  const { ready, user, syncSessionCookie } = useWebAuth();
+  const next = React.useMemo(() => normalizeNextPath(sp.get('next')), [sp]);
+  const { ready, authLoading, user, syncSessionCookie } = useWebAuth();
   const redirectingRef = React.useRef(false);
 
   const [name, setName] = React.useState('');
@@ -45,8 +46,8 @@ function RegisterForm() {
       try {
         const signedIn = await completeGoogleRedirectSignIn();
         if (cancelled || !signedIn) return;
-        await syncSessionCookie();
-        redirectToApp(next);
+        void syncSessionCookie().catch(() => {});
+        router.replace(next);
       } catch (e) {
         if (!cancelled) setErr(authErrorMessage(e, 'google'));
       }
@@ -58,24 +59,12 @@ function RegisterForm() {
   }, []);
 
   React.useEffect(() => {
-    if (!ready || !user || redirectingRef.current) return;
+    if (!ready || authLoading || !user || redirectingRef.current) return;
 
     redirectingRef.current = true;
-    void (async () => {
-      try {
-        await syncSessionCookie();
-        redirectToApp(next);
-      } catch (e) {
-        redirectingRef.current = false;
-        setErr(authErrorMessage(e, 'register'));
-      }
-    })();
-  }, [ready, user, next, syncSessionCookie]);
-
-  function redirectToApp(target: string) {
-    const path = target.startsWith('/') ? target : '/app';
-    window.location.assign(path);
-  }
+    void syncSessionCookie().catch(() => {});
+    router.replace(next);
+  }, [ready, authLoading, user, next, router, syncSessionCookie]);
 
   async function onGoogle() {
     setBusyGoogle(true);
@@ -83,8 +72,8 @@ function RegisterForm() {
     try {
       const mode = await signInGoogleWeb();
       if (mode === 'redirect-started') return;
-      await syncSessionCookie();
-      redirectToApp(next);
+      void syncSessionCookie().catch(() => {});
+      router.replace(next);
     } catch (e) {
       setErr(authErrorMessage(e, 'google'));
     } finally {
@@ -102,8 +91,8 @@ function RegisterForm() {
     setBusyEmail(true);
     try {
       await registerEmail(email.trim(), password, name.trim() || (email.split('@')[0] ?? 'Planner'));
-      await syncSessionCookie();
-      redirectToApp(next);
+      void syncSessionCookie().catch(() => {});
+      router.replace(next);
     } catch (ex) {
       setErr(authErrorMessage(ex, 'register'));
     } finally {
@@ -202,4 +191,14 @@ function RegisterForm() {
       </div>
     </div>
   );
+}
+
+function normalizeNextPath(next: string | null): string {
+  const fallback = '/app/dashboard';
+  if (!next || !next.startsWith('/')) return fallback;
+  if (next === '/login' || next.startsWith('/login?')) return fallback;
+  if (next === '/register' || next.startsWith('/register?')) return fallback;
+  if (next === '/forgot-password' || next.startsWith('/forgot-password?')) return fallback;
+  if (!next.startsWith('/app')) return fallback;
+  return next;
 }
