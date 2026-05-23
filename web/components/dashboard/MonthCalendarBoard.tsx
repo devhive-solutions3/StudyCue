@@ -632,25 +632,27 @@ export default function MonthCalendarBoard() {
       </button>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-[560px] rounded-[30px] border border-border bg-surface p-6 shadow-[var(--sc-shadow-md)]">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-2xl font-extrabold text-text-primary">{draft.id ? 'Edit Event' : '+ Add Event'}</h2>
+        <div className="fixed inset-0 z-[110] flex min-h-dvh items-start justify-center overflow-y-auto bg-black/50 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:py-8">
+          <div className="w-full min-w-0 max-w-full overflow-hidden rounded-[30px] border border-border bg-surface shadow-[var(--sc-shadow-md)] sm:max-w-[560px]">
+            <div className="max-h-[calc(100dvh-96px)] overflow-y-auto overflow-x-hidden p-5 sm:p-6">
+            <div className="mb-4 flex items-start justify-between gap-4 sm:mb-5">
+              <h2 className="text-xl font-extrabold text-text-primary sm:text-2xl">{draft.id ? 'Edit Event' : '+ Add Event'}</h2>
               <button type="button" onClick={() => setModalOpen(false)} className="rounded-full bg-surface-2 px-3 py-2 text-text-secondary">×</button>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <PillGroup label="Type" values={EVENT_TYPES} value={draft.type} onChange={(type) => setDraft((p) => ({ ...p, type }))} formatter={typeLabel} />
-              <input value={draft.title} onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Math Chapter 5" className="sc-input" />
-              <input value={draft.location} onChange={(e) => setDraft((p) => ({ ...p, location: e.target.value }))} placeholder="Optional location" className="sc-input" />
+              <input value={draft.title} onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Math Chapter 5" className="sc-input w-full min-w-0 max-w-full" />
+              <input value={draft.location} onChange={(e) => setDraft((p) => ({ ...p, location: e.target.value }))} placeholder="Optional location" className="sc-input w-full min-w-0 max-w-full" />
               <PillGroup label="Recurrence" values={RECURRENCES} value={draft.recurrence} onChange={(recurrence) => setDraft((p) => ({ ...p, recurrence }))} formatter={recurrenceLabel} />
-              <input type="date" value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} className="sc-input" />
+              <input type="date" value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} className="sc-input w-full min-w-0 max-w-full" />
               <div className="grid gap-3 sm:grid-cols-2">
-                <input type="time" value={draft.startTime} onChange={(e) => setDraft((p) => ({ ...p, startTime: e.target.value }))} className="sc-input" />
-                <input type="time" value={draft.endTime} onChange={(e) => setDraft((p) => ({ ...p, endTime: e.target.value }))} className="sc-input" />
+                <input type="time" value={draft.startTime} onChange={(e) => setDraft((p) => ({ ...p, startTime: e.target.value }))} className="sc-input w-full min-w-0 max-w-full" />
+                <input type="time" value={draft.endTime} onChange={(e) => setDraft((p) => ({ ...p, endTime: e.target.value }))} className="sc-input w-full min-w-0 max-w-full" />
               </div>
               <button type="button" onClick={() => saveDraft(false)} className="sc-btn-primary min-h-[58px] w-full rounded-full">
                 Add to Calendar
               </button>
+            </div>
             </div>
           </div>
         </div>
@@ -702,13 +704,13 @@ function PillGroup<T extends string>({
   return (
     <div>
       <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.2em] text-text-muted">{label}</p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 sm:gap-3">
         {values.map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => onChange(item)}
-            className="rounded-full px-4 py-2 text-sm font-extrabold transition"
+            className="rounded-full px-3 py-2 text-xs font-extrabold transition sm:px-4 sm:text-sm"
             style={item === value ? { background: 'var(--sc-accent)', color: 'white', boxShadow: 'var(--sc-shadow-accent)' } : { background: 'var(--sc-surface-soft)', color: 'var(--sc-text-secondary)' }}
           >
             {formatter(item)}
