@@ -295,8 +295,9 @@ html.dark body::before {
     var(--sc-bg);
 }
 
-/* Make sure any direct page content sits above the ambient backdrop */
-body > * {
+/* Make sure any direct page content sits above the ambient backdrop.
+   Exclude portaled modals — they must stay position:fixed on document.body. */
+body > *:not([data-sc-portal-root]) {
   position: relative;
   z-index: 1;
 }
