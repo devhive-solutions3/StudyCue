@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { ClassItem } from '@studycue/types';
 
@@ -631,9 +632,10 @@ export default function MonthCalendarBoard() {
         +
       </button>
 
-      {modalOpen ? (
-        <div className="fixed inset-0 z-[110] flex min-h-dvh w-full max-w-[100vw] items-start justify-center overflow-x-hidden bg-black/50 px-2 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:overflow-y-auto sm:px-4 sm:py-8 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-          <div className="box-border w-full min-w-0 max-w-[calc(100vw-16px)] overflow-hidden rounded-[26px] border border-border bg-surface shadow-[var(--sc-shadow-md)] sm:max-w-[42rem] sm:rounded-[30px]">
+      {modalOpen && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[110] flex min-h-dvh w-full items-start justify-center overflow-x-hidden bg-black/50 px-2 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:overflow-y-auto sm:px-4 sm:py-8 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="box-border w-full min-w-0 overflow-hidden rounded-[26px] border border-border bg-surface shadow-[var(--sc-shadow-md)] sm:max-w-[42rem] sm:rounded-[30px]">
             <div className="box-border max-h-[calc(100dvh-24px)] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-3.5 sm:max-h-[calc(100dvh-96px)] sm:p-8">
               <div className="mb-4 flex min-w-0 max-w-full items-start justify-between gap-3 sm:mb-5 sm:gap-4">
                 <h2 className="min-w-0 max-w-full text-xl font-extrabold text-text-primary sm:text-2xl">
@@ -646,10 +648,12 @@ export default function MonthCalendarBoard() {
                 <input value={draft.title} onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Math Chapter 5" className="sc-input box-border w-full min-w-0 max-w-full" />
                 <input value={draft.location} onChange={(e) => setDraft((p) => ({ ...p, location: e.target.value }))} placeholder="Optional location" className="sc-input box-border w-full min-w-0 max-w-full" />
                 <PillGroup label="Recurrence" values={RECURRENCES} value={draft.recurrence} onChange={(recurrence) => setDraft((p) => ({ ...p, recurrence }))} formatter={recurrenceLabel} />
-                <input type="date" value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
-                <div className="grid min-w-0 max-w-full gap-3 sm:grid-cols-2">
-                  <input type="time" value={draft.startTime} onChange={(e) => setDraft((p) => ({ ...p, startTime: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
-                  <input type="time" value={draft.endTime} onChange={(e) => setDraft((p) => ({ ...p, endTime: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
+                <div className="min-w-0 max-w-full space-y-3">
+                  <input type="date" value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
+                  <div className="grid min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2">
+                    <input type="time" value={draft.startTime} onChange={(e) => setDraft((p) => ({ ...p, startTime: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
+                    <input type="time" value={draft.endTime} onChange={(e) => setDraft((p) => ({ ...p, endTime: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
+                  </div>
                 </div>
                 <button type="button" onClick={() => saveDraft(false)} className="sc-btn-primary box-border min-h-[58px] w-full min-w-0 max-w-full rounded-full">
                   Add to Calendar
@@ -657,11 +661,14 @@ export default function MonthCalendarBoard() {
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
 
-      {conflicts ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+      {conflicts && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
           <div className="w-full max-w-[460px] rounded-[30px] border border-border bg-surface p-6 shadow-[var(--sc-shadow-md)]">
             <h2 className="text-xl font-extrabold text-text-primary">Schedule Conflict</h2>
             <p className="mt-2 text-sm text-text-secondary">
@@ -684,8 +691,10 @@ export default function MonthCalendarBoard() {
               <button type="button" onClick={() => saveDraft(true)} className="sc-btn-primary rounded-full">Add Anyway</button>
             </div>
           </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

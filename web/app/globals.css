@@ -396,6 +396,11 @@ html.dark .sc-card {
 }
 .sc-btn-primary:hover { background: var(--sc-accent-hover); transform: translateY(-1px); }
 .sc-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.sc-btn-primary.w-full {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+}
 
 .sc-btn-secondary {
   display: inline-flex;
@@ -417,6 +422,7 @@ html.dark .sc-card {
 
 /* Input primitive (used in auth pages) */
 .sc-input {
+  box-sizing: border-box;
   width: 100%;
   min-height: 46px;
   min-width: 0;
@@ -433,8 +439,17 @@ html.dark .sc-card {
 .sc-input::placeholder { color: var(--sc-text-muted); }
 .sc-input[type="date"],
 .sc-input[type="time"] {
+  display: block;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
+  box-sizing: border-box;
+  -webkit-min-logical-width: 0;
+}
+.sc-input[type="date"]::-webkit-date-and-time-value,
+.sc-input[type="time"]::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
 }
 .sc-input:focus {
   border-color: var(--sc-accent);
