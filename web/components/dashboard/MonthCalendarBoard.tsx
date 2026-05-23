@@ -632,9 +632,9 @@ export default function MonthCalendarBoard() {
       </button>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-[110] flex min-h-dvh w-full max-w-[100vw] items-start justify-center overflow-x-hidden bg-black/50 px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:overflow-y-auto sm:px-4 sm:py-8 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-          <div className="box-border w-[min(100%,42rem)] min-w-0 max-w-full overflow-hidden rounded-[30px] border border-border bg-surface shadow-[var(--sc-shadow-md)]">
-            <div className="box-border max-h-[calc(100dvh-32px)] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-4 sm:max-h-[calc(100dvh-96px)] sm:p-8">
+        <div className="fixed inset-0 z-[110] flex min-h-dvh w-full max-w-[100vw] items-start justify-center overflow-x-hidden bg-black/50 px-2 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:overflow-y-auto sm:px-4 sm:py-8 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="box-border w-full min-w-0 max-w-[calc(100vw-16px)] overflow-hidden rounded-[26px] border border-border bg-surface shadow-[var(--sc-shadow-md)] sm:max-w-[42rem] sm:rounded-[30px]">
+            <div className="box-border max-h-[calc(100dvh-24px)] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-3.5 sm:max-h-[calc(100dvh-96px)] sm:p-8">
               <div className="mb-4 flex min-w-0 max-w-full items-start justify-between gap-3 sm:mb-5 sm:gap-4">
                 <h2 className="min-w-0 max-w-full text-xl font-extrabold text-text-primary sm:text-2xl">
                   {draft.id ? 'Edit Event' : '+ Add Event'}
@@ -712,7 +712,7 @@ function PillGroup<T extends string>({
             key={item}
             type="button"
             onClick={() => onChange(item)}
-            className="min-w-0 max-w-full overflow-hidden rounded-full px-3 py-2 text-center text-xs font-extrabold text-ellipsis transition sm:w-auto sm:px-4 sm:text-sm"
+            className="w-full min-w-0 max-w-full overflow-hidden rounded-full px-3 py-2 text-center text-xs leading-tight font-extrabold whitespace-normal break-words transition sm:w-auto sm:px-4 sm:text-sm sm:whitespace-nowrap"
             style={item === value ? { background: 'var(--sc-accent)', color: 'white', boxShadow: 'var(--sc-shadow-accent)' } : { background: 'var(--sc-surface-soft)', color: 'var(--sc-text-secondary)' }}
           >
             {formatter(item)}
