@@ -419,6 +419,8 @@ html.dark .sc-card {
 .sc-input {
   width: 100%;
   min-height: 46px;
+  min-width: 0;
+  max-width: 100%;
   background: var(--sc-surface-soft);
   color: var(--sc-text-primary);
   border: 1px solid var(--sc-border);
@@ -429,6 +431,11 @@ html.dark .sc-card {
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 .sc-input::placeholder { color: var(--sc-text-muted); }
+.sc-input[type="date"],
+.sc-input[type="time"] {
+  min-width: 0;
+  max-width: 100%;
+}
 .sc-input:focus {
   border-color: var(--sc-accent);
   box-shadow: 0 0 0 4px rgba(107, 99, 212, 0.12);

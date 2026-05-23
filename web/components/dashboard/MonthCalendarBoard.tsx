@@ -632,16 +632,16 @@ export default function MonthCalendarBoard() {
       </button>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-[110] flex min-h-dvh w-full max-w-[100vw] items-start justify-center overflow-x-hidden overflow-y-auto bg-black/50 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:py-8">
-          <div className="box-border w-full min-w-0 max-w-[calc(100vw-32px)] overflow-x-hidden rounded-[30px] border border-border bg-surface shadow-[var(--sc-shadow-md)] sm:max-w-[720px]">
-            <div className="box-border max-h-[calc(100dvh-96px)] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-5 sm:p-8">
+        <div className="fixed inset-0 z-[110] flex min-h-dvh w-full max-w-[100vw] items-start justify-center overflow-x-hidden bg-black/50 px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:overflow-y-auto sm:px-4 sm:py-8 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="box-border w-[min(100%,42rem)] min-w-0 max-w-full overflow-hidden rounded-[30px] border border-border bg-surface shadow-[var(--sc-shadow-md)]">
+            <div className="box-border max-h-[calc(100dvh-32px)] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-4 sm:max-h-[calc(100dvh-96px)] sm:p-8">
               <div className="mb-4 flex min-w-0 max-w-full items-start justify-between gap-3 sm:mb-5 sm:gap-4">
                 <h2 className="min-w-0 max-w-full text-xl font-extrabold text-text-primary sm:text-2xl">
                   {draft.id ? 'Edit Event' : '+ Add Event'}
                 </h2>
                 <button type="button" onClick={() => setModalOpen(false)} className="shrink-0 rounded-full bg-surface-2 px-3 py-2 text-text-secondary">×</button>
               </div>
-              <div className="min-w-0 max-w-full space-y-3 sm:space-y-4">
+              <div className="min-w-0 max-w-full overflow-hidden space-y-3 sm:space-y-4">
                 <PillGroup label="Type" values={EVENT_TYPES} value={draft.type} onChange={(type) => setDraft((p) => ({ ...p, type }))} formatter={typeLabel} />
                 <input value={draft.title} onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Math Chapter 5" className="sc-input box-border w-full min-w-0 max-w-full" />
                 <input value={draft.location} onChange={(e) => setDraft((p) => ({ ...p, location: e.target.value }))} placeholder="Optional location" className="sc-input box-border w-full min-w-0 max-w-full" />
@@ -706,13 +706,13 @@ function PillGroup<T extends string>({
   return (
     <div className="min-w-0 max-w-full">
       <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.2em] text-text-muted">{label}</p>
-      <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:gap-3">
+      <div className="grid min-w-0 max-w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
         {values.map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => onChange(item)}
-            className="max-w-full min-w-0 rounded-full px-3 py-2 text-xs font-extrabold transition sm:px-4 sm:text-sm"
+            className="min-w-0 max-w-full overflow-hidden rounded-full px-3 py-2 text-center text-xs font-extrabold text-ellipsis transition sm:w-auto sm:px-4 sm:text-sm"
             style={item === value ? { background: 'var(--sc-accent)', color: 'white', boxShadow: 'var(--sc-shadow-accent)' } : { background: 'var(--sc-surface-soft)', color: 'var(--sc-text-secondary)' }}
           >
             {formatter(item)}
