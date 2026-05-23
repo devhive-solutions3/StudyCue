@@ -30,7 +30,7 @@ const BOTTOM_ITEMS: Item[] = [
 
 function NavSection({ title, items, onNavigate }: { title: string; items: Item[]; onNavigate: () => void }) {
   const pathname = usePathname();
-  const { focusLocked } = useDashboardUi();
+  const { focusLocked, openFocusLockModal } = useDashboardUi();
   return (
     <div className="mt-4 first:mt-0">
       <p
@@ -49,7 +49,7 @@ function NavSection({ title, items, onNavigate }: { title: string; items: Item[]
               onClick={(event) => {
                 if (focusLocked && item.href !== '/app/focus') {
                   event.preventDefault();
-                  window.alert('Please focus on your studies for now or end the session.');
+                  openFocusLockModal();
                   return;
                 }
                 onNavigate();
@@ -99,7 +99,7 @@ export default function AppSidebar({
   brand: string;
 }) {
   const pathname = usePathname();
-  const { focusLocked } = useDashboardUi();
+  const { focusLocked, openFocusLockModal } = useDashboardUi();
   const { user } = useWebAuth();
   const [, bumpSidebarAvatar] = useReducer((x: number) => x + 1, 0);
 
@@ -249,7 +249,7 @@ export default function AppSidebar({
                   onClick={(event) => {
                     if (focusLocked && item.href !== '/app/focus') {
                       event.preventDefault();
-                      window.alert('Please focus on your studies for now or end the session.');
+                      openFocusLockModal();
                       return;
                     }
                     onClose();

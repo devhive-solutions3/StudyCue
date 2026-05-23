@@ -10,6 +10,7 @@ import GlowBackground from '@/components/layout/GlowBackground';
 import AddTaskFab from './AddTaskFab';
 import AppSidebar from './AppSidebar';
 import AppTopbar from './AppTopbar';
+import FocusLockModal from './FocusLockModal';
 import MobileBottomNav from './MobileBottomNav';
 
 export default function DashboardShell({ children }: { children: ReactNode }) {
@@ -63,6 +64,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         </div>
         <AddTaskFab />
         <MobileBottomNav />
+        <FocusLockModal />
       </div>
     </GlowBackground>
   );
