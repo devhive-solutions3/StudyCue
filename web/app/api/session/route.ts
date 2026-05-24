@@ -3,6 +3,7 @@ import { verifyFirebaseIdToken } from '@/lib/firebase-server-auth';
 import { STUDYCUE_COOKIE } from '@/lib/session';
 
 const maxAgeSeconds = 60 * 60 * 24;
+const IS_DEV = process.env.NODE_ENV !== 'production';
 
 export async function POST(req: Request) {
   try {
@@ -12,6 +13,7 @@ export async function POST(req: Request) {
     }
     const verified = await verifyFirebaseIdToken(idToken);
     if (!verified) {
+      if (IS_DEV) console.warn('Session creation rejected: Firebase ID token verification failed');
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -31,7 +33,8 @@ export async function POST(req: Request) {
     });
 
     return res;
-  } catch {
+  } catch (error) {
+    if (IS_DEV) console.warn('Session creation failed', error);
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 }

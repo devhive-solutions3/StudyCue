@@ -4,11 +4,17 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRef, useState } from 'react';
 
+import PasswordField from '@/components/forms/PasswordField';
 import { useMirror } from '@/context/mirror-context';
 import { type AppTheme, useTheme } from '@/context/theme-context';
 import {
+  addPasswordLogin,
   changePassword,
   deleteGoogleAccount,
+  getProviderIds,
+  hasGoogleProvider,
+  hasPasswordProvider,
+  linkGoogleLogin,
   scheduleAccountDeletion,
   uploadProfilePic,
   useWebAuth,
@@ -38,6 +44,8 @@ export default function SettingsRoutePage() {
   const [cpCurrent, setCpCurrent] = useState('');
   const [cpNew, setCpNew] = useState('');
   const [cpNew2, setCpNew2] = useState('');
+  const [apNew, setApNew] = useState('');
+  const [apNew2, setApNew2] = useState('');
 
   // ── State ──────────────────────────────────────────────────────────
   const [busy, setBusy] = useState(false);
@@ -46,9 +54,12 @@ export default function SettingsRoutePage() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deletionScheduled, setDeletionScheduled] = useState(false);
 
-  const ids = user?.providerIds ?? [];
-  const googleLinked = ids.includes('google.com');
-  const emailLinked = ids.includes('password');
+  const [passwordLinkedNow, setPasswordLinkedNow] = useState(false);
+  const [googleLinkedNow, setGoogleLinkedNow] = useState(false);
+
+  const ids = getProviderIds(user);
+  const googleLinked = googleLinkedNow || hasGoogleProvider(user);
+  const emailLinked = passwordLinkedNow || hasPasswordProvider(user);
   const visibleAvatar = avatarPreview ?? getLocalProfilePhoto(user?.uid) ?? user?.photoURL ?? null;
 
   const hasUnsavedChanges =
@@ -113,6 +124,61 @@ export default function SettingsRoutePage() {
       flash(errors.join(' · '), false);
     } else {
       flash('Changes saved!');
+    }
+  }
+
+  async function handleAddPassword() {
+    if (!user?.email) {
+      flash('A password can only be added when your account has an email address.', false);
+      return;
+    }
+    if (apNew !== apNew2) {
+      flash('Passwords do not match.', false);
+      return;
+    }
+    if (apNew.length < 8) {
+      flash('New password must be at least 8 characters.', false);
+      return;
+    }
+
+    setBusy(true);
+    setMsg(null);
+    try {
+      await addPasswordLogin(apNew);
+      setApNew('');
+      setApNew2('');
+      setPasswordLinkedNow(true);
+      flash('Password login added. You can now sign in using email and password.');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'could not add password';
+      flash(
+        message.includes('auth/requires-recent-login')
+          ? 'Please sign in with Google again, then try adding a password.'
+          : message,
+        false,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleLinkGoogle() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await linkGoogleLogin();
+      setGoogleLinkedNow(true);
+      flash('Google sign-in linked. You can now continue with Google.');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not link Google right now.';
+      flash(
+        message.includes('auth/account-exists-with-different-credential') || message.includes('auth/email-already-in-use')
+          ? 'An account already exists with this email. Sign in with email and password first, then link Google from Settings.'
+          : message,
+        false,
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -275,31 +341,82 @@ export default function SettingsRoutePage() {
         <section className="space-y-4 rounded-[14px] border border-border bg-surface-2 p-5">
           <h2 className="text-base font-semibold text-text-primary">Change password</h2>
           <div className="space-y-2">
-            <input
-              type="password"
+            <PasswordField
               placeholder="Current password"
               value={cpCurrent}
               onChange={(e) => setCpCurrent(e.target.value)}
               autoComplete="current-password"
-              className="w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted"
+              inputClassName="w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 pr-12 text-sm text-text-primary outline-none placeholder:text-text-muted"
             />
-            <input
-              type="password"
+            <PasswordField
               placeholder="New password (min 8 characters)"
               value={cpNew}
               onChange={(e) => setCpNew(e.target.value)}
               autoComplete="new-password"
-              className="w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted"
+              inputClassName="w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 pr-12 text-sm text-text-primary outline-none placeholder:text-text-muted"
             />
-            <input
-              type="password"
+            <PasswordField
               placeholder="Confirm new password"
               value={cpNew2}
               onChange={(e) => setCpNew2(e.target.value)}
               autoComplete="new-password"
-              className="w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted"
+              inputClassName="w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 pr-12 text-sm text-text-primary outline-none placeholder:text-text-muted"
             />
           </div>
+        </section>
+      )}
+
+      {!emailLinked && googleLinked && (
+        <section className="space-y-4 rounded-[14px] border border-border bg-surface-2 p-5">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-text-primary">Add password login</h2>
+            <p className="text-sm text-text-secondary">
+              Your account currently uses Google sign-in. Add a password if you also want to sign in with email and password.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <PasswordField
+              placeholder="New password"
+              value={apNew}
+              onChange={(e) => setApNew(e.target.value)}
+              autoComplete="new-password"
+              inputClassName="w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 pr-12 text-sm text-text-primary outline-none placeholder:text-text-muted"
+            />
+            <PasswordField
+              placeholder="Confirm password"
+              value={apNew2}
+              onChange={(e) => setApNew2(e.target.value)}
+              autoComplete="new-password"
+              inputClassName="w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 pr-12 text-sm text-text-primary outline-none placeholder:text-text-muted"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void handleAddPassword()}
+            className="rounded-[10px] border border-border bg-surface px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 disabled:opacity-40"
+          >
+            Add password
+          </button>
+        </section>
+      )}
+
+      {emailLinked && !googleLinked && (
+        <section className="space-y-4 rounded-[14px] border border-border bg-surface-2 p-5">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-text-primary">Link Google sign-in</h2>
+            <p className="text-sm text-text-secondary">
+              Connect Google so you can sign in faster next time.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void handleLinkGoogle()}
+            className="rounded-[10px] border border-border bg-surface px-4 py-2 text-sm text-text-secondary hover:bg-surface-2 disabled:opacity-40"
+          >
+            Link Google
+          </button>
         </section>
       )}
 
@@ -360,13 +477,12 @@ export default function SettingsRoutePage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-rose-500">
                   Confirm with your password
                 </p>
-                <input
-                  type="password"
+                <PasswordField
                   autoComplete="current-password"
                   value={deletePassword}
                   onChange={(e) => setDeletePassword(e.target.value)}
                   placeholder="Your current password"
-                  className="w-full rounded-[10px] border border-rose-200 bg-white px-3 py-2.5 text-sm text-text-primary outline-none"
+                  inputClassName="w-full rounded-[10px] border border-rose-200 bg-white px-3 py-2.5 pr-12 text-sm text-text-primary outline-none"
                 />
                 <button
                   type="button"

@@ -2,10 +2,16 @@
 
 import { getApps, initializeApp } from 'firebase/app';
 import {
+  type User as FirebaseUser,
+  EmailAuthProvider,
   browserLocalPersistence,
   browserSessionPersistence,
+  fetchSignInMethodsForEmail,
   getAuth,
   GoogleAuthProvider,
+  linkWithCredential,
+  linkWithPopup,
+  reload,
   setPersistence,
   signOut,
 } from 'firebase/auth';
@@ -30,6 +36,21 @@ const SIGNED_IN_AT_KEY = 'studycue.web.signedInAt';
 const REMEMBER_ME_KEY = 'studycue.web.rememberMe';
 const REMEMBERED_EMAIL_KEY = 'studycue.web.rememberedEmail';
 const IS_DEV = process.env.NODE_ENV !== 'production';
+
+async function readResponseError(res: Response): Promise<string> {
+  try {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = (await res.json()) as { error?: string };
+      if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+    }
+    const text = (await res.text()).trim();
+    if (text) return text;
+  } catch {
+    /* noop */
+  }
+  return `HTTP ${res.status}`;
+}
 
 function readSignedInAt(): number | null {
   if (typeof window === 'undefined') return null;
@@ -88,15 +109,31 @@ export type FirebaseUserLite = {
   providerIds: string[];
 };
 
+export function getProviderIds(user: Pick<FirebaseUserLite, 'providerIds'> | FirebaseUser | null | undefined): string[] {
+  if (!user) return [];
+  if ('providerIds' in user) return Array.isArray(user.providerIds) ? user.providerIds : [];
+  return user.providerData.map((provider) => provider.providerId).filter(Boolean);
+}
+
+export function hasPasswordProvider(user: Pick<FirebaseUserLite, 'providerIds'> | FirebaseUser | null | undefined): boolean {
+  return getProviderIds(user).includes('password');
+}
+
+export function hasGoogleProvider(user: Pick<FirebaseUserLite, 'providerIds'> | FirebaseUser | null | undefined): boolean {
+  return getProviderIds(user).includes('google.com');
+}
+
 type AuthCtx = {
   ready: boolean;
   authLoading: boolean;
   user: FirebaseUserLite | null;
   logout: () => Promise<void>;
   /** Post-login cookie for middleware */
-  syncSessionCookie: () => Promise<void>;
+  syncSessionCookie: (userOverride?: SessionUser) => Promise<void>;
   getIdToken: () => Promise<string | null>;
 };
+
+type SessionUser = Pick<FirebaseUser, 'uid' | 'getIdToken'>;
 
 let appInstance: ReturnType<typeof initializeApp> | null = null;
 
@@ -155,11 +192,7 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
     return u.getIdToken();
   }, []);
 
-  const syncSessionCookie = useCallback(async () => {
-    const { auth } = getFirebase();
-    const u = auth.currentUser;
-    if (!u) return;
-    const token = await u.getIdToken();
+  const postSessionCookie = useCallback(async (token: string) => {
     const res = await fetch('/api/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -167,9 +200,21 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
       credentials: 'same-origin',
     });
     if (!res.ok) {
+      const detail = await readResponseError(res);
+      if (IS_DEV) console.warn('Session cookie sync failed', { status: res.status, detail });
       throw new Error(`Session cookie sync failed (${res.status})`);
     }
+    if (IS_DEV) console.info('Session cookie sync succeeded', { status: res.status });
   }, []);
+
+  const syncSessionCookie = useCallback(async (userOverride?: SessionUser) => {
+    const { auth } = getFirebase();
+    const u = userOverride ?? auth.currentUser;
+    if (!u) return;
+    const token = await u.getIdToken(true);
+    if (IS_DEV) console.info('Firebase ID token obtained for session sync', { uid: u.uid });
+    await postSessionCookie(token);
+  }, [postSessionCookie]);
 
   const logout = useCallback(async () => {
     const { auth } = getFirebase();
@@ -229,13 +274,8 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
         });
 
         try {
-          const token = await u.getIdToken();
-          await fetch('/api/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken: token }),
-            credentials: 'same-origin',
-          });
+          const token = await u.getIdToken(true);
+          await postSessionCookie(token);
         } catch (e) {
           if (IS_DEV) console.warn('Session cookie refresh failed', e);
         }
@@ -255,7 +295,7 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
       clearExpiryTimer();
       unsub();
     };
-  }, []);
+  }, [postSessionCookie]);
 
   const value = useMemo(
     () => ({ ready, authLoading: !ready, user, logout, syncSessionCookie, getIdToken }),
@@ -293,24 +333,28 @@ export async function signInGooglePopup() {
   const provider = new GoogleAuthProvider();
   auth.languageCode = 'en';
   const { signInWithPopup } = await import('firebase/auth');
-  await signInWithPopup(auth, provider);
+  const result = await signInWithPopup(auth, provider);
+  if (IS_DEV) console.info('Firebase Google popup sign-in succeeded', { uid: result.user.uid });
+  return result.user;
 }
 
 /** Popup on desktop; redirect on mobile/Safari (and when popup is blocked). */
-export async function signInGoogleWeb(): Promise<'popup-complete' | 'redirect-started'> {
+export async function signInGoogleWeb(): Promise<
+  { mode: 'popup-complete'; user: FirebaseUser } | { mode: 'redirect-started'; user: null }
+> {
   if (shouldUseGoogleRedirect()) {
     await signInGoogleRedirect();
-    return 'redirect-started';
+    return { mode: 'redirect-started', user: null };
   }
   try {
-    await signInGooglePopup();
-    return 'popup-complete';
+    const user = await signInGooglePopup();
+    return { mode: 'popup-complete', user };
   } catch (e) {
     const code =
       e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';
     if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
       await signInGoogleRedirect();
-      return 'redirect-started';
+      return { mode: 'redirect-started', user: null };
     }
     throw e;
   }
@@ -321,13 +365,21 @@ export async function completeGoogleRedirectSignIn(): Promise<boolean> {
   const { auth } = getFirebase();
   const { getRedirectResult } = await import('firebase/auth');
   const result = await getRedirectResult(auth);
+  if (result?.user && IS_DEV) console.info('Firebase Google redirect sign-in succeeded', { uid: result.user.uid });
   return !!result?.user;
 }
 
 export async function signInEmail(email: string, password: string) {
   const { auth } = getFirebase();
   const { signInWithEmailAndPassword } = await import('firebase/auth');
-  await signInWithEmailAndPassword(auth, email, password);
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  if (IS_DEV) console.info('Firebase email sign-in succeeded', { uid: cred.user.uid });
+  return cred.user;
+}
+
+export async function lookupSignInMethods(email: string): Promise<string[]> {
+  const { auth } = getFirebase();
+  return fetchSignInMethodsForEmail(auth, email.trim());
 }
 
 export async function registerEmail(email: string, password: string, displayName: string) {
@@ -337,24 +389,15 @@ export async function registerEmail(email: string, password: string, displayName
   );
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(cred.user, { displayName });
+  if (IS_DEV) console.info('Firebase email registration succeeded', { uid: cred.user.uid });
+  return cred.user;
 }
 
 export async function sendPasswordReset(email: string) {
   const { auth } = getFirebase();
   const { sendPasswordResetEmail } = await import('firebase/auth');
-  const continueUrl =
-    typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
-
-  await sendPasswordResetEmail(
-    auth,
-    email,
-    continueUrl
-      ? {
-          url: continueUrl,
-          handleCodeInApp: false,
-        }
-      : undefined,
-  );
+  // TODO: add explicit actionCodeSettings only when the production return URL is fully configured in Firebase Auth.
+  await sendPasswordResetEmail(auth, email);
 }
 
 export async function deleteMirrorDocument(uid: string) {
@@ -445,6 +488,28 @@ export async function changePassword(currentPassword: string, newPassword: strin
 
   await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
   await updatePassword(user, newPassword);
+}
+
+export async function addPasswordLogin(newPassword: string) {
+  const { auth } = getFirebase();
+  const user = auth.currentUser;
+  if (!user?.email) throw new Error('Your account needs an email address before a password can be added.');
+
+  await linkWithCredential(user, EmailAuthProvider.credential(user.email, newPassword));
+  await reload(user);
+  return user;
+}
+
+export async function linkGoogleLogin() {
+  const { auth } = getFirebase();
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not signed in');
+
+  const provider = new GoogleAuthProvider();
+  auth.languageCode = 'en';
+  const result = await linkWithPopup(user, provider);
+  await reload(result.user);
+  return result.user;
 }
 
 export async function uploadProfilePic(file: File): Promise<string> {

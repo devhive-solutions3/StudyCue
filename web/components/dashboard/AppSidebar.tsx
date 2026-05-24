@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useReducer } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 
 import { useDashboardUi } from '@/context/dashboard-ui';
 import { IconGlyph, type IconName } from '@/lib/icon-map';
@@ -27,6 +27,30 @@ const STUDY_ITEMS: Item[] = [
 const BOTTOM_ITEMS: Item[] = [
   { href: '/app/settings', label: 'Settings', icon: 'settings' },
 ];
+
+const ALLOWED_REMOTE_AVATAR_HOSTS = new Set([
+  'lh3.googleusercontent.com',
+  'lh4.googleusercontent.com',
+  'lh5.googleusercontent.com',
+  'lh6.googleusercontent.com',
+]);
+
+function sanitizeAvatarSrc(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('/')) return trimmed;
+  if (trimmed.startsWith('data:image/')) return trimmed;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    if (!ALLOWED_REMOTE_AVATAR_HOSTS.has(url.hostname)) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
 
 function NavSection({ title, items, onNavigate }: { title: string; items: Item[]; onNavigate: () => void }) {
   const pathname = usePathname();
@@ -102,6 +126,7 @@ export default function AppSidebar({
   const { focusLocked, openFocusLockModal } = useDashboardUi();
   const { user } = useWebAuth();
   const [, bumpSidebarAvatar] = useReducer((x: number) => x + 1, 0);
+  const [failedAvatarSrc, setFailedAvatarSrc] = useState<string | null>(null);
 
   useEffect(() => {
     const onCustom = () => bumpSidebarAvatar();
@@ -125,8 +150,11 @@ export default function AppSidebar({
       .join('')
       .toUpperCase() || 'SC';
 
-  const visibleAvatar =
-    getLocalProfilePhoto(user?.uid) ?? user?.photoURL ?? null;
+  const visibleAvatar = useMemo(
+    () => sanitizeAvatarSrc(getLocalProfilePhoto(user?.uid) ?? user?.photoURL ?? null),
+    [user?.photoURL, user?.uid],
+  );
+  const showAvatar = !!visibleAvatar && failedAvatarSrc !== visibleAvatar;
 
   return (
     <>
@@ -200,13 +228,14 @@ export default function AppSidebar({
           }}
         >
           <div className="relative h-9 w-9 shrink-0">
-            {visibleAvatar ? (
+            {showAvatar ? (
               <Image
                 src={visibleAvatar}
                 alt={brand}
                 width={36}
                 height={36}
                 className="h-9 w-9 rounded-full object-cover"
+                onError={() => setFailedAvatarSrc(visibleAvatar)}
                 unoptimized={
                   typeof visibleAvatar === 'string' &&
                   visibleAvatar.startsWith('data:')

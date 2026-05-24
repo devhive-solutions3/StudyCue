@@ -46,10 +46,13 @@ const MESSAGES: Record<string, Partial<Record<AuthErrorContext, string>>> = {
   },
   'auth/account-exists-with-different-credential': {
     login: 'This email is linked to another sign-in method. Try Google or the method you used when signing up.',
-    google: 'This email already has an account with a different sign-in method. Try email/password instead.',
+    google:
+      'An account already exists with this email. Please sign in with email and password first, then link Google from settings later.',
   },
   'auth/email-already-in-use': {
     register: 'An account with this email already exists. Log in or use Forgot password.',
+    google:
+      'An account already exists with this email. Please sign in with email and password first, then link Google from settings later.',
   },
   'auth/weak-password': {
     register: 'Choose a stronger password (at least 6 characters).',
@@ -83,6 +86,10 @@ function extractAuthErrorCode(error: unknown): string | null {
     if (match) return match[0].slice(1, -1);
   }
   return null;
+}
+
+export function getAuthErrorCode(error: unknown): string | null {
+  return extractAuthErrorCode(error);
 }
 
 /** User-facing copy for Firebase Auth failures (never show raw `Firebase: Error (...)`). */

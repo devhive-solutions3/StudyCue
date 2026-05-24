@@ -1,19 +1,25 @@
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
+
 type VerifiedFirebaseUser = {
   uid: string;
   email: string | null;
 };
 
-type IdentityToolkitLookupResponse = {
-  users?: Array<{
-    localId?: string;
-    email?: string;
-  }>;
+const FIREBASE_JWKS = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'),
+);
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
+type FirebaseJwtPayload = JWTPayload & {
+  user_id?: string;
+  email?: string;
 };
 
-function getFirebaseApiKey(): string {
+function getFirebaseProjectId(): string {
   return (
-    process.env.EXPO_PUBLIC_FIREBASE_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ||
+    process.env.FIREBASE_ADMIN_PROJECT_ID?.trim() ||
+    process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
     ''
   );
 }
@@ -31,31 +37,27 @@ export function readBearerToken(request: Request): string | null {
 }
 
 export async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseUser | null> {
-  const apiKey = getFirebaseApiKey();
-  if (!apiKey || !idToken?.trim()) return null;
+  const projectId = getFirebaseProjectId();
+  if (!projectId || !idToken?.trim()) return null;
 
   try {
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-        cache: 'no-store',
-      },
-    );
-
-    if (!response.ok) return null;
-
-    const data = (await response.json()) as IdentityToolkitLookupResponse;
-    const user = data.users?.[0];
-    if (!user?.localId) return null;
+    const { payload } = await jwtVerify(idToken, FIREBASE_JWKS, {
+      issuer: `https://securetoken.google.com/${projectId}`,
+      audience: projectId,
+    });
+    const firebasePayload = payload as FirebaseJwtPayload;
+    const uid =
+      (typeof firebasePayload.user_id === 'string' && firebasePayload.user_id) ||
+      (typeof firebasePayload.sub === 'string' && firebasePayload.sub) ||
+      null;
+    if (!uid) return null;
 
     return {
-      uid: user.localId,
-      email: user.email ?? null,
+      uid,
+      email: typeof firebasePayload.email === 'string' ? firebasePayload.email : null,
     };
-  } catch {
+  } catch (error) {
+    if (IS_DEV) console.warn('Firebase ID token verification failed', error);
     return null;
   }
 }
