@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyFirebaseIdToken } from '@/lib/firebase-server-auth';
+import { verifyFirebaseIdTokenDetailed } from '@/lib/firebase-server-auth';
 import { STUDYCUE_COOKIE } from '@/lib/session';
 
 const maxAgeSeconds = 60 * 60 * 24;
@@ -11,13 +11,31 @@ export async function POST(req: Request) {
     if (IS_DEV) {
       console.info('POST /api/session', { idTokenPresent: Boolean(idToken?.length) });
     }
-    if (!idToken?.length || idToken.length > 12000) {
+    if (!idToken?.length) {
+      return NextResponse.json({ ok: false, error: 'Missing ID token' }, { status: 400 });
+    }
+    if (idToken.length > 12000) {
       return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 400 });
     }
-    const verified = await verifyFirebaseIdToken(idToken);
+
+    const { user: verified, debug } = await verifyFirebaseIdTokenDetailed(idToken);
     if (!verified) {
       if (IS_DEV) {
-        console.warn('Session creation rejected: Firebase ID token verification failed');
+        console.warn('Session creation rejected: Firebase ID token verification failed', {
+          method: debug.method,
+          status: debug.status,
+          code: debug.firebaseCode,
+          detail: debug.detail,
+        });
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Unauthorized',
+            code: 'SESSION_VERIFY_FAILED',
+            detail: debug.detail,
+          },
+          { status: 401 },
+        );
       }
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
