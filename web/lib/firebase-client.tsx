@@ -169,6 +169,11 @@ function getFirebase(): { app: NonNullable<typeof appInstance>; auth: ReturnType
   return { app: appInstance, auth };
 }
 
+export function getFirebaseAuth() {
+  const { auth } = getFirebase();
+  return auth;
+}
+
 export function getFirebaseDb() {
   const { app } = getFirebase();
   return getFirestore(app);
