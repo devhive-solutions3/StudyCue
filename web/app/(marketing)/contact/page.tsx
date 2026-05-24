@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 };
 
 export default function ContactPage() {
-  const email = 'solutions.devhive@gmail.com';
+  const email = 'support.studycue@gmail.com';
   const facebook = 'https://www.facebook.com/share/1apeFAUjcM/?mibextid=wwXIfr';
   const instagram = 'https://www.instagram.com/devhivesolutions?igsh=cjd3YzM1bWxyZnVz&utm_source=qr';
   const solutionsDevHive = 'https://www.solutionsdevhive.com/';
