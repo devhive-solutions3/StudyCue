@@ -14,7 +14,7 @@ export default function HelpPage() {
         <h1 className="font-serif text-4xl">Help desk</h1>
         <p className="text-text-secondary">StudyCue support and guides are coming soon.</p>
       </header>
-      <div className="rounded-2xl border border-border bg-surface px-5 py-6 shadow-[var(--shadow-sm)]">
+      <div className="rounded-2xl border border-border bg-surface px-5 py-6 shadow-[var(--sc-shadow-card)]">
         <p className="text-text-secondary">
           We are preparing helpful guides for using StudyCue, including calendar setup, task planning, notes, focus
           timer, and Cue AI. For direct questions, please visit the Contact page.

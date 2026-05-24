@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+import GoogleAdSenseAd from '@/components/ads/GoogleAdSenseAd';
+
 import { canonical } from '@/lib/site-config';
 
 export const metadata: Metadata = {
@@ -37,12 +39,13 @@ export default function FeaturesPage() {
       </header>
       <section className="grid gap-4 md:grid-cols-2">
         {blocks.map(([title, body]) => (
-          <article key={title} className="rounded-3xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)]">
+          <article key={title} className="rounded-3xl border border-border bg-surface p-5 shadow-[var(--sc-shadow-card)]">
             <h2 className="text-xl font-semibold text-text-primary">{title}</h2>
             <p className="mt-3 text-text-secondary">{body}</p>
           </article>
         ))}
       </section>
+      <GoogleAdSenseAd className="mt-10" />
     </div>
   );
 }

@@ -23,7 +23,7 @@ export default function ContactPage() {
         </p>
       </header>
 
-      <div className="rounded-2xl border border-border bg-surface p-6 shadow-[var(--shadow-sm)] sm:p-8">
+      <div className="rounded-2xl border border-border bg-surface p-6 shadow-[var(--sc-shadow-card)] sm:p-8">
         <p className="max-w-2xl text-text-secondary">
           Need help with StudyCue or want to connect with the team? Use the links below to reach us through email or
           our social channels.

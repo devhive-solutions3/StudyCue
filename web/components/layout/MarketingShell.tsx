@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import AdSenseSlot from '@/components/ads/AdSenseSlot';
+import MarketingThemeToggle from '@/components/marketing/MarketingThemeToggle';
 
 const NAV = [
   { href: '/features', label: 'Features' },
@@ -11,20 +11,14 @@ const NAV = [
   { href: '/contact', label: 'Contact' },
 ];
 
-export default function MarketingShell({
-  children,
-  showAds = false,
-}: {
-  children: ReactNode;
-  showAds?: boolean;
-}) {
+export default function MarketingShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col text-text-primary" style={{ background: 'transparent' }}>
       <header
         className="sticky top-0 z-40"
         style={{
-          background: 'color-mix(in srgb, var(--sc-surface) 80%, transparent)',
-          borderBottom: '1px solid var(--sc-border)',
+          background: 'var(--sc-header-bg)',
+          borderBottom: '1px solid var(--sc-header-border)',
           backdropFilter: 'blur(18px) saturate(140%)',
           WebkitBackdropFilter: 'blur(18px) saturate(140%)',
         }}
@@ -71,17 +65,18 @@ export default function MarketingShell({
               </Link>
             ))}
           </nav>
-          <div className="ml-auto flex gap-3 text-sm">
+          <div className="ml-auto flex items-center gap-2 text-sm sm:gap-3">
+            <MarketingThemeToggle />
             <Link
               href="/login"
-              className="rounded-[12px] px-4 py-2 transition"
+              className="rounded-[12px] px-3 py-2 transition sm:px-4"
               style={{ color: 'var(--sc-text-secondary)' }}
             >
               Log in
             </Link>
             <Link
               href="/register"
-              className="rounded-[14px] px-5 py-2 font-semibold text-white"
+              className="rounded-[14px] px-4 py-2 font-semibold text-white sm:px-5"
               style={{
                 background: 'var(--sc-accent)',
                 boxShadow: 'var(--sc-shadow-accent)',
@@ -93,7 +88,6 @@ export default function MarketingShell({
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-14">{children}</main>
-      {showAds ? <AdSenseSlot /> : null}
 
       <footer
         className="px-4 py-12 text-sm"
