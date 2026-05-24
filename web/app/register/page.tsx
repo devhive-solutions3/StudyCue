@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { Suspense } from 'react';
 
+import PasswordField from '@/components/forms/PasswordField';
 import { authErrorMessage } from '@/lib/auth-error-message';
 import { authRateLimitMessage, consumeAuthAttempt } from '@/lib/client-auth-rate-limit';
 import {
@@ -85,9 +86,9 @@ function RegisterForm() {
         setErr(authRateLimitMessage(rate.retryAfterMs));
         return;
       }
-      const mode = await signInGoogleWeb();
-      if (mode === 'redirect-started') return;
-      await syncSessionCookie();
+      const result = await signInGoogleWeb();
+      if (result.mode === 'redirect-started') return;
+      await syncSessionCookie(result.user);
       router.replace(next);
     } catch (e) {
       setErr(authErrorMessage(e, 'google'));
@@ -123,8 +124,12 @@ function RegisterForm() {
     }
     setBusyEmail(true);
     try {
-      await registerEmail(trimmedEmail, password, name.trim() || (trimmedEmail.split('@')[0] ?? 'Planner'));
-      await syncSessionCookie();
+      const createdUser = await registerEmail(
+        trimmedEmail,
+        password,
+        name.trim() || (trimmedEmail.split('@')[0] ?? 'Planner'),
+      );
+      await syncSessionCookie(createdUser);
       router.replace(next);
     } catch (ex) {
       setErr(authErrorMessage(ex, 'register'));
@@ -190,21 +195,19 @@ function RegisterForm() {
             type="email"
             className="sc-input"
           />
-          <input
+          <PasswordField
             placeholder="password (minimum 6 characters)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            type="password"
             minLength={6}
-            className="sc-input"
+            inputClassName="sc-input pr-12"
           />
-          <input
+          <PasswordField
             placeholder="confirm password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            type="password"
             minLength={6}
-            className="sc-input"
+            inputClassName="sc-input pr-12"
           />
           <button
             disabled={busyEmail}

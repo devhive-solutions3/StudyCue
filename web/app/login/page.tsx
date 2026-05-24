@@ -6,12 +6,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { Suspense } from 'react';
 
-import { authErrorMessage } from '@/lib/auth-error-message';
+import PasswordField from '@/components/forms/PasswordField';
+import { authErrorMessage, getAuthErrorCode } from '@/lib/auth-error-message';
 import { authRateLimitMessage, consumeAuthAttempt } from '@/lib/client-auth-rate-limit';
 import {
   clearRememberedEmail,
   readRememberMe,
   readRememberedEmail,
+  lookupSignInMethods,
   setAuthPersistence,
   completeGoogleRedirectSignIn,
   signInEmail,
@@ -22,6 +24,7 @@ import {
 } from '@/lib/firebase-client';
 
 const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const IS_DEV = process.env.NODE_ENV !== 'production';
 
 export default function LoginPage() {
   return (
@@ -110,9 +113,9 @@ function LoginForm() {
       }
       persistRememberMe(rememberMe, email.trim());
       await setAuthPersistence(rememberMe);
-      const mode = await signInGoogleWeb();
-      if (mode === 'redirect-started') return;
-      await syncSessionCookie();
+      const result = await signInGoogleWeb();
+      if (result.mode === 'redirect-started') return;
+      await syncSessionCookie(result.user);
       router.replace(next);
     } catch (e) {
       setErr(authErrorMessage(e, 'google'));
@@ -142,10 +145,33 @@ function LoginForm() {
     try {
       persistRememberMe(rememberMe, trimmed);
       await setAuthPersistence(rememberMe);
-      await signInEmail(trimmed, password);
-      await syncSessionCookie();
+      const signedInUser = await signInEmail(trimmed, password);
+      await syncSessionCookie(signedInUser);
       router.replace(next);
     } catch (e) {
+      const code = getAuthErrorCode(e);
+      if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/user-not-found'
+      ) {
+        try {
+          const methods = await lookupSignInMethods(trimmed);
+          const hasPassword = methods.includes('password');
+          const hasGoogle = methods.includes('google.com');
+
+          if (hasGoogle && !hasPassword) {
+            setErr('This email uses Google sign-in. Please continue with Google.');
+          } else if (hasGoogle && hasPassword) {
+            setErr("That email or password doesn't match. You can reset your password or continue with Google.");
+          } else {
+            setErr("That email or password doesn't match. Check your password or use Forgot password.");
+          }
+          return;
+        } catch (lookupError) {
+          if (IS_DEV) console.warn('Could not inspect sign-in methods after login failure', lookupError);
+        }
+      }
       setErr(authErrorMessage(e, 'login'));
     } finally {
       setBusyEmail(false);
@@ -209,12 +235,11 @@ function LoginForm() {
           </div>
           <div>
             <label className="sc-label">Password</label>
-            <input
+            <PasswordField
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              type="password"
               autoComplete="current-password"
-              className="sc-input mt-2"
+              inputClassName="sc-input mt-2 pr-12"
             />
           </div>
           <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--sc-text-secondary)' }}>

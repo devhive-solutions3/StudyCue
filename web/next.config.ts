@@ -5,6 +5,30 @@ import { bridgedPublicEnvForNextConfig } from './lib/public-env';
 const nextConfig: NextConfig = {
   /** Expose EXPO_PUBLIC_* (Vercel) + NEXT_PUBLIC_* (local) to client bundles. */
   env: bridgedPublicEnvForNextConfig(),
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh4.googleusercontent.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh5.googleusercontent.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh6.googleusercontent.com',
+        pathname: '/**',
+      },
+    ],
+  },
   async headers() {
     return [
       {
