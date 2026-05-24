@@ -66,7 +66,7 @@ export default function ForgotPasswordPage() {
         }
         setNow(Date.now());
         setMsg(
-          'If this email has a password login, a reset email has been sent. Please check your inbox and spam folder.',
+          'Check your inbox and spam folder. The reset link will open a secure StudyCue password reset page.',
         );
         return;
       }
@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
       }
       setNow(Date.now());
       setMsg(
-        'If this email is connected to a password login, a reset email has been sent. Please check your inbox and spam folder.',
+        'If this email is connected to a password login, a reset email has been sent. Check your inbox and spam folder. The reset link will open a secure StudyCue password reset page.',
       );
     } catch (e) {
       const code = getAuthErrorCode(e);
@@ -86,7 +86,7 @@ export default function ForgotPasswordPage() {
 
       if (code === 'auth/user-not-found') {
         setMsg(
-          'If this email is connected to a password login, a reset email has been sent. Please check your inbox and spam folder.',
+          'If this email is connected to a password login, a reset email has been sent. Check your inbox and spam folder. The reset link will open a secure StudyCue password reset page.',
         );
       } else {
         setMsg(authErrorMessage(e, 'reset'));
