@@ -3,49 +3,63 @@ import Link from 'next/link';
 
 import AdSenseSlot from '@/components/ads/AdSenseSlot';
 import JsonLd from '@/components/seo/JsonLd';
-import { canonical, siteTitle } from '@/lib/site-config';
+import { resolveSiteOrigin } from '@/lib/site-config';
+
+const HOME_URL = `${resolveSiteOrigin()}/`;
+const HOME_TITLE = 'StudyCue - Smart Study Planner and Focus Timer';
+const HOME_DESCRIPTION =
+  'StudyCue is a smart study planner for managing classes, tasks, focus sessions, notes, and schedules in one calm student workspace.';
 
 export const metadata: Metadata = {
-  title: siteTitle,
-  description:
-    'StudyCue is a local-first planner for students — calendars, Pomodoro, and focused study workflows across mobile and web.',
-  alternates: { canonical: canonical('/') },
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
+  alternates: { canonical: HOME_URL },
   openGraph: {
-    title: siteTitle,
-    description: 'Plan classes, grind focus sessions, sync across mobile and web.',
-    url: canonical('/'),
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    url: HOME_URL,
     siteName: 'StudyCue',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: siteTitle,
-    description: 'Plan classes, grind focus sessions, sync across mobile and web.',
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
   },
 };
 
 export default function LandingPage() {
-  const organization = {
+  const website = {
     '@context': 'https://schema.org',
-    '@type': 'Organization',
+    '@type': 'WebSite',
     name: 'StudyCue',
-    url: canonical('/'),
-    sameAs: [] as string[],
+    alternateName: ['Study Cue', 'StudyCue by Solutions DevHive'],
+    url: HOME_URL,
+  };
+
+  const softwareApplication = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'StudyCue',
+    applicationCategory: 'EducationalApplication',
+    operatingSystem: 'Web',
+    url: HOME_URL,
   };
 
   return (
     <>
-      <JsonLd data={organization} />
+      <JsonLd data={[website, softwareApplication]} />
       <section className="space-y-6 text-center">
         <p className="mx-auto inline-flex rounded-full border border-border bg-surface px-4 py-1 text-[11px] font-medium uppercase tracking-widest text-accent">
-          Web cockpit · Mobile and desktop · Ads only on marketing
+          StudyCue by Solutions DevHive · Smart study planner · Mobile and desktop
         </p>
         <h1 className="text-balance font-serif text-4xl tracking-tight text-text-primary sm:text-6xl md:text-[3.65rem]">
-          The study planner built for busy students and packed semesters.
+          StudyCue is the smart study planner built for calm, organized student workdays.
         </h1>
         <p className="mx-auto max-w-2xl text-lg text-text-secondary">
-          Keep everything on-device in the Expo app — then open the mirrored web dashboard when you&apos;re deep in
-          browser land. StudyCue helps you stay organized without adding extra complexity.
+          StudyCue brings your calendar, tasks, focus timer, notes, schedules, and Cue AI into one calm student
+          workspace. Built by Solutions DevHive, it helps you plan classes, protect focus sessions, and keep your
+          weekly study flow clear on web.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <Link
@@ -63,16 +77,17 @@ export default function LandingPage() {
       <AdSenseSlot compact className="mt-10 max-w-xl" />
 
       <section id="tiles" className="mt-20 grid gap-6 md:grid-cols-3">
-        <FeatureCard title="Mobile planning" detail="Manage classes, tasks, and study sessions quickly from your phone." />
-        <FeatureCard title="Desktop dashboard" detail="Use a wider layout on web for cleaner planning and weekly review." />
-        <FeatureCard title="Focus sessions" detail="Run focused study timers and track consistency over time." />
+        <FeatureCard title="Calendar and schedules" detail="Manage class blocks, study schedules, and weekly planning in a student-friendly calendar." />
+        <FeatureCard title="Tasks, notes, and Cue AI" detail="Capture tasks, write notes, and use Cue AI to sort the next best step in your study plan." />
+        <FeatureCard title="Focus timer" detail="Run focused study sessions with a calm timer flow that fits into the rest of your workspace." />
       </section>
 
       <section className="mt-20 rounded-3xl border border-border bg-surface p-8 shadow-[var(--shadow-sm)]">
-        <h2 className="text-2xl font-semibold text-text-primary">Screens you will actually ship</h2>
+        <h2 className="text-2xl font-semibold text-text-primary">A public StudyCue homepage Google can understand</h2>
         <p className="mt-3 max-w-prose text-text-secondary">
-          StudyCue gives students a simple flow: capture tasks on mobile, then review and organize better on desktop.
-          The same account works across both so old and new users can continue where they left off.
+          This official StudyCue web app gives students one place for a smart study planner, calendar, tasks, notes,
+          focus timer, and Cue AI. The authenticated workspace stays under <span className="font-semibold text-text-primary">/app</span>,
+          while this homepage stays crawlable for search engines and sharing.
         </p>
       </section>
     </>
