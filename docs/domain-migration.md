@@ -42,8 +42,22 @@ Do **not** change:
 
 ## Google Search Console
 
-- Add property: `studycueplanner.com`
-- Submit sitemap: `https://studycueplanner.com/sitemap.xml`
+1. Add property: **`studycueplanner.com`** (domain or URL-prefix).
+2. Verify ownership (HTML file `web/public/google99f6d1266fd2e34d.html` is deployed at `/google99f6d1266fd2e34d.html` if still valid).
+3. Submit sitemap: **`https://studycueplanner.com/sitemap.xml`**
+4. Request indexing for `https://studycueplanner.com/` after deploy.
+
+Indexing is not instant — ranking for queries like “studycue planner” may take days or weeks after deploy and submission.
+
+**Post-deploy checks:**
+
+| URL | Purpose |
+|-----|---------|
+| `https://studycueplanner.com/` | Homepage + metadata |
+| `https://studycueplanner.com/robots.txt` | Crawl rules |
+| `https://studycueplanner.com/sitemap.xml` | Public URLs |
+| `https://studycueplanner.com/favicon.ico` | Favicon |
+| `https://studycueplanner.com/ads.txt` | AdSense verification |
 
 ## Google AdSense
 

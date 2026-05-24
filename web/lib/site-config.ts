@@ -1,4 +1,6 @@
-export const siteTitle = 'StudyCue — Study planner + AI';
+import { siteTitle } from '@/lib/seo-config';
+
+export { siteTitle };
 
 const LOCAL_DEV_URL = 'http://localhost:3000';
 const PRODUCTION_SITE_URL = 'https://studycueplanner.com';

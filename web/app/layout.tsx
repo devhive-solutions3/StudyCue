@@ -4,25 +4,41 @@ import Script from 'next/script';
 import { Providers } from '@/components/Providers';
 
 import './globals.css';
-import { resolveSiteOrigin, siteTitle } from '@/lib/site-config';
+import {
+  openGraphDescription,
+  PRODUCTION_CANONICAL_ORIGIN,
+  siteDescription,
+  siteKeywords,
+  siteName,
+  siteTitle,
+} from '@/lib/seo-config';
+import { resolveSiteOrigin } from '@/lib/site-config';
 
 export const metadata: Metadata = {
   metadataBase: new URL(resolveSiteOrigin()),
-  title: { default: siteTitle, template: '%s · StudyCue' },
-  description:
-    'Local-first college planner with Pomodoro, calendar, and focused study workflows across mobile and web.',
+  title: { default: siteTitle, template: `%s · ${siteName}` },
+  description: siteDescription,
+  keywords: [...siteKeywords],
   robots: { index: true, follow: true },
-  icons: [
-    { rel: 'icon', url: '/favicon.ico' },
-    { rel: 'icon', type: 'image/png', url: '/cue-icon-light.png' },
-    { rel: 'apple-touch-icon', url: '/cue-icon-light.png' },
-  ],
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/cue-icon.png', type: 'image/png' },
+    ],
+    apple: [{ url: '/cue-icon.png', type: 'image/png' }],
+  },
   openGraph: {
     title: siteTitle,
-    description: 'Plan classes and focus sessions. StudyCue syncs securely between mobile and browser.',
+    description: openGraphDescription,
+    url: PRODUCTION_CANONICAL_ORIGIN,
+    siteName,
     type: 'website',
     locale: 'en_US',
-    siteName: 'StudyCue',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: siteTitle,
+    description: openGraphDescription,
   },
 };
 
