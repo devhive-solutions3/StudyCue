@@ -3,28 +3,36 @@ import Link from 'next/link';
 
 import GoogleAdSenseAd from '@/components/ads/GoogleAdSenseAd';
 import JsonLd from '@/components/seo/JsonLd';
-import { resolveSiteOrigin } from '@/lib/site-config';
+import {
+  openGraphDescription,
+  organizationName,
+  PRODUCTION_CANONICAL_ORIGIN,
+  siteDescription,
+  siteKeywords,
+  siteName,
+  siteTitle,
+  structuredDataDescription,
+} from '@/lib/seo-config';
+import { canonical } from '@/lib/site-config';
 
-const HOME_URL = `${resolveSiteOrigin()}/`;
-const HOME_TITLE = 'StudyCue - Smart Study Planner and Focus Timer';
-const HOME_DESCRIPTION =
-  'StudyCue is a smart study planner for managing classes, tasks, focus sessions, notes, and schedules in one calm student workspace.';
+const HOME_URL = canonical('/');
 
 export const metadata: Metadata = {
-  title: HOME_TITLE,
-  description: HOME_DESCRIPTION,
+  title: siteTitle,
+  description: siteDescription,
+  keywords: [...siteKeywords],
   alternates: { canonical: HOME_URL },
   openGraph: {
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
-    url: HOME_URL,
-    siteName: 'StudyCue',
+    title: siteTitle,
+    description: openGraphDescription,
+    url: PRODUCTION_CANONICAL_ORIGIN,
+    siteName,
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
+    title: siteTitle,
+    description: openGraphDescription,
   },
 };
 
@@ -32,18 +40,29 @@ export default function LandingPage() {
   const website = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'StudyCue',
-    alternateName: ['Study Cue', 'StudyCue by Solutions DevHive'],
+    name: siteName,
+    alternateName: ['StudyCue', 'Study Cue'],
     url: HOME_URL,
+    description: structuredDataDescription,
+    publisher: {
+      '@type': 'Organization',
+      name: organizationName,
+    },
   };
 
   const softwareApplication = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'StudyCue',
+    name: siteName,
+    alternateName: ['StudyCue', 'Study Cue'],
+    url: HOME_URL,
     applicationCategory: 'EducationalApplication',
     operatingSystem: 'Web',
-    url: HOME_URL,
+    description: structuredDataDescription,
+    author: {
+      '@type': 'Organization',
+      name: organizationName,
+    },
   };
 
   return (
