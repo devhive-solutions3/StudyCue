@@ -17,9 +17,9 @@ The Auth user directory is shared with the Expo mobile client automatically.
 3. Under **Authorized JavaScript origins**, add (separate from Firebase **Authorized domains**):
 
    - `http://localhost:3000`
-   - `https://study-cue-gamma.vercel.app`
-   - `https://studycue.solutionsdevhive.com` (your production custom domain)
-   - `https://studycue.<your-apex-domain>` (any other apex you attach)
+   - `https://study-cue-gamma.vercel.app` (optional Vercel preview)
+   - `https://studycueplanner.com` (production)
+   - `https://www.studycueplanner.com` (if you serve www)
 
    Missing origins here breaks **Continue with Google** on that hostname even when Firebase Auth domains are allowlisted.
 

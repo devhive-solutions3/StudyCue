@@ -1,7 +1,7 @@
 export const siteTitle = 'StudyCue — Study planner + AI';
 
 const LOCAL_DEV_URL = 'http://localhost:3000';
-const PRODUCTION_SITE_URL = 'https://studycue.solutionsdevhive.com';
+const PRODUCTION_SITE_URL = 'https://studycueplanner.com';
 
 /** Normalize env values; reject relative paths like `/api/cue`. */
 function toAbsoluteSiteOrigin(raw: string): string | null {
