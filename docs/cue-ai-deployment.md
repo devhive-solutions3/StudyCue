@@ -44,7 +44,7 @@ Expo app     →  https://studycue.fly.dev/api/groq  →  Groq (GROQ_API_KEY on 
 | `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET` | Yes | |
 | `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Yes | |
 | `EXPO_PUBLIC_FIREBASE_APP_ID` | Yes | Keep this exact name on Vercel |
-| `EXPO_PUBLIC_SITE_URL` | Yes | e.g. `https://studycue.yourdomain.com` |
+| `EXPO_PUBLIC_SITE_URL` | Yes | `https://studycueplanner.com` (production) |
 | `EXPO_PUBLIC_AI_PROXY_URL` | Recommended | Value **`/api/cue`** (same-origin Next routes). Skip the variable entirely if you prefer auto-default — do **not** save an empty value. |
 
 Do **not** put `GROQ_API_KEY` / `GEMINI_API_KEY` in `EXPO_PUBLIC_*`. Local dev may still use `NEXT_PUBLIC_*` aliases; the web app reads both.
