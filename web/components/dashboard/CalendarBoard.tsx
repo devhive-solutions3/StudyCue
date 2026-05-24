@@ -9,6 +9,7 @@ import type { CloudMirrorV1 } from '@studycue/types';
 
 import { useMirror } from '@/context/mirror-context';
 import { orderedWeekdays } from '@/lib/mirror-bootstrap';
+import { withSyncedClasses } from '@/lib/study-task-sync';
 
 export default function CalendarBoard() {
   const { mirror, commitMirror } = useMirror();
@@ -24,10 +25,12 @@ export default function CalendarBoard() {
     const classId = Number(match[1]);
     const weekday = overId.slice('drop:'.length);
 
-    commitMirror((prev: CloudMirrorV1) => ({
-      ...prev,
-      classes: prev.classes.map((c) => (c.id === classId ? { ...c, weekday } : c)),
-    }));
+    commitMirror((prev: CloudMirrorV1) =>
+      withSyncedClasses(
+        prev,
+        prev.classes.map((c) => (c.id === classId ? { ...c, weekday } : c)),
+      ),
+    );
   }
 
   const weekdayOrder = orderedWeekdays();

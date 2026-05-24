@@ -19,7 +19,7 @@ export default function MobileBottomNav() {
   const { focusLocked, openFocusLockModal } = useDashboardUi();
 
   function guardNavigation(event: MouseEvent<HTMLAnchorElement>, href: string) {
-    if (focusLocked && href !== '/app/focus') {
+    if (focusLocked && href !== '/app/focus' && href !== '/app/focus-timer') {
       event.preventDefault();
       openFocusLockModal();
     }

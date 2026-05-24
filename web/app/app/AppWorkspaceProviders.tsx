@@ -7,6 +7,7 @@ import GlowBackground from '@/components/layout/GlowBackground';
 import { TransitionCard } from '@/components/layout/AppTransitionOverlay';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import { DashboardUiProvider } from '@/context/dashboard-ui';
+import { FocusTimerProvider } from '@/context/focus-timer';
 import { MirrorProvider, useMirror } from '@/context/mirror-context';
 import { useWebAuth } from '@/lib/firebase-client';
 
@@ -78,11 +79,13 @@ export default function AppWorkspaceProviders({ children }: Readonly<{ children:
 
   return (
     <MirrorProvider uid={user.uid}>
-      <DashboardUiProvider>
-        <DashboardShell>
-          <MirrorGate>{children}</MirrorGate>
-        </DashboardShell>
-      </DashboardUiProvider>
+      <FocusTimerProvider>
+        <DashboardUiProvider>
+          <DashboardShell>
+            <MirrorGate>{children}</MirrorGate>
+          </DashboardShell>
+        </DashboardUiProvider>
+      </FocusTimerProvider>
     </MirrorProvider>
   );
 }

@@ -3,12 +3,10 @@
 import Link from 'next/link';
 
 import type { CloudMirrorV1 } from '@studycue/types';
+import { isActiveTask } from '@/lib/study-task-sync';
 
 function firstUpcomingTask(mirror: CloudMirrorV1) {
-  const pending = mirror.tasks.filter((t) => {
-    const s = (t.status ?? '').toLowerCase();
-    return s !== 'completed' && s !== 'done';
-  });
+  const pending = mirror.tasks.filter((task) => isActiveTask(task));
 
   return [...pending].sort((a, b) => {
     const ad = a.dueAt ? Date.parse(a.dueAt) : Number.MAX_SAFE_INTEGER;
