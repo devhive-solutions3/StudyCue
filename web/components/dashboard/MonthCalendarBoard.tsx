@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { ClassItem } from '@studycue/types';
@@ -409,10 +409,14 @@ export default function MonthCalendarBoard() {
     }
   }
 
-  function openAdd(date = selectedIso) {
+  const closeAddEventModal = useCallback(() => {
+    setModalOpen(false);
+  }, []);
+
+  const openAddEventModal = useCallback((date = selectedIso) => {
     setDraft({ ...EMPTY_DRAFT, date });
     setModalOpen(true);
-  }
+  }, [selectedIso]);
 
   function openEdit(event: CalendarEvent) {
     setDraft({
@@ -464,7 +468,7 @@ export default function MonthCalendarBoard() {
       };
     });
     setSelectedIso(cleaned.date);
-    setModalOpen(false);
+    closeAddEventModal();
     setConflicts(null);
   }
 
@@ -512,7 +516,11 @@ export default function MonthCalendarBoard() {
               </button>
             ))}
           </div>
-          <button type="button" onClick={() => openAdd()} className="relative z-10 shrink-0 sc-btn-primary min-h-[42px] rounded-full px-5">
+          <button
+            type="button"
+            onClick={() => openAddEventModal()}
+            className="relative z-10 shrink-0 pointer-events-auto sc-btn-primary min-h-[42px] rounded-full px-5"
+          >
             + Add Event
           </button>
         </div>
@@ -628,7 +636,11 @@ export default function MonthCalendarBoard() {
         </aside>
       </div>
 
-      <button type="button" onClick={() => openAdd()} className="fixed right-[34px] bottom-[128px] z-[85] flex h-[58px] w-[58px] items-center justify-center rounded-full bg-accent text-3xl font-light text-white shadow-[var(--sc-shadow-accent)] max-[900px]:right-6 max-[900px]:bottom-[112px]">
+      <button
+        type="button"
+        onClick={() => openAddEventModal()}
+        className="fixed right-[34px] bottom-[128px] z-[95] flex h-[58px] w-[58px] items-center justify-center rounded-full bg-accent text-3xl font-light text-white shadow-[var(--sc-shadow-accent)] pointer-events-auto touch-manipulation max-[900px]:right-6 max-[900px]:bottom-[128px]"
+      >
         +
       </button>
 
@@ -636,11 +648,11 @@ export default function MonthCalendarBoard() {
         ? createPortal(
             <div
               data-sc-portal-root
-              className="fixed inset-0 z-[110] flex min-h-dvh w-full items-start justify-center overflow-x-hidden bg-black/50 px-2 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:overflow-y-auto sm:px-4 sm:py-8 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-              onClick={() => setModalOpen(false)}
+              className="fixed inset-0 z-[120] flex min-h-dvh w-full items-start justify-center overflow-x-hidden bg-black/50 px-2 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm pointer-events-auto sm:items-center sm:overflow-y-auto sm:px-4 sm:py-8 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+              onClick={closeAddEventModal}
             >
               <div
-                className="box-border w-full min-w-0 overflow-hidden rounded-[26px] border border-border bg-surface shadow-[var(--sc-shadow-md)] sm:max-w-[42rem] sm:rounded-[30px]"
+                className="box-border z-[121] w-full min-w-0 overflow-hidden rounded-[26px] border border-border bg-surface shadow-[var(--sc-shadow-md)] sm:max-w-[42rem] sm:rounded-[30px]"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="box-border max-h-[calc(100dvh-24px)] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-3.5 sm:max-h-[calc(100dvh-96px)] sm:p-8">
@@ -648,7 +660,7 @@ export default function MonthCalendarBoard() {
                     <h2 className="min-w-0 max-w-full text-xl font-extrabold text-text-primary sm:text-2xl">
                       {draft.id ? 'Edit Event' : '+ Add Event'}
                     </h2>
-                    <button type="button" onClick={() => setModalOpen(false)} className="shrink-0 rounded-full bg-surface-2 px-3 py-2 text-text-secondary">×</button>
+                    <button type="button" onClick={closeAddEventModal} className="shrink-0 rounded-full bg-surface-2 px-3 py-2 text-text-secondary">×</button>
                   </div>
                   <div className="min-w-0 max-w-full overflow-hidden space-y-3 sm:space-y-4">
                 <PillGroup label="Type" values={EVENT_TYPES} value={draft.type} onChange={(type) => setDraft((p) => ({ ...p, type }))} formatter={typeLabel} />
@@ -677,11 +689,11 @@ export default function MonthCalendarBoard() {
         ? createPortal(
             <div
               data-sc-portal-root
-              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+              className="fixed inset-0 z-[122] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
               onClick={() => setConflicts(null)}
             >
               <div
-                className="w-full max-w-[460px] rounded-[30px] border border-border bg-surface p-6 shadow-[var(--sc-shadow-md)]"
+                className="z-[123] w-full max-w-[460px] rounded-[30px] border border-border bg-surface p-6 shadow-[var(--sc-shadow-md)]"
                 onClick={(e) => e.stopPropagation()}
               >
             <h2 className="text-xl font-extrabold text-text-primary">Schedule Conflict</h2>

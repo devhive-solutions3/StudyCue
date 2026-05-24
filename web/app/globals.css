@@ -573,7 +573,8 @@ html.dark .sc-panel {
   border-radius: 999px;
   border: 1px solid var(--sc-border);
   background: var(--sc-surface);
-  z-index: 70;
+  z-index: 99;
+  pointer-events: auto;
   box-shadow:
     0 14px 34px rgba(107, 99, 212, 0.18),
     0 0 0 9px rgba(107, 99, 212, 0.08);
