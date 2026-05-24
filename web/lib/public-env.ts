@@ -20,6 +20,22 @@ export function publicEnv(name: FirebasePublicEnvKey | 'AI_PROXY_URL' | 'SITE_UR
   return (process.env[expo] ?? process.env[next] ?? '').trim();
 }
 
+/**
+ * File storage defaults to Firebase unless explicitly forced to local-only mode.
+ * This avoids cross-device note links breaking when the mode flag is simply unset.
+ */
+export function publicFileStorageMode(): 'firebase' | 'local' {
+  const raw = (
+    process.env.EXPO_PUBLIC_FILE_STORAGE_MODE ??
+    process.env.NEXT_PUBLIC_FILE_STORAGE_MODE ??
+    ''
+  )
+    .trim()
+    .toLowerCase();
+
+  return raw === 'local' ? 'local' : 'firebase';
+}
+
 export function getFirebasePublicConfig() {
   return {
     apiKey: publicEnv('FIREBASE_API_KEY'),

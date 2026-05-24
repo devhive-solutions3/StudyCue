@@ -4,6 +4,7 @@ import Script from 'next/script';
 import { Providers } from '@/components/Providers';
 
 import './globals.css';
+import { getAdsenseClient } from '@/lib/adsense-config';
 import {
   openGraphDescription,
   PRODUCTION_CANONICAL_ORIGIN,
@@ -57,8 +58,17 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const adsenseClient = getAdsenseClient();
+
   return (
     <html lang="en" suppressHydrationWarning className="h-full antialiased">
+      <head>
+        <script
+          async
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(adsenseClient)}`}
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="flex min-h-full flex-col bg-bg text-text-primary">
         <Script id="studycue-theme-boot" strategy="beforeInteractive">
           {themeBootScript}

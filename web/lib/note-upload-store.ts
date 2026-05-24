@@ -6,6 +6,7 @@ import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 
 import { getFirebaseStorage } from '@/lib/firebase-client';
 import { saveLocalNoteFile } from '@/lib/local-file-store';
+import { publicFileStorageMode } from '@/lib/public-env';
 
 export type NoteUploadTask = {
   id: string;
@@ -64,7 +65,7 @@ export function startNoteUpload(params: StartNoteUploadParams): void {
   _tasks = [..._tasks, entry];
   notify();
 
-  if (process.env.NEXT_PUBLIC_FILE_STORAGE_MODE !== 'firebase') {
+  if (publicFileStorageMode() !== 'firebase') {
     void (async () => {
       try {
         _tasks = _tasks.map((t) => (t.id === id ? { ...t, progress: 35 } : t));
