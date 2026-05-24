@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+import { getAdsenseClient } from '@/lib/adsense-config';
+
 /**
  * Lightweight consent banner before loading AdSense (see `docs/cookie-consent-klaro.md` for full Klaro option).
  *
@@ -11,7 +13,7 @@ export const AD_CONSENT_KEY = 'studycue.ads_consent';
 
 export default function ConsentBar() {
   const skip = process.env.NEXT_PUBLIC_SKIP_AD_CONSENT === '1';
-  const client = process.env.NEXT_PUBLIC_ADSENSE_CLIENT?.trim();
+  const client = getAdsenseClient();
 
   const [open, setOpen] = useState(() => {
     if (skip || typeof window === 'undefined') return false;

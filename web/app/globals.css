@@ -3,37 +3,52 @@
 /* ─── StudyCue "Soft Study Dashboard" design tokens ─────────────────────── */
 :root {
   /* Backgrounds & surfaces */
-  --sc-bg: #F7F6FE;
+  --sc-bg: #F6F4FF;
+  --sc-bg-gradient-start: #FAF9FF;
+  --sc-bg-gradient-end: #EDEAFF;
   --sc-surface: #FFFFFF;
-  --sc-surface-soft: #F1F0FB;
-  --sc-surface-hover: #ECEAF8;
+  --sc-surface-elevated: #FFFFFF;
+  --sc-surface-soft: #F0EEFF;
+  --sc-surface-hover: #E8E4FF;
 
   /* Borders */
-  --sc-border: #E3E1F2;
-  --sc-border-strong: #CBC7E4;
+  --sc-border: #DDD8F2;
+  --sc-border-strong: #CBC4EA;
 
   /* Text */
-  --sc-text-primary: #1D1A35;
-  --sc-text-secondary: #625F7D;
-  --sc-text-muted: #9A96B4;
+  --sc-text-primary: #1E1B33;
+  --sc-text-secondary: #5F5A78;
+  --sc-text-muted: #8A84A3;
 
   /* Accent (purple) */
-  --sc-accent: #6B63D4;
-  --sc-accent-hover: #534AB7;
+  --sc-accent: #6A5FDB;
+  --sc-accent-strong: #574BC9;
+  --sc-accent-hover: #574BC9;
+  --sc-accent-purple: #7C6CFF;
   --sc-accent-soft: #EEEDFE;
+  --sc-accent-glow: rgba(106, 95, 219, 0.22);
+
+  /* Status */
+  --sc-success: #14966F;
+  --sc-warning: #B7791F;
+  --sc-error: #DC2626;
+
+  /* Marketing chrome */
+  --sc-header-bg: rgba(246, 244, 255, 0.82);
+  --sc-header-border: rgba(30, 27, 51, 0.10);
 
   /* Tone palette */
   --sc-blue-soft: #E8F3FF;
   --sc-blue: #2F80D8;
 
   --sc-teal-soft: #E4F7F0;
-  --sc-teal: #17956F;
+  --sc-teal: #14966F;
 
   --sc-yellow-soft: #FFF4D8;
   --sc-yellow: #B7791F;
 
   --sc-danger-soft: #FDECEC;
-  --sc-danger: #D94A4A;
+  --sc-danger: #DC2626;
 
   --sc-pink-soft: #FFEAF5;
   --sc-pink: #D9468F;
@@ -46,9 +61,10 @@
   --sc-radius-pill: 999px;
 
   /* Shadow scale */
-  --sc-shadow-sm: 0 4px 12px rgba(81, 70, 145, 0.06);
-  --sc-shadow-md: 0 18px 45px rgba(81, 70, 145, 0.12);
-  --sc-shadow-accent: 0 12px 32px rgba(107, 99, 212, 0.24);
+  --sc-shadow-sm: 0 4px 12px rgba(67, 56, 120, 0.06);
+  --sc-shadow-md: 0 24px 70px rgba(67, 56, 120, 0.12);
+  --sc-shadow-card: 0 24px 70px rgba(67, 56, 120, 0.12);
+  --sc-shadow-accent: 0 18px 40px rgba(106, 95, 219, 0.18);
   --sidebar-w: 252px;
 
   /* ─── Legacy aliases ─────────────────────────────────────────────────── */
@@ -197,44 +213,58 @@ body {
 
 /* ─── Dark mode overrides ─────────────────────────────────────────────────── */
 html.dark {
-  --sc-bg: #0F0E1A;
-  --sc-surface: #171625;
-  --sc-surface-soft: #222034;
+  --sc-bg: #0F0E1C;
+  --sc-bg-gradient-start: #111023;
+  --sc-bg-gradient-end: #1B1830;
+  --sc-surface: #171527;
+  --sc-surface-elevated: #1D1A31;
+  --sc-surface-soft: #211F35;
   --sc-surface-hover: #2A2740;
 
-  --sc-border: #2D2A42;
-  --sc-border-strong: #47435F;
+  --sc-border: #2D2944;
+  --sc-border-strong: #3A3554;
 
-  --sc-text-primary: #F7F5FF;
-  --sc-text-secondary: #C8C4DD;
-  --sc-text-muted: #8C88A6;
+  --sc-text-primary: #F7F4FF;
+  --sc-text-secondary: #C9C4DD;
+  --sc-text-muted: #9A94B8;
 
-  --sc-accent: #A099FF;
+  --sc-accent: #A49BFF;
+  --sc-accent-strong: #8B7CFF;
   --sc-accent-hover: #B9B4FF;
+  --sc-accent-purple: #6A5FDB;
   --sc-accent-soft: #27224D;
+  --sc-accent-glow: rgba(164, 155, 255, 0.35);
+
+  --sc-success: #38CFA2;
+  --sc-warning: #F5B85B;
+  --sc-error: #F87171;
+
+  --sc-header-bg: rgba(15, 14, 28, 0.82);
+  --sc-header-border: rgba(255, 255, 255, 0.08);
 
   --sc-blue-soft: #14283D;
   --sc-blue: #8EC8FF;
 
   --sc-teal-soft: #102D27;
-  --sc-teal: #8BEBCB;
+  --sc-teal: #38CFA2;
 
   --sc-yellow-soft: #352B15;
-  --sc-yellow: #F4C86A;
+  --sc-yellow: #F5B85B;
 
   --sc-danger-soft: #351B23;
-  --sc-danger: #FF8A9A;
+  --sc-danger: #F87171;
 
   --sc-pink-soft: #35172B;
   --sc-pink: #FF8CCF;
 
   --sc-shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.28);
-  --sc-shadow-md: 0 18px 45px rgba(0, 0, 0, 0.35);
-  --sc-shadow-accent: 0 10px 30px rgba(160, 153, 255, 0.24);
+  --sc-shadow-md: 0 24px 70px rgba(0, 0, 0, 0.35);
+  --sc-shadow-card: 0 24px 70px rgba(0, 0, 0, 0.35);
+  --sc-shadow-accent: 0 18px 40px rgba(164, 155, 255, 0.24);
 
   /* glass surfaces become opaque dark cards in dark mode */
   --glass: var(--sc-surface);
-  --glass-strong: var(--sc-surface);
+  --glass-strong: var(--sc-surface-elevated);
 }
 
 html.dark body {
@@ -242,6 +272,18 @@ html.dark body {
 }
 
 /* ─── Base resets ────────────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 *,
 *::before,
 *::after {
@@ -283,15 +325,15 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 82% 6%, rgba(107, 99, 212, 0.16), transparent 31%),
-    radial-gradient(circle at 52% 100%, rgba(47, 128, 216, 0.08), transparent 34%),
+    radial-gradient(circle at 82% 6%, var(--sc-accent-glow), transparent 31%),
+    linear-gradient(180deg, var(--sc-bg-gradient-start) 0%, var(--sc-bg-gradient-end) 100%),
     var(--sc-bg);
 }
 
 html.dark body::before {
   background:
-    radial-gradient(circle at 82% 6%, rgba(160, 153, 255, 0.18), transparent 31%),
-    radial-gradient(circle at 52% 100%, rgba(47, 128, 216, 0.07), transparent 36%),
+    radial-gradient(circle at 82% 6%, var(--sc-accent-glow), transparent 31%),
+    linear-gradient(180deg, var(--sc-bg-gradient-start) 0%, var(--sc-bg-gradient-end) 100%),
     var(--sc-bg);
 }
 
@@ -318,15 +360,15 @@ body > *:not([data-sc-portal-root]) {
 }
 
 .sc-card {
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--sc-surface);
   border: 1px solid var(--sc-border);
   border-radius: var(--sc-radius-lg);
-  box-shadow: var(--sc-shadow-sm);
+  box-shadow: var(--sc-shadow-card);
   overflow: hidden;
   transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
 }
 html.dark .sc-card {
-  background: rgba(23, 22, 37, 0.88);
+  background: var(--sc-surface-elevated);
 }
 .sc-card:hover {
   box-shadow: var(--sc-shadow-md);
