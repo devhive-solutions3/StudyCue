@@ -8,12 +8,17 @@ const IS_DEV = process.env.NODE_ENV !== 'production';
 export async function POST(req: Request) {
   try {
     const { idToken } = (await req.json()) as { idToken?: string };
+    if (IS_DEV) {
+      console.info('POST /api/session', { idTokenPresent: Boolean(idToken?.length) });
+    }
     if (!idToken?.length || idToken.length > 12000) {
       return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 400 });
     }
     const verified = await verifyFirebaseIdToken(idToken);
     if (!verified) {
-      if (IS_DEV) console.warn('Session creation rejected: Firebase ID token verification failed');
+      if (IS_DEV) {
+        console.warn('Session creation rejected: Firebase ID token verification failed');
+      }
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
 
