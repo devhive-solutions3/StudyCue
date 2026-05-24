@@ -28,7 +28,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { getFirebasePublicConfig } from '@/lib/public-env';
+import { getFirebasePublicConfig, publicFileStorageMode } from '@/lib/public-env';
 import { saveLocalProfilePhoto } from '@/lib/local-file-store';
 
 export const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -526,7 +526,7 @@ export async function uploadProfilePic(file: File): Promise<string> {
   const avatarBlob = await compressProfilePhoto(file);
 
   let photoUrl: string;
-  if (process.env.NEXT_PUBLIC_FILE_STORAGE_MODE !== 'firebase') {
+  if (publicFileStorageMode() !== 'firebase') {
     const compressedFile = new File([avatarBlob], 'avatar.jpg', { type: 'image/jpeg' });
     photoUrl = await saveLocalProfilePhoto(user.uid, compressedFile);
   } else {

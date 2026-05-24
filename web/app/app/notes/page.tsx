@@ -54,6 +54,17 @@ function sanitizeStorageFileName(name: string) {
     .trim();
 }
 
+function triggerFileDownload(url: string, fileName: string) {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.rel = 'noopener noreferrer';
+  anchor.target = '_blank';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
 async function gzipBlobIfPossible(file: File): Promise<{ blob: Blob; compressed: boolean }> {
   const CompressionCtor = (
     window as unknown as { CompressionStream?: new (format: string) => CompressionStream }
@@ -250,13 +261,13 @@ export default function NotesRoutePage() {
       const url = URL.createObjectURL(
         new Blob([blobToOpen], { type: file.mimeType || stored.contentType || 'application/octet-stream' }),
       );
-      window.open(url, '_blank', 'noopener,noreferrer');
+      triggerFileDownload(url, file.name);
       window.setTimeout(() => URL.revokeObjectURL(url), 45_000);
       return;
     }
 
     if (file.compressed !== 1) {
-      window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
+      triggerFileDownload(file.downloadUrl, file.name);
       return;
     }
 
@@ -264,7 +275,7 @@ export default function NotesRoutePage() {
       window as unknown as { DecompressionStream?: new (format: string) => DecompressionStream }
     ).DecompressionStream;
     if (!DecompressionCtor) {
-      window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
+      triggerFileDownload(file.downloadUrl, file.name);
       return;
     }
 
@@ -275,7 +286,7 @@ export default function NotesRoutePage() {
         new DecompressionCtor('gzip'),
       );
       if (!stream) {
-        window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
+        triggerFileDownload(file.downloadUrl, file.name);
         return;
       }
       const decompressed = await new Response(stream).blob();
@@ -283,10 +294,10 @@ export default function NotesRoutePage() {
         type: file.mimeType || 'application/octet-stream',
       });
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      triggerFileDownload(url, file.name);
       window.setTimeout(() => URL.revokeObjectURL(url), 45_000);
     } catch {
-      window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
+      triggerFileDownload(file.downloadUrl, file.name);
     }
   }
 
@@ -431,9 +442,10 @@ export default function NotesRoutePage() {
                         <span className="block text-xs text-text-muted">
                           {(file.sizeBytes / 1024 / 1024).toFixed(2)} MB
                           {file.compressed === 1 ? ' · compressed' : ''}
+                          {isLocalNoteUrl(file.downloadUrl) ? ' · browser-only' : ''}
                         </span>
                       </span>
-                      <span className="text-xs text-accent">Open</span>
+                      <span className="text-xs text-accent">Download</span>
                     </button>
                   ))
                 )}
