@@ -444,13 +444,38 @@ html.dark .sc-card {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  height: 52px;
+  min-height: 52px;
+  border-radius: 15px;
+  border: 1px solid var(--sc-border);
+  background-color: var(--sc-surface-soft);
+  color: var(--sc-text-primary);
+  padding: 0 16px;
+  font: inherit;
+  line-height: 52px;
+  appearance: none;
+  -webkit-appearance: none;
   box-sizing: border-box;
   -webkit-min-logical-width: 0;
+  background-clip: padding-box;
 }
 .sc-input[type="date"]::-webkit-date-and-time-value,
 .sc-input[type="time"]::-webkit-date-and-time-value {
   min-width: 0;
   text-align: left;
+  color: var(--sc-text-primary);
+}
+.sc-input[type="date"]::-webkit-calendar-picker-indicator,
+.sc-input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.85;
+  filter: none;
+}
+html.dark .sc-input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark .sc-input[type="time"]::-webkit-calendar-picker-indicator,
+.dark .sc-input[type="date"]::-webkit-calendar-picker-indicator,
+.dark .sc-input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.85;
 }
 .sc-input:focus {
   border-color: var(--sc-accent);
@@ -585,6 +610,10 @@ html.dark .sc-panel {
   transform: translateY(-3px) scale(1.045);
 }
 
+.time-grid > * {
+  min-width: 0;
+}
+
 html.dark .sc-floating-cue {
   box-shadow:
     0 14px 36px rgba(0, 0, 0, 0.40),
@@ -604,6 +633,34 @@ html.dark .sc-floating-cue {
     height: 78px;
     right: 18px;
     bottom: 92px;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal,
+  .add-event-modal {
+    width: min(100%, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    margin: 0 auto;
+    border-radius: 24px;
+  }
+
+  .modal {
+    padding: 18px;
+  }
+
+  .modal input,
+  .modal select,
+  .modal button,
+  .add-event-modal input,
+  .add-event-modal select,
+  .add-event-modal button {
+    max-width: 100%;
+  }
+
+  .time-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 }
 

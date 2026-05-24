@@ -652,10 +652,10 @@ export default function MonthCalendarBoard() {
               onClick={closeAddEventModal}
             >
               <div
-                className="box-border z-[121] w-full min-w-0 overflow-hidden rounded-[26px] border border-border bg-surface shadow-[var(--sc-shadow-md)] sm:max-w-[42rem] sm:rounded-[30px]"
+                className="add-event-modal box-border z-[121] w-full min-w-0 overflow-hidden rounded-[26px] border border-border bg-surface shadow-[var(--sc-shadow-md)] sm:max-w-[42rem] sm:rounded-[30px]"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="box-border max-h-[calc(100dvh-24px)] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-3.5 sm:max-h-[calc(100dvh-96px)] sm:p-8">
+                <div className="modal box-border max-h-[calc(100dvh-24px)] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-3.5 sm:max-h-[calc(100dvh-96px)] sm:p-8">
                   <div className="mb-4 flex min-w-0 max-w-full items-start justify-between gap-3 sm:mb-5 sm:gap-4">
                     <h2 className="min-w-0 max-w-full text-xl font-extrabold text-text-primary sm:text-2xl">
                       {draft.id ? 'Edit Event' : '+ Add Event'}
@@ -669,7 +669,7 @@ export default function MonthCalendarBoard() {
                 <PillGroup label="Recurrence" values={RECURRENCES} value={draft.recurrence} onChange={(recurrence) => setDraft((p) => ({ ...p, recurrence }))} formatter={recurrenceLabel} />
                 <div className="min-w-0 max-w-full space-y-3">
                   <input type="date" value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
-                  <div className="grid min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="time-grid grid min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2">
                     <input type="time" value={draft.startTime} onChange={(e) => setDraft((p) => ({ ...p, startTime: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
                     <input type="time" value={draft.endTime} onChange={(e) => setDraft((p) => ({ ...p, endTime: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
                   </div>
