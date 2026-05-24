@@ -16,6 +16,7 @@ import {
 } from '@/lib/firebase-client';
 
 const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const IS_DEV = process.env.NODE_ENV !== 'production';
 
 export default function RegisterPage() {
   return (
@@ -50,10 +51,15 @@ function RegisterForm() {
       try {
         const signedIn = await completeGoogleRedirectSignIn();
         if (cancelled || !signedIn) return;
+        if (IS_DEV) console.info('Firebase Google redirect registration succeeded');
         await syncSessionCookie();
+        if (IS_DEV) console.info('/api/session sync completed after Google redirect registration');
         router.replace(next);
       } catch (e) {
-        if (!cancelled) setErr(authErrorMessage(e, 'google'));
+        if (!cancelled) {
+          if (IS_DEV) console.warn('/api/session sync failed after Google redirect registration', e);
+          setErr(authErrorMessage(e, 'google'));
+        }
       }
     })();
     return () => {
@@ -68,10 +74,13 @@ function RegisterForm() {
     redirectingRef.current = true;
     void (async () => {
       try {
+        if (IS_DEV) console.info('Firebase auth state ready; syncing secure session');
         await syncSessionCookie();
+        if (IS_DEV) console.info('/api/session sync completed after auth state change');
         router.replace(next);
-      } catch {
+      } catch (e) {
         redirectingRef.current = false;
+        if (IS_DEV) console.warn('/api/session sync failed after auth state change', e);
         setErr('Could not start your secure session. Please try again.');
       }
     })();
@@ -88,9 +97,12 @@ function RegisterForm() {
       }
       const result = await signInGoogleWeb();
       if (result.mode === 'redirect-started') return;
+      if (IS_DEV) console.info('Firebase Google popup registration succeeded', { uid: result.user.uid });
       await syncSessionCookie(result.user);
+      if (IS_DEV) console.info('/api/session sync completed after Google popup registration');
       router.replace(next);
     } catch (e) {
+      if (IS_DEV) console.warn('/api/session sync failed after Google popup registration', e);
       setErr(authErrorMessage(e, 'google'));
     } finally {
       setBusyGoogle(false);
@@ -129,9 +141,12 @@ function RegisterForm() {
         password,
         name.trim() || (trimmedEmail.split('@')[0] ?? 'Planner'),
       );
+      if (IS_DEV) console.info('Firebase email registration succeeded', { uid: createdUser.uid });
       await syncSessionCookie(createdUser);
+      if (IS_DEV) console.info('/api/session sync completed after email registration');
       router.replace(next);
     } catch (ex) {
+      if (IS_DEV) console.warn('Registration or /api/session sync failed after email registration', ex);
       setErr(authErrorMessage(ex, 'register'));
     } finally {
       setBusyEmail(false);

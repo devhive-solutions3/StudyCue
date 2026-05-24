@@ -63,11 +63,14 @@ function LoginForm() {
       try {
         const signedIn = await completeGoogleRedirectSignIn();
         if (cancelled || !signedIn) return;
+        if (IS_DEV) console.info('Firebase Google redirect login succeeded');
         persistRememberMe(rememberMe, email.trim());
         await syncSessionCookie();
+        if (IS_DEV) console.info('/api/session sync completed after Google redirect');
         router.replace(next);
       } catch (e) {
         if (!cancelled) {
+          if (IS_DEV) console.warn('/api/session sync failed after Google redirect', e);
           setErr(authErrorMessage(e, 'google'));
         }
       }
@@ -84,10 +87,13 @@ function LoginForm() {
     redirectingRef.current = true;
     void (async () => {
       try {
+        if (IS_DEV) console.info('Firebase auth state ready; syncing secure session');
         await syncSessionCookie();
+        if (IS_DEV) console.info('/api/session sync completed after auth state change');
         router.replace(next);
-      } catch {
+      } catch (e) {
         redirectingRef.current = false;
+        if (IS_DEV) console.warn('/api/session sync failed after auth state change', e);
         setErr('Could not start your secure session. Please try again.');
       }
     })();
@@ -115,9 +121,12 @@ function LoginForm() {
       await setAuthPersistence(rememberMe);
       const result = await signInGoogleWeb();
       if (result.mode === 'redirect-started') return;
+      if (IS_DEV) console.info('Firebase Google popup login succeeded', { uid: result.user.uid });
       await syncSessionCookie(result.user);
+      if (IS_DEV) console.info('/api/session sync completed after Google popup');
       router.replace(next);
     } catch (e) {
+      if (IS_DEV) console.warn('/api/session sync failed after Google popup', e);
       setErr(authErrorMessage(e, 'google'));
     } finally {
       setBusyGoogle(false);
@@ -146,9 +155,12 @@ function LoginForm() {
       persistRememberMe(rememberMe, trimmed);
       await setAuthPersistence(rememberMe);
       const signedInUser = await signInEmail(trimmed, password);
+      if (IS_DEV) console.info('Firebase email login succeeded', { uid: signedInUser.uid });
       await syncSessionCookie(signedInUser);
+      if (IS_DEV) console.info('/api/session sync completed after email login');
       router.replace(next);
     } catch (e) {
+      if (IS_DEV) console.warn('Login or /api/session sync failed after email login', e);
       const code = getAuthErrorCode(e);
       if (
         code === 'auth/invalid-credential' ||
