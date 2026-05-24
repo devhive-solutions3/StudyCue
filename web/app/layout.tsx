@@ -1,25 +1,10 @@
 import type { Metadata } from 'next';
-import { DM_Sans, DM_Serif_Display } from 'next/font/google';
 import Script from 'next/script';
 
 import { Providers } from '@/components/Providers';
 
 import './globals.css';
 import { resolveSiteOrigin, siteTitle } from '@/lib/site-config';
-
-const dmSans = DM_Sans({
-  variable: '--font-dm-sans',
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-});
-
-const dmSerif = DM_Serif_Display({
-  variable: '--font-dm-serif',
-  subsets: ['latin'],
-  weight: ['400'],
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(resolveSiteOrigin()),
@@ -57,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${dmSans.variable} ${dmSerif.variable} h-full antialiased`}>
+    <html lang="en" suppressHydrationWarning className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-bg text-text-primary">
         <Script id="studycue-theme-boot" strategy="beforeInteractive">
           {themeBootScript}

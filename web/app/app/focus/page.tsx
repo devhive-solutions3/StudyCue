@@ -66,14 +66,17 @@ export default function FocusRoutePage() {
   const endsAtMsRef = React.useRef<number | null>(null);
   const remainingSecondsRef = React.useRef(remainingSeconds);
   const totalSecondsRef = React.useRef(totalSeconds);
-  remainingSecondsRef.current = remainingSeconds;
-  totalSecondsRef.current = totalSeconds;
   const completionAudioRef = React.useRef<HTMLAudioElement | null>(null);
   const fallbackAudioContextRef = React.useRef<AudioContext | null>(null);
   const hasUnlockedAudioRef = React.useRef(false);
   const hasPlayedCompletionSoundRef = React.useRef(false);
   const completionSoundPendingRef = React.useRef(false);
   const isNaturalCompletionPendingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    remainingSecondsRef.current = remainingSeconds;
+    totalSecondsRef.current = totalSeconds;
+  }, [remainingSeconds, totalSeconds]);
 
   React.useEffect(() => {
     completionAudioRef.current = new Audio('/sounds/timer.mp3');
@@ -197,6 +200,14 @@ export default function FocusRoutePage() {
     }
   }, []);
 
+  const resolveMinutes = React.useCallback(() => {
+    const custom = Number(customMinutes);
+    if (Number.isFinite(custom) && custom >= 1) {
+      return Math.round(custom);
+    }
+    return selectedMinutes;
+  }, [customMinutes, selectedMinutes]);
+
   const finishSession = React.useCallback(() => {
     isNaturalCompletionPendingRef.current = false;
     const nowIso = new Date().toISOString();
@@ -237,13 +248,13 @@ export default function FocusRoutePage() {
     if (linkedTaskId != null) {
       setCompletePromptTaskId(linkedTaskId);
     }
-  }, [commitMirror, persistNow, selectedTaskId, sessionTitle, startedAtMs]);
+  }, [commitMirror, persistNow, resolveMinutes, selectedTaskId, sessionTitle, startedAtMs]);
 
   const handleNaturalCompletion = React.useCallback(async () => {
     if (isNaturalCompletionPendingRef.current) return;
     const endsAt = endsAtMsRef.current;
     const left =
-      endsAt != null ? Math.ceil((endsAt - Date.now()) / 1000) : remainingSeconds;
+      endsAt != null ? Math.ceil((endsAt - Date.now()) / 1000) : remainingSecondsRef.current;
     if (left > 0) return;
 
     isNaturalCompletionPendingRef.current = true;
@@ -370,14 +381,6 @@ export default function FocusRoutePage() {
       setSelectedTaskId(null);
     }
   }, [selectedTaskId, taskLookup]);
-
-  function resolveMinutes() {
-    const custom = Number(customMinutes);
-    if (Number.isFinite(custom) && custom >= 1) {
-      return Math.round(custom);
-    }
-    return selectedMinutes;
-  }
 
   async function startSession() {
     await unlockCompletionAudio();

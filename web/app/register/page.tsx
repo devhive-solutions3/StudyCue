@@ -6,6 +6,7 @@ import * as React from 'react';
 import { Suspense } from 'react';
 
 import { authErrorMessage } from '@/lib/auth-error-message';
+import { authRateLimitMessage, consumeAuthAttempt } from '@/lib/client-auth-rate-limit';
 import {
   completeGoogleRedirectSignIn,
   registerEmail,
@@ -79,6 +80,11 @@ function RegisterForm() {
     setBusyGoogle(true);
     setErr(null);
     try {
+      const rate = consumeAuthAttempt('register');
+      if (!rate.allowed) {
+        setErr(authRateLimitMessage(rate.retryAfterMs));
+        return;
+      }
       const mode = await signInGoogleWeb();
       if (mode === 'redirect-started') return;
       await syncSessionCookie();
@@ -108,6 +114,11 @@ function RegisterForm() {
     }
     if (password.length < 6) {
       setErr('Password must be at least 6 characters.');
+      return;
+    }
+    const rate = consumeAuthAttempt('register');
+    if (!rate.allowed) {
+      setErr(authRateLimitMessage(rate.retryAfterMs));
       return;
     }
     setBusyEmail(true);

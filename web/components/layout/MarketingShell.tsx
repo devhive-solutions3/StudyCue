@@ -103,12 +103,6 @@ export default function MarketingShell({
           borderTop: '1px solid var(--sc-border)',
         }}
       >
-        <div className="mx-auto max-w-5xl">
-          <p className="max-w-3xl leading-relaxed">
-            StudyCue is a smart study planner for students by Solutions DevHive. Manage your calendar, tasks, notes,
-            focus timer, and Cue AI in one clean workspace.
-          </p>
-        </div>
         <div className="mx-auto mt-10 grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="font-semibold" style={{ color: 'var(--sc-text-primary)' }}>

@@ -1,18 +1,38 @@
 import { requireFirebaseAuth } from '@/lib/firebase-server-auth';
+import { rateLimitHeaders, takeRateLimit } from '@/lib/rate-limit';
 import { handleCueGeminiProxy, type CueGeminiProxyBody } from '@/lib/ai-proxy-server';
 
 export const runtime = 'nodejs';
+const AI_LIMIT = 20;
+const AI_WINDOW_MS = 10 * 60 * 1000;
 
 export async function POST(req: Request) {
   const viewer = await requireFirebaseAuth(req);
   if (!viewer) {
     return Response.json({ error: 'Unauthorized.' }, { status: 401 });
   }
+
+  const rate = takeRateLimit(`cue:${viewer.uid}`, AI_LIMIT, AI_WINDOW_MS);
+  if (!rate.allowed) {
+    return Response.json(
+      { error: 'Too many Cue requests. Please wait a few minutes and try again.' },
+      { status: 429, headers: rateLimitHeaders(rate) },
+    );
+  }
   let body: CueGeminiProxyBody;
   try {
     body = (await req.json()) as CueGeminiProxyBody;
   } catch {
-    return Response.json({ error: 'Invalid JSON body.' }, { status: 400 });
+    return Response.json({ error: 'Invalid JSON body.' }, { status: 400, headers: rateLimitHeaders(rate) });
   }
-  return handleCueGeminiProxy(body);
+  const response = await handleCueGeminiProxy(body);
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(rateLimitHeaders(rate))) {
+    headers.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }

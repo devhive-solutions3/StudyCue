@@ -83,11 +83,10 @@ export default function LandingPage() {
       </section>
 
       <section className="mt-20 rounded-3xl border border-border bg-surface p-8 shadow-[var(--shadow-sm)]">
-        <h2 className="text-2xl font-semibold text-text-primary">A public StudyCue homepage Google can understand</h2>
+        <h2 className="text-2xl font-semibold text-text-primary">Built for calmer study planning</h2>
         <p className="mt-3 max-w-prose text-text-secondary">
-          This official StudyCue web app gives students one place for a smart study planner, calendar, tasks, notes,
-          focus timer, and Cue AI. The authenticated workspace stays under <span className="font-semibold text-text-primary">/app</span>,
-          while this homepage stays crawlable for search engines and sharing.
+          StudyCue gives students one clean place to plan class schedules, manage tasks, organize notes, run focus
+          sessions, and get help from Cue AI.
         </p>
       </section>
     </>

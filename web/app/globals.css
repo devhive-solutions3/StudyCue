@@ -107,9 +107,9 @@ body {
 /* ─── Tailwind theme wiring (Tailwind v4 @theme inline) ─────────────────── */
 @theme inline {
   /* Fonts */
-  --font-sans: var(--font-dm-sans, var(--font-inter, "DM Sans"), "Inter", system-ui, -apple-system, sans-serif);
-  --font-serif: var(--font-dm-serif, "DM Serif Display"), Georgia, serif;
-  --font-display: var(--font-dm-serif, "DM Serif Display"), Georgia, serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: "DM Serif Display", Georgia, "Times New Roman", serif;
+  --font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
 
   /* Core */
   --color-bg: var(--sc-bg);
@@ -261,7 +261,7 @@ body {
   margin: 0;
   background: transparent;
   color: var(--sc-text-primary);
-  font-family: var(--font-dm-sans), "DM Sans", "Inter", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.5;
   font-feature-settings: "ss01", "cv11";
@@ -525,7 +525,7 @@ html.dark .sc-focus-ring:focus-visible {
 }
 
 .sc-hero-title {
-  font-family: var(--font-dm-serif), "DM Serif Display", Georgia, serif;
+  font-family: var(--font-serif);
   font-size: clamp(42px, 4vw, 66px);
   line-height: 0.94;
   letter-spacing: -0.05em;

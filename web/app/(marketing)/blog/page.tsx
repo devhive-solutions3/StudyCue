@@ -16,7 +16,13 @@ export default function BlogIndexPage() {
       </header>
       <div className="rounded-2xl border border-border bg-surface px-5 py-6 shadow-[var(--shadow-sm)]">
         <p className="text-text-secondary">
-          Welcome sa lahat ng new users at old users ng StudyCue. More blog updates coming soon.
+          StudyCue is a smart study planner for students who want a calmer way to manage schoolwork. It brings your
+          calendar, class schedules, tasks, notes, focus timer, and Cue AI into one clean workspace.
+        </p>
+        <p className="mt-4 text-text-secondary">
+          Use StudyCue to plan your week, track what needs to be done, organize study materials, and stay focused
+          during review sessions. This blog will share product updates, feature guides, and study tips to help you get
+          the most out of StudyCue.
         </p>
       </div>
     </div>
