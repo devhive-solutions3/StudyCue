@@ -295,8 +295,9 @@ html.dark body::before {
     var(--sc-bg);
 }
 
-/* Make sure any direct page content sits above the ambient backdrop */
-body > * {
+/* Make sure any direct page content sits above the ambient backdrop.
+   Exclude portaled modals — they must stay position:fixed on document.body. */
+body > *:not([data-sc-portal-root]) {
   position: relative;
   z-index: 1;
 }
@@ -572,7 +573,8 @@ html.dark .sc-panel {
   border-radius: 999px;
   border: 1px solid var(--sc-border);
   background: var(--sc-surface);
-  z-index: 70;
+  z-index: 99;
+  pointer-events: auto;
   box-shadow:
     0 14px 34px rgba(107, 99, 212, 0.18),
     0 0 0 9px rgba(107, 99, 212, 0.08);
