@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import MarketingThemeToggle from '@/components/marketing/MarketingThemeToggle';
 
 const NAV = [
+  { href: '/', label: 'Home' },
   { href: '/features', label: 'Features' },
   { href: '/blog', label: 'Blog' },
   { href: '/help', label: 'Help' },
@@ -50,7 +51,7 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
               className="font-serif text-[22px] leading-none tracking-tight"
               style={{ color: 'var(--sc-text-primary)' }}
             >
-              Study<span style={{ color: 'var(--sc-accent)' }}>Cue</span>
+              Study<span style={{ color: 'var(--sc-accent)' }}>Cue</span> Planner
             </span>
           </Link>
           <nav className="flex flex-wrap gap-1 text-sm md:gap-2">
@@ -100,36 +101,40 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
         <div className="mx-auto mt-10 grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
-              StudyCue
+              StudyCue Planner
             </p>
             <p className="mt-2 leading-relaxed">
-              Smart study planner for students by Solutions DevHive. Plan schoolwork, organize notes, and stay focused
-              with Cue AI.
+              StudyCue Planner is a smart study planner for students by Solutions DevHive. Plan schoolwork, organize
+              notes, manage class schedules, and stay focused with Cue AI.
             </p>
           </div>
           <div className="space-y-2">
             <p className="font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
-              Company
+              Explore
             </p>
-            <FooterLink href="/contact">Contact</FooterLink>
+            <FooterLink href="/">Home</FooterLink>
             <FooterLink href="/features">Features</FooterLink>
+            <FooterLink href="/blog">Blog</FooterLink>
+            <FooterLink href="/help">Help</FooterLink>
+            <FooterLink href="/contact">Contact</FooterLink>
           </div>
           <div className="space-y-2">
             <p className="font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
               Legal
             </p>
+            <FooterLink href="/cookies">Cookies</FooterLink>
             <FooterLink href="/privacy">Privacy</FooterLink>
             <FooterLink href="/terms">Terms</FooterLink>
           </div>
           <div className="space-y-2">
             <p className="font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
-              Study
+              StudyCue Planner
             </p>
-            <FooterLink href="/app/calendar">Calendar</FooterLink>
-            <FooterLink href="/app/tasks">Tasks</FooterLink>
-            <FooterLink href="/app/notes">Notes</FooterLink>
-            <FooterLink href="/app/focus">Focus Timer</FooterLink>
-            <FooterLink href="/app/chat">Cue AI</FooterLink>
+            <FooterLink href="/features">Calendar and schedules</FooterLink>
+            <FooterLink href="/features">Tasks and deadlines</FooterLink>
+            <FooterLink href="/features">Notes</FooterLink>
+            <FooterLink href="/features">Focus timer</FooterLink>
+            <FooterLink href="/features">Cue AI</FooterLink>
           </div>
         </div>
       </footer>

@@ -3,6 +3,7 @@ import { canonical } from '@/lib/site-config';
 
 export const metadata: Metadata = {
   title: 'Contact',
+  description: 'Contact the StudyCue Planner team for support, bugs, or general questions.',
   alternates: { canonical: canonical('/contact') },
 };
 
@@ -17,7 +18,7 @@ export default function ContactPage() {
   return (
     <div className="mx-auto max-w-[900px] space-y-6">
       <header className="space-y-3">
-        <h1 className="font-serif text-4xl text-text-primary">Contact StudyCue</h1>
+        <h1 className="font-serif text-4xl text-text-primary">Contact StudyCue Planner</h1>
         <p className="max-w-2xl text-text-secondary">
           Reach out to the Solutions DevHive team for questions, support, or project inquiries.
         </p>
@@ -25,8 +26,8 @@ export default function ContactPage() {
 
       <div className="rounded-2xl border border-border bg-surface p-6 shadow-[var(--sc-shadow-card)] sm:p-8">
         <p className="max-w-2xl text-text-secondary">
-          Need help with StudyCue or want to connect with the team? Use the links below to reach us through email or
-          our social channels.
+          Need help with StudyCue Planner or want to connect with the team? Use the links below to reach us through
+          email or our social channels.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <a href={`mailto:${email}`} className={actionClassName}>

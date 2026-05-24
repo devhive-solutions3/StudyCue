@@ -1,10 +1,8 @@
-import { siteTitle } from '@/lib/seo-config';
+import { PRODUCTION_CANONICAL_ORIGIN, siteTitle } from '@/lib/seo-config';
 
 export { siteTitle };
 
 const LOCAL_DEV_URL = 'http://localhost:3000';
-const PRODUCTION_SITE_URL = 'https://studycueplanner.com';
-
 /** Normalize env values; reject relative paths like `/api/cue`. */
 function toAbsoluteSiteOrigin(raw: string): string | null {
   const v = raw.trim();
@@ -45,11 +43,11 @@ function inferVercelOrigin(): string {
     const origin = toAbsoluteSiteOrigin(host);
     if (origin) return origin;
   }
-  return PRODUCTION_SITE_URL;
+  return PRODUCTION_CANONICAL_ORIGIN;
 }
 
 export function canonical(path = ''): string {
-  const base = resolveSiteOrigin();
+  const base = PRODUCTION_CANONICAL_ORIGIN;
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p === '/' ? '' : p}`;
 }

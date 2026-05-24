@@ -1,11 +1,8 @@
 import type { MetadataRoute } from 'next';
 
-import { getAllPosts } from '@/lib/posts';
-import { resolveSiteOrigin } from '@/lib/site-config';
+import { PRODUCTION_CANONICAL_ORIGIN } from '@/lib/seo-config';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = resolveSiteOrigin();
-
   const paths = [
     '/',
     '/features',
@@ -17,17 +14,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/cookies',
   ];
 
-  const staticEntries = paths.map((path) => ({
-    url: `${base}${path}`,
+  return paths.map((path) => ({
+    url: `${PRODUCTION_CANONICAL_ORIGIN}${path === '/' ? '' : path}`,
     priority: path === '/' ? 1 : 0.65,
     lastModified: new Date(),
   }));
-
-  const posts = getAllPosts().map((p) => ({
-    url: `${base}/blog/${p.slug}`,
-    lastModified: new Date(p.date),
-    priority: 0.7,
-  }));
-
-  return [...staticEntries, ...posts];
 }

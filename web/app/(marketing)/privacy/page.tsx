@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
+import { canonical } from '@/lib/site-config';
 
-export const metadata: Metadata = { title: 'Privacy policy · StudyCue Web' };
+export const metadata: Metadata = {
+  title: 'Privacy policy',
+  alternates: { canonical: canonical('/privacy') },
+};
 
 export default function PrivacyPage() {
   return (

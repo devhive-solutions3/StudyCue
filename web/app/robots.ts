@@ -1,16 +1,14 @@
 import type { MetadataRoute } from 'next';
 
-import { resolveSiteOrigin } from '@/lib/site-config';
+import { PRODUCTION_CANONICAL_ORIGIN } from '@/lib/seo-config';
 
 export default function robots(): MetadataRoute.Robots {
-  const base = resolveSiteOrigin();
-
   return {
     rules: {
       userAgent: '*',
-      allow: ['/'],
+      allow: ['/', '/features', '/blog', '/help', '/contact', '/privacy', '/terms', '/cookies'],
       disallow: ['/app', '/login', '/register', '/forgot-password', '/auth/action', '/api/session'],
     },
-    sitemap: `${base}/sitemap.xml`,
+    sitemap: `${PRODUCTION_CANONICAL_ORIGIN}/sitemap.xml`,
   };
 }

@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'StudyCue Planner',
     short_name: 'StudyCue',
     description:
-      'StudyCue Planner helps students manage schedules, tasks, notes, focus sessions, and Cue AI in one calm study workspace.',
+      'StudyCue Planner helps students organize class schedules, tasks, notes, focus sessions, and Cue AI in one calm study workspace.',
     start_url: '/',
     display: 'standalone',
     background_color: '#F6F4FF',
