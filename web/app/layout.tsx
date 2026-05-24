@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   title: { default: siteTitle, template: `%s · ${siteName}` },
   description: siteDescription,
   keywords: [...siteKeywords],
+  alternates: { canonical: PRODUCTION_CANONICAL_ORIGIN },
   robots: { index: true, follow: true },
   icons: {
     icon: [

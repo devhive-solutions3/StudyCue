@@ -7,7 +7,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { getAllPosts, getPostBySlug } from '@/lib/posts';
-import { canonical, resolveSiteOrigin, siteTitle } from '@/lib/site-config';
+import { canonical, siteTitle } from '@/lib/site-config';
+import { PRODUCTION_CANONICAL_ORIGIN, siteName } from '@/lib/seo-config';
 
 export const dynamicParams = false;
 
@@ -36,7 +37,6 @@ export default async function BlogArticlePage(props: { params: Promise<{ slug: s
   const post = getPostBySlug(slug);
   if (!post) notFound();
 
-  const publisherUrl = resolveSiteOrigin();
   const ld = {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
@@ -46,8 +46,8 @@ export default async function BlogArticlePage(props: { params: Promise<{ slug: s
     url: canonical(`/blog/${post.slug}`),
     publisher: {
       '@type': 'Organization',
-      name: 'StudyCue',
-      url: publisherUrl,
+      name: siteName,
+      url: PRODUCTION_CANONICAL_ORIGIN,
     },
   };
 

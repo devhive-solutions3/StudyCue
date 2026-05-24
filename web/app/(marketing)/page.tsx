@@ -41,25 +41,20 @@ export default function LandingPage() {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: siteName,
-    alternateName: ['StudyCue', 'Study Cue'],
+    alternateName: 'StudyCue',
     url: HOME_URL,
-    description: structuredDataDescription,
-    publisher: {
-      '@type': 'Organization',
-      name: organizationName,
-    },
   };
 
-  const softwareApplication = {
+  const webApplication = {
     '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
+    '@type': 'WebApplication',
     name: siteName,
-    alternateName: ['StudyCue', 'Study Cue'],
+    alternateName: 'StudyCue',
     url: HOME_URL,
     applicationCategory: 'EducationalApplication',
     operatingSystem: 'Web',
     description: structuredDataDescription,
-    author: {
+    creator: {
       '@type': 'Organization',
       name: organizationName,
     },
@@ -67,18 +62,18 @@ export default function LandingPage() {
 
   return (
     <>
-      <JsonLd data={[website, softwareApplication]} />
+      <JsonLd data={[website, webApplication]} />
       <section className="space-y-6 text-center">
         <p className="mx-auto inline-flex rounded-full border border-border bg-surface px-4 py-1 text-[11px] font-medium uppercase tracking-widest text-accent">
-          StudyCue by Solutions DevHive · Smart study planner · Mobile and desktop
+          StudyCue Planner by Solutions DevHive · Smart study planner · Mobile and desktop
         </p>
         <h1 className="text-balance font-serif text-4xl tracking-tight text-text-primary sm:text-6xl md:text-[3.65rem]">
-          StudyCue is the smart study planner built for calm, organized student workdays.
+          StudyCue Planner is the smart study planner for calm, organized student workdays.
         </h1>
         <p className="mx-auto max-w-2xl text-lg text-text-secondary">
-          StudyCue brings your calendar, tasks, focus timer, notes, schedules, and Cue AI into one calm student
-          workspace. Built by Solutions DevHive, it helps you plan classes, protect focus sessions, and keep your
-          weekly study flow clear on web.
+          StudyCue Planner is a smart study planner for students who want one calm place for class schedules, tasks,
+          notes, focus sessions, and Cue AI. Built by Solutions DevHive, it helps you plan classes, protect focus
+          sessions, and keep your weekly study flow clear on web.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <Link
@@ -104,8 +99,8 @@ export default function LandingPage() {
       <section className="mt-20 rounded-3xl border border-border bg-surface p-8 shadow-[var(--sc-shadow-card)]">
         <h2 className="text-2xl font-semibold text-text-primary">Built for calmer study planning</h2>
         <p className="mt-3 max-w-prose text-text-secondary">
-          StudyCue gives students one clean place to plan class schedules, manage tasks, organize notes, run focus
-          sessions, and get help from Cue AI.
+          StudyCue Planner gives students one clean place to plan class schedules, manage tasks, organize notes, run
+          focus sessions, and get help from Cue AI.
         </p>
       </section>
     </>

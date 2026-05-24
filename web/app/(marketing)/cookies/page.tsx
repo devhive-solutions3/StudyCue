@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
+import { canonical } from '@/lib/site-config';
 
-export const metadata: Metadata = { title: 'Cookie policy', description: 'How StudyCue gates AdSense analytics cookies.' };
+export const metadata: Metadata = {
+  title: 'Cookie policy',
+  description: 'How StudyCue Planner handles consent, functional cookies, and AdSense cookies on public pages.',
+  alternates: { canonical: canonical('/cookies') },
+};
 
 export default function CookiesPage() {
   return (
