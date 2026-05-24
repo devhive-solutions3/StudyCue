@@ -54,6 +54,13 @@ const themeBootScript = `
   } catch (e) {}
 `;
 
+const googleAdsTagScript = `
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'AW-18186517077');
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -71,6 +78,10 @@ export default function RootLayout({
         />
       </head>
       <body className="flex min-h-full flex-col bg-bg text-text-primary">
+        <Script src="https://www.googletagmanager.com/gtag/js?id=AW-18186517077" strategy="afterInteractive" />
+        <Script id="studycue-google-ads-tag" strategy="afterInteractive">
+          {googleAdsTagScript}
+        </Script>
         <Script id="studycue-theme-boot" strategy="beforeInteractive">
           {themeBootScript}
         </Script>
