@@ -103,13 +103,20 @@ export default function MarketingShell({
           borderTop: '1px solid var(--sc-border)',
         }}
       >
-        <div className="mx-auto grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mx-auto max-w-5xl">
+          <p className="max-w-3xl leading-relaxed">
+            StudyCue is a smart study planner for students by Solutions DevHive. Manage your calendar, tasks, notes,
+            focus timer, and Cue AI in one clean workspace.
+          </p>
+        </div>
+        <div className="mx-auto mt-10 grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
               StudyCue
             </p>
             <p className="mt-2 leading-relaxed">
-              Local-first planner on mobile with a clean web cockpit.
+              Smart study planner for students by Solutions DevHive. Plan schoolwork, organize notes, and stay focused
+              with Cue AI.
             </p>
           </div>
           <div className="space-y-2">
@@ -125,14 +132,16 @@ export default function MarketingShell({
             </p>
             <FooterLink href="/privacy">Privacy</FooterLink>
             <FooterLink href="/terms">Terms</FooterLink>
-            <FooterLink href="/cookies">Cookies</FooterLink>
           </div>
           <div className="space-y-2">
             <p className="font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
               Study
             </p>
-            <FooterLink href="/blog">Blog</FooterLink>
-            <FooterLink href="/help">Help / FAQ</FooterLink>
+            <FooterLink href="/app/calendar">Calendar</FooterLink>
+            <FooterLink href="/app/tasks">Tasks</FooterLink>
+            <FooterLink href="/app/notes">Notes</FooterLink>
+            <FooterLink href="/app/focus">Focus Timer</FooterLink>
+            <FooterLink href="/app/chat">Cue AI</FooterLink>
           </div>
         </div>
       </footer>

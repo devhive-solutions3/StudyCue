@@ -1,8 +1,13 @@
+import { requireFirebaseAuth } from '@/lib/firebase-server-auth';
 import { handleGroqProxy, type GroqProxyBody } from '@/lib/ai-proxy-server';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  const viewer = await requireFirebaseAuth(req);
+  if (!viewer) {
+    return Response.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
   let body: GroqProxyBody;
   try {
     body = (await req.json()) as GroqProxyBody;

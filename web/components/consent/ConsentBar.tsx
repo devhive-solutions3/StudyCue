@@ -13,13 +13,11 @@ export default function ConsentBar() {
   const skip = process.env.NEXT_PUBLIC_SKIP_AD_CONSENT === '1';
   const client = process.env.NEXT_PUBLIC_ADSENSE_CLIENT?.trim();
 
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (skip) return;
+  const [open, setOpen] = useState(() => {
+    if (skip || typeof window === 'undefined') return false;
     const v = localStorage.getItem(AD_CONSENT_KEY);
-    if (v !== 'granted' && v !== 'denied') setOpen(true);
-  }, [skip]);
+    return v !== 'granted' && v !== 'denied';
+  });
 
   useEffect(() => {
     function onConsent() {

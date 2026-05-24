@@ -41,10 +41,6 @@ export default function TimerCard({ mirror }: { mirror: CloudMirrorV1 }) {
     return () => window.clearInterval(id);
   }, [plannedSeconds, running]);
 
-  React.useEffect(() => {
-    setRemaining(plannedSeconds);
-  }, [plannedSeconds]);
-
   function recordingMinutes() {
     if (!running || !startRef.current) return plannedSeconds / 60;
     const elapsed = (Date.now() - startRef.current) / 1000;
@@ -91,13 +87,14 @@ export default function TimerCard({ mirror }: { mirror: CloudMirrorV1 }) {
   }
 
   const mins = mirror.preferences?.preferredFocusMinutes ?? 25;
+  const displayRemaining = running ? remaining : plannedSeconds;
 
   return (
     <section className="rounded-[16px] border border-border bg-surface p-5 shadow-[var(--shadow-sm)]">
       <p className="text-xs uppercase tracking-[0.35em] text-text-muted">Focus</p>
       <h2 className="text-2xl font-semibold text-text-primary">Focus timer</h2>
       <p className="text-sm text-text-secondary">{mins}-minute sprint</p>
-      <p className="mt-6 text-center font-mono text-5xl text-text-primary">{formatSeconds(Math.max(0, remaining))}</p>
+      <p className="mt-6 text-center font-mono text-5xl text-text-primary">{formatSeconds(Math.max(0, displayRemaining))}</p>
       <div className="mt-6 flex gap-3">
         <button
           type="button"

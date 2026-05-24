@@ -6,6 +6,8 @@ import * as React from 'react';
 import { authErrorMessage } from '@/lib/auth-error-message';
 import { sendPasswordReset } from '@/lib/firebase-client';
 
+const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -13,11 +15,16 @@ export default function ForgotPasswordPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const trimmed = email.trim();
+    if (!trimmed || !SIMPLE_EMAIL_RE.test(trimmed) || trimmed.length > 254) {
+      setMsg('Enter a valid email address.');
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
-      await sendPasswordReset(email.trim());
-      setMsg(`If ${email.trim()} matches an email/password login, recovery mail was sent.`);
+      await sendPasswordReset(trimmed);
+      setMsg(`If ${trimmed} matches an email/password login, recovery mail was sent.`);
     } catch (e) {
       setMsg(authErrorMessage(e, 'reset'));
     } finally {
