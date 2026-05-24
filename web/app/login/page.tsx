@@ -7,6 +7,7 @@ import * as React from 'react';
 import { Suspense } from 'react';
 
 import { authErrorMessage } from '@/lib/auth-error-message';
+import { authRateLimitMessage, consumeAuthAttempt } from '@/lib/client-auth-rate-limit';
 import {
   clearRememberedEmail,
   readRememberMe,
@@ -102,6 +103,11 @@ function LoginForm() {
     setBusyGoogle(true);
     setErr(null);
     try {
+      const rate = consumeAuthAttempt('login');
+      if (!rate.allowed) {
+        setErr(authRateLimitMessage(rate.retryAfterMs));
+        return;
+      }
       persistRememberMe(rememberMe, email.trim());
       await setAuthPersistence(rememberMe);
       const mode = await signInGoogleWeb();
@@ -125,6 +131,11 @@ function LoginForm() {
     }
     if (!SIMPLE_EMAIL_RE.test(trimmed) || trimmed.length > 254) {
       setErr('Enter a valid email address.');
+      return;
+    }
+    const rate = consumeAuthAttempt('login');
+    if (!rate.allowed) {
+      setErr(authRateLimitMessage(rate.retryAfterMs));
       return;
     }
     setBusyEmail(true);

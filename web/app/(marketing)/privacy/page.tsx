@@ -12,7 +12,9 @@ export default function PrivacyPage() {
       </p>
       <h2 className="font-serif text-2xl text-text-primary">Advertising disclosure</h2>
       <p>
-        Personalized ads may serve on crawlable `/`, `/blog/*`, `/resources/*` placements after affirmative consent (`studycue.ads_consent` localStorage equals granted). Configure AdSense strictly as manual placements; auto-ads disabled.
+        Personalized ads may appear on public `/`, `/blog/*`, and `/resources/*` pages after affirmative consent
+        (`studycue.ads_consent` localStorage equals granted). AdSense is configured for manual placements only, with
+        auto-ads disabled.
       </p>
       <p>
         You may opt-out of Google&apos;s personalization via Google&apos;s Ad Settings dashboard; clearing consent here keeps third-party creatives off-session.

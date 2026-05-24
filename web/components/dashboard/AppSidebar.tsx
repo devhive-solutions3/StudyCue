@@ -177,7 +177,7 @@ export default function AppSidebar({
               className="text-[23px] leading-none"
               style={{
                 color: 'var(--sc-text-primary)',
-                fontFamily: 'var(--font-dm-serif), Georgia, serif',
+                fontFamily: 'var(--font-serif)',
                 letterSpacing: '-0.01em',
               }}
             >
