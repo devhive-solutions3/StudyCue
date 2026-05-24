@@ -65,13 +65,20 @@ function NavSection({ title, items, onNavigate }: { title: string; items: Item[]
       </p>
       <div className="space-y-1">
         {items.map((item) => {
-          const active = pathname === item.href && (item.href !== '/app' || item.label === 'Dashboard');
+          const active =
+            (pathname === item.href ||
+              (item.href === '/app/focus' && pathname === '/app/focus-timer')) &&
+            (item.href !== '/app' || item.label === 'Dashboard');
           return (
             <Link
               key={`${title}-${item.label}`}
               href={item.href}
               onClick={(event) => {
-                if (focusLocked && item.href !== '/app/focus') {
+                if (
+                  focusLocked &&
+                  item.href !== '/app/focus' &&
+                  item.href !== '/app/focus-timer'
+                ) {
                   event.preventDefault();
                   openFocusLockModal();
                   return;
@@ -276,7 +283,11 @@ export default function AppSidebar({
                   key={item.label}
                   href={item.href}
                   onClick={(event) => {
-                    if (focusLocked && item.href !== '/app/focus') {
+                    if (
+                      focusLocked &&
+                      item.href !== '/app/focus' &&
+                      item.href !== '/app/focus-timer'
+                    ) {
                       event.preventDefault();
                       openFocusLockModal();
                       return;

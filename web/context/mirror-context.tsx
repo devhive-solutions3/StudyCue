@@ -15,6 +15,7 @@ import {
 
 import { getFirebaseDb } from '@/lib/firebase-client';
 import { normalizeMirror, emptyMirror } from '@/lib/mirror-bootstrap';
+import { syncStudyCalendarTasks } from '@/lib/study-task-sync';
 
 const SAVE_DEBOUNCE_MS = 850;
 const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -111,7 +112,7 @@ export function MirrorProvider({
         }
         try {
           const parsed = JSON.parse(raw) as CloudMirrorV1;
-          const n = normalizeMirror(parsed);
+          const n = syncStudyCalendarTasks(normalizeMirror(parsed));
           didInit = true;
           setMirror(n);
           latestRef.current = n;

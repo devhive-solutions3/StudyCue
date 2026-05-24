@@ -32,7 +32,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         ? 'Calendar'
         : pathname === '/app/tasks'
           ? 'Tasks'
-          : pathname === '/app/focus'
+          : pathname === '/app/focus' || pathname === '/app/focus-timer'
             ? 'Focus Timer'
         : pathname === '/app/chat'
           ? 'Study Assistant'

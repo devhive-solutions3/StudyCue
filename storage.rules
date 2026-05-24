@@ -7,5 +7,11 @@ service firebase.storage {
     match /{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // New user-scoped notes path used by web notes uploads:
+    //   users/{uid}/notes/{folderId}/{fileName}
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }

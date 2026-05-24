@@ -90,6 +90,10 @@ export async function getLocalNoteFile(storagePath: string): Promise<StoredFile 
   return row ?? null;
 }
 
+export async function deleteLocalNoteFile(storagePath: string) {
+  await withStore('readwrite', (store) => store.delete(storagePath));
+}
+
 export async function saveLocalProfilePhoto(uid: string, file: File): Promise<string> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();

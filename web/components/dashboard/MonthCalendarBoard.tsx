@@ -8,6 +8,7 @@ import type { ClassItem } from '@studycue/types';
 
 import { useMirror } from '@/context/mirror-context';
 import { nextNumericId } from '@/lib/mirror-bootstrap';
+import { withSyncedClasses } from '@/lib/study-task-sync';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -154,11 +155,11 @@ function normalizeEvent(row: ClassItem, occurrenceIso?: string): CalendarEvent |
     endTime: row.endTime,
     location: row.location ?? '',
     recurrence,
-    parentEventId: null,
-    notes: '',
+    parentEventId: row.parentEventId ?? null,
+    notes: row.notes ?? '',
     occurrenceIso: iso,
-    createdAt: null,
-    updatedAt: null,
+    createdAt: row.createdAt ?? null,
+    updatedAt: row.updatedAt ?? null,
   };
 }
 
@@ -285,11 +286,13 @@ function TimedCalendarGrid({
   events,
   selectedIso,
   onSelectDay,
+  onOpenEvent,
 }: {
   dayIsos: string[];
   events: CalendarEvent[];
   selectedIso: string;
   onSelectDay: (iso: string) => void;
+  onOpenEvent: (event: CalendarEvent) => void;
 }) {
   const gridHeight = HOURS.length * HOUR_HEIGHT;
   const isWeek = dayIsos.length > 1;
@@ -346,7 +349,7 @@ function TimedCalendarGrid({
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onSelectDay(iso);
+                          onOpenEvent(event);
                         }}
                       >
                         <p className="calendar-event-title truncate">{event.title}</p>
@@ -373,8 +376,14 @@ function findConflicts(events: CalendarEvent[], draft: EventDraft) {
   );
 }
 
+function resolveMasterEventId(event: Pick<CalendarEvent, 'id' | 'parentEventId' | 'recurrence'>) {
+  const parentId = Number(event.parentEventId);
+  if (event.recurrence !== 'once' && Number.isFinite(parentId)) return parentId;
+  return event.id;
+}
+
 export default function MonthCalendarBoard() {
-  const { mirror, commitMirror } = useMirror();
+  const { mirror, commitMirror, persistNow } = useMirror();
   const todayIso = localIso(new Date());
   const [selectedIso, setSelectedIso] = useState(todayIso);
   const [calendarView, setCalendarView] = useState<CalendarView>('week');
@@ -419,8 +428,17 @@ export default function MonthCalendarBoard() {
   }, [selectedIso]);
 
   function openEdit(event: CalendarEvent) {
+    const masterId = resolveMasterEventId(event);
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[calendar-edit]', {
+        eventId: event.id,
+        isRecurring: event.recurrence !== 'once',
+        masterId,
+        updateScope: event.recurrence !== 'once' ? 'entire_series' : 'single_event',
+      });
+    }
     setDraft({
-      id: event.id,
+      id: masterId,
       title: event.title,
       type: event.type,
       date: event.date,
@@ -445,6 +463,15 @@ export default function MonthCalendarBoard() {
       }
     }
     const parentClass = findConflicts(normalizedEvents, cleaned).find((event) => event.type === 'class' && ['quiz', 'exam'].includes(cleaned.type));
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[calendar-edit-save]', {
+        eventId: cleaned.id ?? null,
+        isRecurring: cleaned.recurrence !== 'once',
+        masterId: cleaned.id ?? null,
+        updateScope: cleaned.recurrence !== 'once' ? 'entire_series' : 'single_event',
+        updatedOccurrences: cleaned.recurrence === 'once' ? 1 : 'generated-from-master',
+      });
+    }
     commitMirror((prev) => {
       const now = new Date().toISOString();
       const row: ClassItem = {
@@ -456,35 +483,66 @@ export default function MonthCalendarBoard() {
         location: cleaned.location || null,
         recurrence: cleaned.recurrence === 'once' ? 'none' : cleaned.recurrence,
         eventType: cleaned.type,
-        specificDate: cleaned.recurrence === 'once' ? cleaned.date : cleaned.date,
+        specificDate: cleaned.date,
         parentEventId: parentClass ? String(parentClass.id) : cleaned.parentEventId,
         notes: cleaned.notes || null,
         createdAt: cleaned.id ? undefined : now,
         updatedAt: now,
       } as ClassItem;
-      return {
-        ...prev,
-        classes: cleaned.id ? prev.classes.map((event) => (event.id === cleaned.id ? { ...event, ...row } : event)) : [...prev.classes, row],
-      };
+      const nextClasses = cleaned.id
+        ? prev.classes.map((event) => (event.id === cleaned.id ? { ...event, ...row } : event))
+        : [...prev.classes, row];
+      return withSyncedClasses(prev, nextClasses);
     });
+    window.setTimeout(() => {
+      void persistNow();
+    }, 0);
     setSelectedIso(cleaned.date);
     closeAddEventModal();
     setConflicts(null);
   }
 
   function deleteEvent(id: number) {
-    if (!window.confirm('Delete this calendar event?')) return;
-    commitMirror((prev) => ({ ...prev, classes: prev.classes.filter((event) => event.id !== id) }));
+    const masterEvent = mirror.classes.find((event) => event.id === id);
+    const recurrence = normalizeRecurrence(masterEvent?.recurrence);
+    const isRecurring = recurrence !== 'once';
+    if (
+      !window.confirm(
+        isRecurring
+          ? 'Delete this recurring event and all of its occurrences?'
+          : 'Delete this calendar event?',
+      )
+    ) {
+      return;
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[calendar-delete]', {
+        eventId: id,
+        isRecurring,
+        masterId: id,
+        updateScope: isRecurring ? 'entire_series' : 'single_event',
+        updatedOccurrences: isRecurring ? 'all-generated-occurrences' : 1,
+      });
+    }
+    commitMirror((prev) => withSyncedClasses(prev, prev.classes.filter((event) => event.id !== id)));
+    window.setTimeout(() => {
+      void persistNow();
+    }, 0);
   }
 
   function deleteAllClassEvents() {
     const count = normalizedEvents.filter((event) => event.type === 'class').length;
     if (count === 0) return;
     if (!window.confirm(`Delete all ${count} class event${count === 1 ? '' : 's'}? Quiz, exam, study, and deadline events will stay.`)) return;
-    commitMirror((prev) => ({
-      ...prev,
-      classes: prev.classes.filter((event) => normalizeType(event.eventType) !== 'class'),
-    }));
+    commitMirror((prev) =>
+      withSyncedClasses(
+        prev,
+        prev.classes.filter((event) => normalizeType(event.eventType) !== 'class'),
+      ),
+    );
+    window.setTimeout(() => {
+      void persistNow();
+    }, 0);
   }
 
   const title =
@@ -549,22 +607,38 @@ export default function MonthCalendarBoard() {
                 {cells.map((cell) => {
                   const events = getEventsForDate(normalizedEvents, cell.iso);
                   return (
-                    <button
-                      type="button"
+                    <div
                       key={cell.iso}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedIso(cell.iso)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedIso(cell.iso);
+                        }
+                      }}
                       className={`min-h-[100px] rounded-[16px] border p-2 text-left transition ${cell.iso === selectedIso ? 'border-accent bg-accent-light' : 'border-border bg-surface hover:bg-surface-2'} ${cell.otherMonth ? 'opacity-45' : ''}`}
                     >
                       <span className="text-xs font-extrabold text-text-secondary">{cell.day}</span>
                       <div className="mt-2 space-y-1">
                         {events.slice(0, 2).map((event) => (
-                          <span key={`${cell.iso}-${event.id}`} className="block truncate rounded-md px-2 py-1 text-[10px] font-bold" style={typeStyle(event.type)}>
+                          <button
+                            type="button"
+                            key={`${cell.iso}-${event.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEdit(event);
+                            }}
+                            className="block w-full truncate rounded-md px-2 py-1 text-left text-[10px] font-bold"
+                            style={typeStyle(event.type)}
+                          >
                             {event.title}
-                          </span>
+                          </button>
                         ))}
                         {events.length > 2 ? <span className="text-[10px] text-text-muted">+{events.length - 2} more</span> : null}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -574,6 +648,7 @@ export default function MonthCalendarBoard() {
                 events={normalizedEvents}
                 selectedIso={selectedIso}
                 onSelectDay={setSelectedIso}
+                onOpenEvent={openEdit}
               />
             )}
           </div>
@@ -595,6 +670,7 @@ export default function MonthCalendarBoard() {
                     <p className="mt-3 font-extrabold text-text-primary">{event.title}</p>
                     <p className="mt-1 text-xs text-text-muted">{timeRange(event)} · {recurrenceLabel(event.recurrence)}</p>
                     {event.location ? <p className="mt-1 text-xs text-text-secondary">{event.location}</p> : null}
+                    {event.notes ? <p className="mt-2 text-xs leading-5 text-text-secondary">{event.notes}</p> : null}
                     <div className="mt-3 flex gap-2">
                       <button type="button" onClick={() => openEdit(event)} className="text-xs font-extrabold text-accent">Edit</button>
                       <button type="button" onClick={() => deleteEvent(event.id)} className="text-xs font-extrabold text-danger">Delete</button>
@@ -663,9 +739,15 @@ export default function MonthCalendarBoard() {
                     <button type="button" onClick={closeAddEventModal} className="shrink-0 rounded-full bg-surface-2 px-3 py-2 text-text-secondary">×</button>
                   </div>
                   <div className="min-w-0 max-w-full overflow-hidden space-y-3 sm:space-y-4">
+                {draft.recurrence !== 'once' ? (
+                  <p className="rounded-[16px] border border-accent/20 bg-accent/5 px-4 py-3 text-xs font-medium text-text-secondary">
+                    Editing this recurring event updates all occurrences in the series.
+                  </p>
+                ) : null}
                 <PillGroup label="Type" values={EVENT_TYPES} value={draft.type} onChange={(type) => setDraft((p) => ({ ...p, type }))} formatter={typeLabel} />
                 <input value={draft.title} onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Math Chapter 5" className="sc-input box-border w-full min-w-0 max-w-full" />
                 <input value={draft.location} onChange={(e) => setDraft((p) => ({ ...p, location: e.target.value }))} placeholder="Optional location" className="sc-input box-border w-full min-w-0 max-w-full" />
+                <textarea value={draft.notes} onChange={(e) => setDraft((p) => ({ ...p, notes: e.target.value }))} placeholder="Details or notes" rows={4} className="sc-input box-border w-full min-w-0 max-w-full resize-y py-3" />
                 <PillGroup label="Recurrence" values={RECURRENCES} value={draft.recurrence} onChange={(recurrence) => setDraft((p) => ({ ...p, recurrence }))} formatter={recurrenceLabel} />
                 <div className="min-w-0 max-w-full space-y-3">
                   <input type="date" value={draft.date} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
@@ -674,9 +756,14 @@ export default function MonthCalendarBoard() {
                     <input type="time" value={draft.endTime} onChange={(e) => setDraft((p) => ({ ...p, endTime: e.target.value }))} className="sc-input box-border w-full min-w-0 max-w-full" />
                   </div>
                 </div>
-                <button type="button" onClick={() => saveDraft(false)} className="sc-btn-primary box-border min-h-[58px] w-full min-w-0 max-w-full rounded-full">
-                  Add to Calendar
-                </button>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button type="button" onClick={closeAddEventModal} className="sc-btn-secondary box-border min-h-[58px] w-full min-w-0 max-w-full rounded-full">
+                    Cancel
+                  </button>
+                  <button type="button" onClick={() => saveDraft(false)} className="sc-btn-primary box-border min-h-[58px] w-full min-w-0 max-w-full rounded-full">
+                    {draft.id ? 'Save Changes' : 'Add to Calendar'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

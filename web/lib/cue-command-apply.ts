@@ -2,6 +2,7 @@ import type { CloudMirrorV1, ClassItem, TaskCategory, TaskItem } from '@studycue
 
 import type { CueCommand } from '@/lib/cue-chat-response';
 import { nextNumericId } from '@/lib/mirror-bootstrap';
+import { withSyncedClasses } from '@/lib/study-task-sync';
 
 const ALLOWED_CALENDAR_EVENT_TYPES = new Set([
   'class',
@@ -79,7 +80,7 @@ function applyAddCalendar(prev: CloudMirrorV1, command: Extract<CueCommand, { ki
     };
     nextClasses = [...nextClasses, nextRow];
   }
-  return { ...prev, classes: nextClasses };
+  return withSyncedClasses(prev, nextClasses);
 }
 
 function applyAddTasks(prev: CloudMirrorV1, command: Extract<CueCommand, { kind: 'add_tasks' }>): CloudMirrorV1 {
@@ -127,7 +128,7 @@ export function applyCueCommandToMirror(prev: CloudMirrorV1, command: CueCommand
     return prev;
   }
   if (command.kind === 'clear_classes') {
-    return { ...prev, classes: [] };
+    return withSyncedClasses(prev, []);
   }
   if (command.kind === 'replace_classes') {
     const reset = { ...prev, classes: [] };

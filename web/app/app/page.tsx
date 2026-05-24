@@ -8,10 +8,11 @@ import QuickActions from '@/components/dashboard/QuickActions';
 import StatsGrid from '@/components/dashboard/StatsGrid';
 import TasksColumn from '@/components/dashboard/TasksColumn';
 import { useMirror } from '@/context/mirror-context';
+import { isActiveTask } from '@/lib/study-task-sync';
 
 export default function AppHomePage() {
   const { mirror } = useMirror();
-  const openTasks = mirror.tasks.filter((task) => !['done', 'completed'].includes((task.status ?? '').toLowerCase())).length;
+  const openTasks = mirror.tasks.filter((task) => isActiveTask(task)).length;
 
   return (
     <div className="w-full min-w-0 max-w-full space-y-[18px]">

@@ -20,10 +20,14 @@ export type TaskItem = {
   id: number;
   categoryId: number | null;
   title: string | null;
+  details?: string | null;
   dueAt: string | null;
   estimatedMinutes: number | null;
   status: string | null;
   createdAt: string | null;
+  updatedAt?: string | null;
+  sourceType?: string | null;
+  sourceEventId?: number | null;
 };
 
 export type TaskCategory = {
@@ -37,19 +41,26 @@ export type NoteFolder = {
   name: string;
   slug: string;
   createdAt: string | null;
+  updatedAt?: string | null;
 };
 
 export type NoteFile = {
   id: number;
   folderId: number;
   name: string;
+  originalName?: string | null;
+  safeFileName?: string | null;
   extension: string | null;
   sizeBytes: number;
   storagePath: string;
   downloadUrl: string;
+  downloadURL?: string | null;
   compressed: number | null;
   mimeType: string | null;
+  contentType?: string | null;
   createdAt: string | null;
+  updatedAt?: string | null;
+  storageProvider?: 'firebase' | 'local' | null;
 };
 
 export type StudySessionItem = {

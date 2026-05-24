@@ -26,6 +26,13 @@ service cloud.firestore {
       match /mirror/{docId} {
         allow read, write: if isOwner(uid);
       }
+      match /noteFolders/{folderId} {
+        allow read, write: if isOwner(uid);
+
+        match /files/{fileId} {
+          allow read, write: if isOwner(uid);
+        }
+      }
       match /meta/{docId} {
         allow read, write: if isOwner(uid);
       }

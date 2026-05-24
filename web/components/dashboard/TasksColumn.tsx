@@ -8,6 +8,7 @@ import type { CloudMirrorV1, TaskItem } from '@studycue/types';
 import { useDashboardUi } from '@/context/dashboard-ui';
 import { useMirror } from '@/context/mirror-context';
 import { nextNumericId } from '@/lib/mirror-bootstrap';
+import { isActiveTask, isTaskDone } from '@/lib/study-task-sync';
 
 export default function TasksColumn({ mirror }: { mirror: CloudMirrorV1 }) {
   const { commitMirror } = useMirror();
@@ -61,16 +62,25 @@ export default function TasksColumn({ mirror }: { mirror: CloudMirrorV1 }) {
 
   const today = dayjs().startOf('day');
   const filtered = mirror.tasks.filter((t) => {
-    const status = (t.status ?? '').toLowerCase();
-    const done = status === 'done' || status === 'completed';
+    const done = isTaskDone(t);
     const due = t.dueAt ? dayjs(t.dueAt) : null;
     if (activeTab === 'Done') return done;
     if (activeTab === 'Today') return !done && !!due && due.isSame(today, 'day');
     if (activeTab === 'Upcoming') return !done && (!!due ? due.isAfter(today, 'day') : true);
     if (activeTab === 'Overdue') return !done && !!due && due.isBefore(today, 'day');
-    return true;
+    return isActiveTask(t);
   });
-  const doneCount = mirror.tasks.filter((t) => ['done', 'completed'].includes((t.status ?? '').toLowerCase())).length;
+  const doneCount = mirror.tasks.filter((task) => isTaskDone(task)).length;
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[dashboard-tasks]', {
+        activeTab,
+        visibleTaskCount: filtered.length,
+        totalTaskCount: mirror.tasks.length,
+      });
+    }
+  }, [activeTab, filtered.length, mirror.tasks.length]);
 
   return (
     <section>
@@ -132,7 +142,7 @@ export default function TasksColumn({ mirror }: { mirror: CloudMirrorV1 }) {
           ) : (
             <div className="space-y-2">
               {filtered.slice(0, 15).map((t) => {
-                const done = ['done', 'completed'].includes((t.status ?? '').toLowerCase());
+                const done = isTaskDone(t);
                 return (
                   <button
                     type="button"
