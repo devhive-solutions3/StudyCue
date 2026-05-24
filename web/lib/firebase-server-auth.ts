@@ -1,29 +1,33 @@
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
-
 import { getFirebasePublicConfig } from '@/lib/public-env';
 
-type VerifiedFirebaseUser = {
+export type VerifiedFirebaseUser = {
   uid: string;
   email: string | null;
+  name: string | null;
+  picture: string | null;
+  emailVerified: boolean;
+};
+
+export type FirebaseTokenVerifyDebug = {
+  method: 'identitytoolkit';
+  firebaseApiKeyPresent: boolean;
+  projectId: string;
+  status?: number;
+  firebaseCode?: string;
+  detail: string;
 };
 
 const DEFAULT_FIREBASE_PROJECT_ID = 'studycue-3d831';
 const DEFAULT_FIREBASE_API_KEY = 'AIzaSyDhU0u21HwVeyush_UdPDKNBUj2ge6iLhk';
-
-const FIREBASE_JWKS = createRemoteJWKSet(
-  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'),
-);
 const IS_DEV = process.env.NODE_ENV !== 'production';
-
-type FirebaseJwtPayload = JWTPayload & {
-  user_id?: string;
-  email?: string;
-};
 
 type IdentityToolkitLookupResponse = {
   users?: Array<{
     localId?: string;
     email?: string;
+    displayName?: string;
+    photoUrl?: string;
+    emailVerified?: boolean;
   }>;
 };
 
@@ -32,23 +36,20 @@ function getFirebaseProjectId(): string {
   return (
     process.env.FIREBASE_ADMIN_PROJECT_ID?.trim() ||
     process.env.FIREBASE_PROJECT_ID?.trim() ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
+    process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
     fromPublicConfig ||
     DEFAULT_FIREBASE_PROJECT_ID
   );
 }
 
 function getFirebaseApiKey(): string {
-  const fromPublicConfig = getFirebasePublicConfig().apiKey;
-  return fromPublicConfig || DEFAULT_FIREBASE_API_KEY;
-}
-
-function logMissingServerAuthConfig() {
-  if (!IS_DEV) return;
-  const projectId = getFirebaseProjectId();
-  const apiKey = getFirebaseApiKey();
-  if (!projectId && !apiKey) {
-    console.warn('Firebase Admin credentials missing or invalid.');
-  }
+  return (
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ||
+    process.env.EXPO_PUBLIC_FIREBASE_API_KEY?.trim() ||
+    getFirebasePublicConfig().apiKey ||
+    DEFAULT_FIREBASE_API_KEY
+  );
 }
 
 function normalizeBearerToken(authHeader: string | null): string | null {
@@ -63,41 +64,39 @@ export function readBearerToken(request: Request): string | null {
   return normalizeBearerToken(request.headers.get('authorization'));
 }
 
-async function verifyViaJose(
-  idToken: string,
-  projectId: string,
-): Promise<VerifiedFirebaseUser | null> {
-  try {
-    const { payload } = await jwtVerify(idToken, FIREBASE_JWKS, {
-      issuer: `https://securetoken.google.com/${projectId}`,
-      audience: projectId,
-      clockTolerance: 60,
+export async function verifyFirebaseIdTokenDetailed(idToken: string): Promise<{
+  user: VerifiedFirebaseUser | null;
+  debug: FirebaseTokenVerifyDebug;
+}> {
+  const projectId = getFirebaseProjectId();
+  const apiKey = getFirebaseApiKey();
+  const debug: FirebaseTokenVerifyDebug = {
+    method: 'identitytoolkit',
+    firebaseApiKeyPresent: Boolean(apiKey),
+    projectId,
+    detail: '',
+  };
+
+  if (IS_DEV) {
+    console.info('verifyFirebaseIdToken', {
+      idTokenPresent: Boolean(idToken?.trim()),
+      firebaseApiKeyPresent: debug.firebaseApiKeyPresent,
+      projectId: projectId || '(none)',
+      method: 'identitytoolkit',
     });
-    const firebasePayload = payload as FirebaseJwtPayload;
-    const uid =
-      (typeof firebasePayload.user_id === 'string' && firebasePayload.user_id) ||
-      (typeof firebasePayload.sub === 'string' && firebasePayload.sub) ||
-      null;
-    if (!uid) return null;
-
-    return {
-      uid,
-      email: typeof firebasePayload.email === 'string' ? firebasePayload.email : null,
-    };
-  } catch (error) {
-    if (IS_DEV) {
-      const code =
-        error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
-      console.warn('Firebase ID token JWT verification failed', { code, projectId });
-    }
-    return null;
   }
-}
 
-async function verifyViaIdentityToolkit(
-  idToken: string,
-  apiKey: string,
-): Promise<VerifiedFirebaseUser | null> {
+  if (!idToken?.trim()) {
+    debug.detail = 'Missing ID token';
+    return { user: null, debug };
+  }
+
+  if (!apiKey) {
+    debug.detail = 'Identity Toolkit verification failed: API key missing';
+    if (IS_DEV) console.warn('Identity Toolkit token verification failed', debug.detail);
+    return { user: null, debug };
+  }
+
   try {
     const response = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`,
@@ -109,54 +108,74 @@ async function verifyViaIdentityToolkit(
       },
     );
 
+    debug.status = response.status;
+
+    if (IS_DEV) {
+      console.info('Identity Toolkit verification response', {
+        status: response.status,
+        method: 'identitytoolkit',
+      });
+    }
+
     if (!response.ok) {
+      const errBody = (await response.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      const firebaseCode = errBody?.error?.message;
+      debug.firebaseCode = firebaseCode;
+      debug.detail = firebaseCode
+        ? `Identity Toolkit verification failed: ${firebaseCode}`
+        : `Identity Toolkit verification failed: HTTP ${response.status}`;
       if (IS_DEV) {
-        const errBody = (await response.clone().json().catch(() => null)) as {
-          error?: { message?: string };
-        } | null;
         console.warn('Identity Toolkit token verification failed', {
           status: response.status,
-          code: errBody?.error?.message,
+          code: firebaseCode,
+          method: 'identitytoolkit',
         });
       }
-      return null;
+      return { user: null, debug };
     }
 
     const data = (await response.json()) as IdentityToolkitLookupResponse;
     const user = data.users?.[0];
-    if (!user?.localId) return null;
+    if (!user?.localId) {
+      debug.detail = 'Identity Toolkit verification failed: user not found in lookup response';
+      if (IS_DEV) console.warn('Identity Toolkit token verification failed', debug.detail);
+      return { user: null, debug };
+    }
+
+    if (IS_DEV) {
+      console.info('Identity Toolkit token verification succeeded', {
+        method: 'identitytoolkit',
+        uid: user.localId,
+      });
+    }
 
     return {
-      uid: user.localId,
-      email: user.email ?? null,
+      user: {
+        uid: user.localId,
+        email: user.email ?? null,
+        name: user.displayName ?? null,
+        picture: user.photoUrl ?? null,
+        emailVerified: Boolean(user.emailVerified),
+      },
+      debug: { ...debug, detail: 'verified' },
     };
   } catch (error) {
-    if (IS_DEV) console.warn('Identity Toolkit token verification failed', error);
-    return null;
+    debug.detail = 'Identity Toolkit verification failed: network or server error';
+    if (IS_DEV) {
+      console.warn('Identity Toolkit token verification failed', {
+        method: 'identitytoolkit',
+        error,
+      });
+    }
+    return { user: null, debug };
   }
 }
 
 export async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseUser | null> {
-  if (!idToken?.trim()) return null;
-
-  const projectId = getFirebaseProjectId();
-  const apiKey = getFirebaseApiKey();
-  if (!projectId && !apiKey) {
-    logMissingServerAuthConfig();
-    return null;
-  }
-
-  if (projectId) {
-    const viaJose = await verifyViaJose(idToken, projectId);
-    if (viaJose) return viaJose;
-  }
-
-  if (apiKey) {
-    return verifyViaIdentityToolkit(idToken, apiKey);
-  }
-
-  logMissingServerAuthConfig();
-  return null;
+  const { user } = await verifyFirebaseIdTokenDetailed(idToken);
+  return user;
 }
 
 export async function requireFirebaseAuth(request: Request): Promise<VerifiedFirebaseUser | null> {
