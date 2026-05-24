@@ -13,6 +13,8 @@ import {
   useWebAuth,
 } from '@/lib/firebase-client';
 
+const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function RegisterPage() {
   return (
     <Suspense
@@ -46,7 +48,7 @@ function RegisterForm() {
       try {
         const signedIn = await completeGoogleRedirectSignIn();
         if (cancelled || !signedIn) return;
-        void syncSessionCookie().catch(() => {});
+        await syncSessionCookie();
         router.replace(next);
       } catch (e) {
         if (!cancelled) setErr(authErrorMessage(e, 'google'));
@@ -62,8 +64,15 @@ function RegisterForm() {
     if (!ready || authLoading || !user || redirectingRef.current) return;
 
     redirectingRef.current = true;
-    void syncSessionCookie().catch(() => {});
-    router.replace(next);
+    void (async () => {
+      try {
+        await syncSessionCookie();
+        router.replace(next);
+      } catch {
+        redirectingRef.current = false;
+        setErr('Could not start your secure session. Please try again.');
+      }
+    })();
   }, [ready, authLoading, user, next, router, syncSessionCookie]);
 
   async function onGoogle() {
@@ -72,7 +81,7 @@ function RegisterForm() {
     try {
       const mode = await signInGoogleWeb();
       if (mode === 'redirect-started') return;
-      void syncSessionCookie().catch(() => {});
+      await syncSessionCookie();
       router.replace(next);
     } catch (e) {
       setErr(authErrorMessage(e, 'google'));
@@ -84,14 +93,27 @@ function RegisterForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !SIMPLE_EMAIL_RE.test(trimmedEmail) || trimmedEmail.length > 254) {
+      setErr('Enter a valid email address.');
+      return;
+    }
+    if (name.trim().length > 80) {
+      setErr('Preferred name must be 80 characters or less.');
+      return;
+    }
     if (password !== confirmPassword) {
       setErr('Passwords do not match.');
       return;
     }
+    if (password.length < 6) {
+      setErr('Password must be at least 6 characters.');
+      return;
+    }
     setBusyEmail(true);
     try {
-      await registerEmail(email.trim(), password, name.trim() || (email.split('@')[0] ?? 'Planner'));
-      void syncSessionCookie().catch(() => {});
+      await registerEmail(trimmedEmail, password, name.trim() || (trimmedEmail.split('@')[0] ?? 'Planner'));
+      await syncSessionCookie();
       router.replace(next);
     } catch (ex) {
       setErr(authErrorMessage(ex, 'register'));

@@ -29,6 +29,7 @@ const SUPPORTED_MIME = new Set([
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ]);
+const SUPPORTED_EXTENSIONS = new Set(['pdf', 'ppt', 'pptx']);
 
 function cleanName(name: string) {
   return name.trim().replace(/\s+/g, ' ');
@@ -44,6 +45,13 @@ function slugify(name: string) {
 function extFromName(name: string) {
   const idx = name.lastIndexOf('.');
   return idx >= 0 ? name.slice(idx + 1).toLowerCase() : '';
+}
+
+function sanitizeStorageFileName(name: string) {
+  return name
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 async function gzipBlobIfPossible(file: File): Promise<{ blob: Blob; compressed: boolean }> {
@@ -162,7 +170,7 @@ export default function NotesRoutePage() {
     setMsg(null);
 
     for (const file of incoming) {
-      if (!SUPPORTED_MIME.has(file.type)) {
+      if (!SUPPORTED_MIME.has(file.type) || !SUPPORTED_EXTENSIONS.has(extFromName(file.name))) {
         setMsg(`Skipped "${file.name}" — only PDF, PPT, and PPTX files are supported.`);
         continue;
       }
@@ -184,7 +192,8 @@ export default function NotesRoutePage() {
       const fileId = nextNumericId([
         ...(mirror.noteFiles ?? []),
       ]);
-      const storagePath = `${user.uid}/notes/${selectedFolder.slug}/${fileId}-${file.name}${compressed ? '.gz' : ''}`;
+      const safeStorageName = sanitizeStorageFileName(file.name) || 'note-file';
+      const storagePath = `${user.uid}/notes/${selectedFolder.slug}/${fileId}-${safeStorageName}${compressed ? '.gz' : ''}`;
       const folderId = selectedFolder.id;
       const capturedCommit = commitMirror;
 

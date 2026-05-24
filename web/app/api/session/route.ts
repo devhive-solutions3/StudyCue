@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { verifyFirebaseIdToken } from '@/lib/firebase-server-auth';
 import { STUDYCUE_COOKIE } from '@/lib/session';
 
 const maxAgeSeconds = 60 * 60 * 24;
@@ -8,6 +9,10 @@ export async function POST(req: Request) {
     const { idToken } = (await req.json()) as { idToken?: string };
     if (!idToken?.length || idToken.length > 12000) {
       return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 400 });
+    }
+    const verified = await verifyFirebaseIdToken(idToken);
+    if (!verified) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const res = NextResponse.json({ ok: true });

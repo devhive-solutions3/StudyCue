@@ -20,6 +20,8 @@ import {
   writeRememberedEmail,
 } from '@/lib/firebase-client';
 
+const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function LoginPage() {
   return (
     <Suspense
@@ -58,7 +60,7 @@ function LoginForm() {
         const signedIn = await completeGoogleRedirectSignIn();
         if (cancelled || !signedIn) return;
         persistRememberMe(rememberMe, email.trim());
-        void syncSessionCookie().catch(() => {});
+        await syncSessionCookie();
         router.replace(next);
       } catch (e) {
         if (!cancelled) {
@@ -76,8 +78,15 @@ function LoginForm() {
     if (!ready || authLoading || !user || redirectingRef.current) return;
 
     redirectingRef.current = true;
-    void syncSessionCookie().catch(() => {});
-    router.replace(next);
+    void (async () => {
+      try {
+        await syncSessionCookie();
+        router.replace(next);
+      } catch {
+        redirectingRef.current = false;
+        setErr('Could not start your secure session. Please try again.');
+      }
+    })();
   }, [ready, authLoading, user, next, router, syncSessionCookie]);
 
   function persistRememberMe(value: boolean, emailValue: string) {
@@ -97,7 +106,7 @@ function LoginForm() {
       await setAuthPersistence(rememberMe);
       const mode = await signInGoogleWeb();
       if (mode === 'redirect-started') return;
-      void syncSessionCookie().catch(() => {});
+      await syncSessionCookie();
       router.replace(next);
     } catch (e) {
       setErr(authErrorMessage(e, 'google'));
@@ -114,12 +123,16 @@ function LoginForm() {
       setErr('Enter your email and password.');
       return;
     }
+    if (!SIMPLE_EMAIL_RE.test(trimmed) || trimmed.length > 254) {
+      setErr('Enter a valid email address.');
+      return;
+    }
     setBusyEmail(true);
     try {
       persistRememberMe(rememberMe, trimmed);
       await setAuthPersistence(rememberMe);
       await signInEmail(trimmed, password);
-      void syncSessionCookie().catch(() => {});
+      await syncSessionCookie();
       router.replace(next);
     } catch (e) {
       setErr(authErrorMessage(e, 'login'));

@@ -18,6 +18,7 @@ import { normalizeMirror, emptyMirror } from '@/lib/mirror-bootstrap';
 
 const SAVE_DEBOUNCE_MS = 850;
 const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const IS_DEV = process.env.NODE_ENV !== 'production';
 
 export type MirrorContextValue = {
   mirror: CloudMirrorV1;
@@ -45,7 +46,9 @@ export function MirrorProvider({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestRef = useRef<CloudMirrorV1>(mirror);
 
-  latestRef.current = mirror;
+  useEffect(() => {
+    latestRef.current = mirror;
+  }, [mirror]);
 
   const persistNow = useCallback(async () => {
     const payload = latestRef.current;
@@ -63,8 +66,8 @@ export function MirrorProvider({
       );
       setError(null);
     } catch (e) {
-      console.warn('[mirror] persist failed', e);
-      setError(e instanceof Error ? e.message : 'Save failed');
+      if (IS_DEV) console.warn('[mirror] persist failed', e);
+      setError('Could not sync your latest changes right now.');
     } finally {
       setSaving(false);
     }
@@ -121,9 +124,8 @@ export function MirrorProvider({
       },
       (snapshotErr) => {
         didInit = true;
-        const message = snapshotErr instanceof Error ? snapshotErr.message : 'Cloud sync listener failed';
-        console.warn('[mirror] snapshot listen failed', snapshotErr);
-        setError(message);
+        if (IS_DEV) console.warn('[mirror] snapshot listen failed', snapshotErr);
+        setError('Cloud sync is temporarily unavailable for this account.');
         setLoading(false);
       },
     );

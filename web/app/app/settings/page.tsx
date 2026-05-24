@@ -238,7 +238,7 @@ export default function SettingsRoutePage() {
           onClick={() =>
             logout()
               .then(() => (window.location.href = '/'))
-              .catch(console.warn)
+              .catch(() => flash('Could not sign out cleanly. Please try again.', false))
           }
           className="rounded-[10px] border border-border bg-surface px-4 py-2 text-sm text-text-secondary hover:bg-surface-2"
         >

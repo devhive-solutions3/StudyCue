@@ -1,15 +1,23 @@
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-/**
- * Firebase auth state is client-initialized in `WebAuthProvider`.
- * Do not block `/app` here based on a cookie, otherwise `/login -> /app`
- * can loop when the client has a Firebase user but the edge cookie is stale
- * or missing.
- */
-export function proxy() {
+import { STUDYCUE_COOKIE } from './lib/session';
+
+export function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+
+  if (pathname.startsWith('/app')) {
+    const sessionCookie = request.cookies.get(STUDYCUE_COOKIE)?.value?.trim();
+    if (!sessionCookie) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('next', `${pathname}${search}`);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/app', '/app/:path*'],
+  matcher: ['/app/:path*'],
 };

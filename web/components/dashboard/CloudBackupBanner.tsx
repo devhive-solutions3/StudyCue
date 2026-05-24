@@ -1,16 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 const DISMISSED_KEY = 'studycue.cloudBannerDismissed';
 
 export default function CloudBackupBanner({ onBackupNow }: { onBackupNow: () => void }) {
-  const [hidden, setHidden] = useState(true);
-
-  useEffect(() => {
-    const v = localStorage.getItem(DISMISSED_KEY);
-    setHidden(v === '1');
-  }, []);
+  const [hidden, setHidden] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem(DISMISSED_KEY) === '1';
+  });
 
   function dismiss() {
     localStorage.setItem(DISMISSED_KEY, '1');

@@ -29,6 +29,7 @@ export const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SIGNED_IN_AT_KEY = 'studycue.web.signedInAt';
 const REMEMBER_ME_KEY = 'studycue.web.rememberMe';
 const REMEMBERED_EMAIL_KEY = 'studycue.web.rememberedEmail';
+const IS_DEV = process.env.NODE_ENV !== 'production';
 
 function readSignedInAt(): number | null {
   if (typeof window === 'undefined') return null;
@@ -236,7 +237,7 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
             credentials: 'same-origin',
           });
         } catch (e) {
-          console.warn('Session cookie refresh failed', e);
+          if (IS_DEV) console.warn('Session cookie refresh failed', e);
         }
 
         const remaining = SESSION_MAX_AGE_MS - elapsed;
