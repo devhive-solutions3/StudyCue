@@ -235,7 +235,7 @@ export default function PricingPage() {
         <PlanCard
           badge="Coming Soon"
           title="StudyCue Plus"
-          price={planPriceLabel(premium.pricePhpMonthly)}
+          price="Coming soon"
           subtitle="Higher limits, no ads, customization, reports, and future group planning."
           features={premiumFeatures}
           ctaLabel="Coming Soon"
