@@ -20,7 +20,7 @@ const MAIN_ITEMS: Item[] = [
 ];
 
 const STUDY_ITEMS: Item[] = [
-  { href: '/app/focus', label: 'Focus Timer', icon: 'timer' },
+  { href: '/app/focus-timer', label: 'Focus Timer', icon: 'timer' },
   { href: '/app/notes', label: 'Notes', icon: 'notes' },
 ];
 
@@ -52,67 +52,106 @@ function sanitizeAvatarSrc(value: string | null | undefined): string | null {
   }
 }
 
-function NavSection({ title, items, onNavigate }: { title: string; items: Item[]; onNavigate: () => void }) {
-  const pathname = usePathname();
+function isItemActive(pathname: string, item: Item) {
+  return (
+    (pathname === item.href || (item.href === '/app/focus-timer' && pathname === '/app/focus')) &&
+    (item.href !== '/app' || item.label === 'Dashboard')
+  );
+}
+
+function SidebarNavLink({
+  item,
+  active,
+  collapsed,
+  onNavigate,
+}: {
+  item: Item;
+  active: boolean;
+  collapsed: boolean;
+  onNavigate: () => void;
+}) {
   const { focusLocked, openFocusLockModal } = useDashboardUi();
+
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? 'page' : undefined}
+      title={item.label}
+      onClick={(event) => {
+        if (focusLocked && item.href !== '/app/focus' && item.href !== '/app/focus-timer') {
+          event.preventDefault();
+          openFocusLockModal();
+          return;
+        }
+        onNavigate();
+      }}
+      className={[
+        'group flex min-h-[46px] items-center rounded-[14px] text-[14px] font-bold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+        collapsed ? 'justify-center px-0' : 'gap-3 px-[13px]',
+      ].join(' ')}
+      style={
+        active
+          ? {
+              background: 'var(--sc-accent-soft)',
+              color: 'var(--sc-accent)',
+              fontWeight: 700,
+            }
+          : {
+              color: 'var(--sc-text-secondary)',
+            }
+      }
+      onMouseEnter={(e) => {
+        if (!active) {
+          e.currentTarget.style.background = 'var(--sc-surface-soft)';
+          e.currentTarget.style.color = 'var(--sc-text-primary)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.color = 'var(--sc-text-secondary)';
+        }
+      }}
+    >
+      <IconGlyph name={item.icon} />
+      {collapsed ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
+    </Link>
+  );
+}
+
+function NavSection({
+  title,
+  items,
+  onNavigate,
+  collapsed,
+}: {
+  title: string;
+  items: Item[];
+  onNavigate: () => void;
+  collapsed: boolean;
+}) {
+  const pathname = usePathname();
   return (
     <div className="mt-4 first:mt-0">
-      <p
-        className="px-[10px] pb-2 text-[11px] font-extrabold uppercase tracking-[0.12em]"
-        style={{ color: 'var(--sc-text-muted)' }}
-      >
-        {title}
-      </p>
+      {!collapsed ? (
+        <p
+          className="px-[10px] pb-2 text-[11px] font-extrabold uppercase tracking-[0.12em]"
+          style={{ color: 'var(--sc-text-muted)' }}
+        >
+          {title}
+        </p>
+      ) : null}
       <div className="space-y-1">
         {items.map((item) => {
-          const active =
-            (pathname === item.href ||
-              (item.href === '/app/focus' && pathname === '/app/focus-timer')) &&
-            (item.href !== '/app' || item.label === 'Dashboard');
+          const active = isItemActive(pathname, item);
           return (
-            <Link
+            <SidebarNavLink
               key={`${title}-${item.label}`}
-              href={item.href}
-              onClick={(event) => {
-                if (
-                  focusLocked &&
-                  item.href !== '/app/focus' &&
-                  item.href !== '/app/focus-timer'
-                ) {
-                  event.preventDefault();
-                  openFocusLockModal();
-                  return;
-                }
-                onNavigate();
-              }}
-              className="group flex min-h-[46px] items-center gap-3 rounded-[12px] px-[13px] text-[14px] font-bold transition"
-              style={
-                active
-                  ? {
-                      background: 'var(--sc-accent-soft)',
-                      color: 'var(--sc-accent)',
-                      fontWeight: 700,
-                    }
-                  : {
-                      color: 'var(--sc-text-secondary)',
-                    }
-              }
-              onMouseEnter={(e) => {
-                if (!active) {
-                  e.currentTarget.style.background = 'var(--sc-surface-soft)';
-                  e.currentTarget.style.color = 'var(--sc-text-primary)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--sc-text-secondary)';
-                }
-              }}
-            >
-              <IconGlyph name={item.icon} />
-              <span>{item.label}</span>
-            </Link>
+              item={item}
+              active={active}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
           );
         })}
       </div>
@@ -124,13 +163,16 @@ export default function AppSidebar({
   open,
   onClose,
   brand,
+  collapsed,
+  onToggleCollapsed,
 }: {
   open: boolean;
   onClose: () => void;
   brand: string;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
   const pathname = usePathname();
-  const { focusLocked, openFocusLockModal } = useDashboardUi();
   const { user } = useWebAuth();
   const [, bumpSidebarAvatar] = useReducer((x: number) => x + 1, 0);
   const [failedAvatarSrc, setFailedAvatarSrc] = useState<string | null>(null);
@@ -173,7 +215,8 @@ export default function AppSidebar({
       />
       <aside
         className={[
-          'fixed left-0 top-0 z-[100] flex h-full w-[252px] flex-col transition-transform',
+          'fixed left-0 top-0 z-[100] flex h-full w-[252px] flex-col transition-[width,transform] duration-200 ease-out md:w-auto',
+          collapsed ? 'md:w-[84px]' : 'md:w-[264px]',
           open ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         ].join(' ')}
         style={{
@@ -184,9 +227,21 @@ export default function AppSidebar({
           boxShadow: 'var(--sc-shadow-sm)',
         }}
       >
-        {/* Logo */}
-        <div className="flex min-h-[86px] items-center overflow-visible px-5 py-[18px]" style={{ borderBottom: '1px solid var(--sc-border)' }}>
-          <Link href="/" className="flex items-center gap-3 overflow-visible">
+        <div
+          className={[
+            'flex min-h-[86px] items-center overflow-visible py-[18px]',
+            collapsed ? 'justify-center px-3' : 'justify-between gap-3 px-5',
+          ].join(' ')}
+          style={{ borderBottom: '1px solid var(--sc-border)' }}
+        >
+          <Link
+            href="/"
+            className={[
+              'flex items-center overflow-visible',
+              collapsed ? 'justify-center' : 'min-w-0 flex-1 gap-3',
+            ].join(' ')}
+            title="StudyCue home"
+          >
             <span
               className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-[16px]"
               style={{ background: 'var(--sc-accent-soft)', boxShadow: 'var(--sc-shadow-accent)' }}
@@ -208,23 +263,39 @@ export default function AppSidebar({
                 priority
               />
             </span>
-            <span
-              className="text-[23px] leading-none"
-              style={{
-                color: 'var(--sc-text-primary)',
-                fontFamily: 'var(--font-serif)',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              Study<span style={{ color: 'var(--sc-accent)' }}>Cue</span>
-            </span>
+            {!collapsed ? (
+              <span
+                className="truncate whitespace-nowrap pr-1 text-[22px] leading-none"
+                style={{
+                  color: 'var(--sc-text-primary)',
+                  fontFamily: 'var(--font-serif)',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                Study<span style={{ color: 'var(--sc-accent)' }}>Cue</span>
+              </span>
+            ) : null}
           </Link>
+          <button
+            type="button"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            onClick={onToggleCollapsed}
+            className="hidden shrink-0 rounded-full border border-border bg-surface-2 p-2 text-text-secondary transition hover:bg-surface md:ml-3 md:inline-flex"
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <span aria-hidden="true" className="text-sm leading-none">
+              {collapsed ? '›' : '‹'}
+            </span>
+          </button>
         </div>
 
-        {/* User strip */}
         <Link
           href="/app/settings"
-          className="flex items-center gap-3 px-[18px] py-4 transition"
+          title="Settings"
+          className={[
+            'flex items-center py-4 transition',
+            collapsed ? 'justify-center px-3' : 'gap-3 px-[18px]',
+          ].join(' ')}
           style={{ borderBottom: '1px solid var(--sc-border)' }}
           onClick={onClose}
           onMouseEnter={(e) => {
@@ -257,71 +328,35 @@ export default function AppSidebar({
               </div>
             )}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
-              {brand}
-            </p>
-            <p className="text-[11px]" style={{ color: 'var(--sc-text-muted)' }}>
-              Good luck today
-            </p>
-          </div>
+          {!collapsed ? (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
+                {brand}
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--sc-text-muted)' }}>
+                Good luck today
+              </p>
+            </div>
+          ) : <span className="sr-only">{brand}</span>}
         </Link>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 py-[18px]">
-          <NavSection title="Main" items={MAIN_ITEMS} onNavigate={onClose} />
-          <NavSection title="Study" items={STUDY_ITEMS} onNavigate={onClose} />
+        <nav className={`flex-1 overflow-y-auto py-[18px] ${collapsed ? 'px-3' : 'px-3'}`}>
+          <NavSection title="Main" items={MAIN_ITEMS} onNavigate={onClose} collapsed={collapsed} />
+          <NavSection title="Study" items={STUDY_ITEMS} onNavigate={onClose} collapsed={collapsed} />
         </nav>
 
-        {/* Bottom items */}
         <div className="p-3" style={{ borderTop: '1px solid var(--sc-border)' }}>
           <div className="space-y-1">
             {BOTTOM_ITEMS.map((item) => {
               const active = pathname === item.href;
               return (
-                <Link
+                <SidebarNavLink
                   key={item.label}
-                  href={item.href}
-                  onClick={(event) => {
-                    if (
-                      focusLocked &&
-                      item.href !== '/app/focus' &&
-                      item.href !== '/app/focus-timer'
-                    ) {
-                      event.preventDefault();
-                      openFocusLockModal();
-                      return;
-                    }
-                    onClose();
-                  }}
-                  className="flex min-h-[46px] items-center gap-3 rounded-[12px] px-[13px] text-[14px] font-bold transition"
-                  style={
-                    active
-                      ? {
-                          background: 'var(--sc-accent-soft)',
-                          color: 'var(--sc-accent)',
-                          fontWeight: 700,
-                        }
-                      : {
-                          color: 'var(--sc-text-secondary)',
-                        }
-                  }
-                  onMouseEnter={(e) => {
-                    if (!active) {
-                      e.currentTarget.style.background = 'var(--sc-surface-soft)';
-                      e.currentTarget.style.color = 'var(--sc-text-primary)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = 'var(--sc-text-secondary)';
-                    }
-                  }}
-                >
-                  <IconGlyph name={item.icon} />
-                  <span>{item.label}</span>
-                </Link>
+                  item={item}
+                  active={active}
+                  collapsed={collapsed}
+                  onNavigate={onClose}
+                />
               );
             })}
           </div>
