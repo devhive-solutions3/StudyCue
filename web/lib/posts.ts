@@ -7,6 +7,7 @@ export type BlogPostMeta = Omit<BlogPost, 'content'>;
 export type BlogPost = {
   slug: string;
   title: string;
+  seoTitle?: string;
   description?: string;
   date: string;
   readingMinutes?: number;
@@ -14,14 +15,21 @@ export type BlogPost = {
   draft?: boolean;
 };
 
-const BLOG_DIR = path.join(process.cwd(), 'content', 'blog');
+const PRIMARY_BLOG_DIR = path.join(process.cwd(), 'content', 'blog');
+const FALLBACK_BLOG_DIR = path.join(process.cwd(), 'web', 'content', 'blog');
+
+function getBlogDir() {
+  if (fs.existsSync(PRIMARY_BLOG_DIR)) return PRIMARY_BLOG_DIR;
+  return FALLBACK_BLOG_DIR;
+}
 
 export function blogDirExists(): boolean {
-  return fs.existsSync(BLOG_DIR);
+  return fs.existsSync(getBlogDir());
 }
 
 function buildPost(slug: string, content: string, data: Record<string, unknown>): BlogPost {
   const title = typeof data.title === 'string' ? data.title : slug;
+  const seoTitle = typeof data.seoTitle === 'string' ? data.seoTitle : undefined;
   const description = typeof data.description === 'string' ? data.description : undefined;
   const date =
     typeof data.date === 'string' ? data.date : typeof data.updated === 'string' ? data.updated : '';
@@ -32,6 +40,7 @@ function buildPost(slug: string, content: string, data: Record<string, unknown>)
   return {
     slug,
     title,
+    seoTitle,
     description,
     date,
     readingMinutes,
@@ -42,7 +51,7 @@ function buildPost(slug: string, content: string, data: Record<string, unknown>)
 
 export function parsePostSlug(slug: string): BlogPost | null {
   const safeSlug = slug.replace(/\.md$/, '').replace(/[^a-z0-9-]/gi, '-');
-  const fullPath = path.join(BLOG_DIR, `${safeSlug}.md`);
+  const fullPath = path.join(getBlogDir(), `${safeSlug}.md`);
   if (!fs.existsSync(fullPath)) return null;
 
   const raw = fs.readFileSync(fullPath, 'utf8');
@@ -58,7 +67,7 @@ export function parsePostSlug(slug: string): BlogPost | null {
 export function getAllPosts(): BlogPost[] {
   if (!blogDirExists()) return [];
   return fs
-    .readdirSync(BLOG_DIR)
+    .readdirSync(getBlogDir())
     .filter((f) => f.endsWith('.md'))
     .map((f) => f.replace(/\.md$/, ''))
     .map((slug) => parsePostSlug(slug))

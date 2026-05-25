@@ -67,6 +67,12 @@ export default function LandingPage() {
         <p className="mx-auto inline-flex rounded-full border border-border bg-surface px-4 py-1 text-[11px] font-medium uppercase tracking-widest text-accent">
           StudyCue Planner by Solutions DevHive · Smart study planner · Mobile and desktop
         </p>
+        <Link
+          href="/blog/studycue-beta-access"
+          className="mx-auto inline-flex max-w-full items-center rounded-full border border-accent/20 bg-[color:var(--sc-accent-soft)] px-4 py-2 text-center text-xs font-semibold text-accent shadow-[var(--sc-shadow-card)] transition hover:border-accent/35 hover:bg-accent-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          Beta access now open — all current features are free during beta →
+        </Link>
         <h1 className="text-balance font-serif text-4xl tracking-tight text-text-primary sm:text-6xl md:text-[3.65rem]">
           StudyCue Planner is the smart study planner for calm, organized student workdays.
         </h1>
