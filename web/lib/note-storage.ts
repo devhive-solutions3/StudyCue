@@ -68,6 +68,12 @@ export async function saveNoteFileMetadata(uid: string, file: NoteFile) {
       folderId: file.folderId,
       originalName: file.originalName ?? file.name,
       safeFileName: file.safeFileName ?? file.name,
+      originalSizeBytes: file.originalSizeBytes ?? file.sizeBytes,
+      storedSizeBytes: file.storedSizeBytes ?? file.sizeBytes,
+      compressionSavedBytes: file.compressionSavedBytes ?? 0,
+      compressionRatio: file.compressionRatio ?? 1,
+      compressionMethod: file.compressionMethod ?? null,
+      compressionWarning: file.compressionWarning ?? null,
       storagePath: file.storagePath,
       downloadURL: file.downloadURL ?? file.downloadUrl,
       contentType: file.contentType ?? file.mimeType,
@@ -185,6 +191,12 @@ export async function listNoteFileMetadata(uid: string, folderId: number) {
       storagePath?: string;
       downloadURL?: string;
       originalName?: string;
+      originalSizeBytes?: number;
+      storedSizeBytes?: number;
+      compressionSavedBytes?: number;
+      compressionRatio?: number;
+      compressionMethod?: string;
+      compressionWarning?: string;
       size?: number;
       contentType?: string;
     };
@@ -197,6 +209,12 @@ export async function listNoteFileMetadata(uid: string, folderId: number) {
       safeFileName: data.safeFileName ?? null,
       extension: data.extension ?? null,
       sizeBytes: Number(data.sizeBytes ?? data.size ?? 0),
+      originalSizeBytes: Number(data.originalSizeBytes ?? data.sizeBytes ?? data.size ?? 0),
+      storedSizeBytes: Number(data.storedSizeBytes ?? data.sizeBytes ?? data.size ?? 0),
+      compressionSavedBytes: Number(data.compressionSavedBytes ?? 0),
+      compressionRatio: Number(data.compressionRatio ?? 1),
+      compressionMethod: data.compressionMethod ?? null,
+      compressionWarning: data.compressionWarning ?? null,
       storagePath: data.storagePath ?? '',
       downloadUrl: data.downloadUrl ?? data.downloadURL ?? '',
       downloadURL: data.downloadURL ?? data.downloadUrl ?? null,

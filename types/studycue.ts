@@ -52,6 +52,12 @@ export type NoteFile = {
   safeFileName?: string | null;
   extension: string | null;
   sizeBytes: number;
+  originalSizeBytes?: number | null;
+  storedSizeBytes?: number | null;
+  compressionSavedBytes?: number | null;
+  compressionRatio?: number | null;
+  compressionMethod?: string | null;
+  compressionWarning?: string | null;
   storagePath: string;
   downloadUrl: string;
   downloadURL?: string | null;

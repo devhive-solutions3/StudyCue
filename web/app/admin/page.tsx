@@ -1,7 +1,8 @@
 import Link from 'next/link';
 
+import AdminBetaSignupToggle from '@/components/admin/AdminBetaSignupToggle';
 import { adminSections, readAdminDataSourceStatus, readAdminOverviewStats } from '@/lib/admin-data';
-import { isBetaSignupsEnabled } from '@/lib/beta-config';
+import { getBetaSignupsMode } from '@/lib/beta-config-server';
 import { adminMoney, formatCompactNumber, formatStorageBytes } from '@/lib/admin-shared';
 import { USER_PLAN_CONFIG } from '@/lib/user-plan';
 
@@ -19,7 +20,7 @@ const overviewCards = [
 export default async function AdminDashboardPage() {
   const dataSource = readAdminDataSourceStatus();
   const stats = await readAdminOverviewStats();
-  const betaSignupsEnabled = isBetaSignupsEnabled();
+  const betaSignupMode = await getBetaSignupsMode();
   return (
     <section className="space-y-6">
       <div className="rounded-[28px] border border-white/10 bg-white/5 px-6 py-5 backdrop-blur-xl dark:border-white/8 dark:bg-white/6">
@@ -74,15 +75,10 @@ export default async function AdminDashboardPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-4">
-        <article className="rounded-[24px] border border-white/10 bg-white/5 p-5 shadow-[0_16px_48px_rgba(9,12,35,0.18)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6">
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-text-muted">Beta signup mode</p>
-          <p className="mt-4 text-2xl font-black tracking-tight text-text-primary">
-            {betaSignupsEnabled ? 'On' : 'Off'}
-          </p>
-          <p className="mt-2 text-sm text-text-secondary">
-            New users default to {betaSignupsEnabled ? 'Beta' : 'Free'} while this env flag is active.
-          </p>
-        </article>
+        <AdminBetaSignupToggle
+          initialEnabled={betaSignupMode.enabled}
+          source={betaSignupMode.source}
+        />
         <article className="rounded-[24px] border border-white/10 bg-white/5 p-5 shadow-[0_16px_48px_rgba(9,12,35,0.18)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6">
           <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-text-muted">Free storage</p>
           <p className="mt-4 text-2xl font-black tracking-tight text-text-primary">

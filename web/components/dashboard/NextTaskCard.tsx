@@ -17,6 +17,7 @@ function firstUpcomingTask(mirror: CloudMirrorV1) {
 
 export default function NextTaskCard({ mirror }: { mirror: CloudMirrorV1 }) {
   const task = firstUpcomingTask(mirror);
+  const focusHref = task?.id != null ? `/app/focus?taskId=${encodeURIComponent(String(task.id))}` : '/app/focus';
   return (
     <section className="rounded-[24px] bg-accent p-6 text-white shadow-[var(--shadow-accent)]">
       <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] opacity-75">Up next</p>
@@ -25,7 +26,7 @@ export default function NextTaskCard({ mirror }: { mirror: CloudMirrorV1 }) {
         {task?.dueAt ? `Due ${new Date(task.dueAt).toLocaleDateString()}` : 'Add your first task to get started'}
       </p>
       <Link
-        href="/app/chat"
+        href={focusHref}
         className="mt-5 inline-flex min-h-[42px] items-center rounded-[14px] border border-white/40 bg-white/20 px-4 text-xs font-extrabold hover:bg-white/30"
       >
         Start focus session

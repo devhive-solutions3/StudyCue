@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { useFocusTimer } from '@/context/focus-timer';
 import { useMirror } from '@/context/mirror-context';
@@ -42,6 +43,7 @@ function isTaskDone(status: string | null | undefined) {
 
 export default function FocusRoutePage() {
   const { mirror } = useMirror();
+  const searchParams = useSearchParams();
   const {
     running,
     paused,
@@ -54,11 +56,26 @@ export default function FocusRoutePage() {
     stopTimer,
   } = useFocusTimer();
 
-  const [sessionTitle, setSessionTitle] = useState('');
+  const requestedTaskId = useMemo(() => {
+    const raw = searchParams.get('taskId');
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [searchParams]);
+
+  const requestedTask = useMemo(() => {
+    if (requestedTaskId == null) return null;
+    const task = mirror.tasks.find((entry) => entry.id === requestedTaskId);
+    return task && !isTaskDone(task.status) ? task : null;
+  }, [mirror.tasks, requestedTaskId]);
+
+  const [sessionTitle, setSessionTitle] = useState(() => requestedTask?.title?.trim() || '');
   const [customMinutes, setCustomMinutes] = useState('');
   const [selectedMinutes, setSelectedMinutes] = useState(25);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
+    () => requestedTask?.categoryId ?? null,
+  );
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(() => requestedTask?.id ?? null);
 
   const logs = useMemo(() => {
     return [...mirror.sessions]

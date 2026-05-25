@@ -30,7 +30,6 @@ import {
 
 import { getFirebasePublicConfig, publicFileStorageMode } from '@/lib/public-env';
 import { saveLocalProfilePhoto } from '@/lib/local-file-store';
-import { buildNewUserProfile } from '@/lib/user-plan';
 
 export const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SIGNED_IN_AT_KEY = 'studycue.web.signedInAt';
@@ -186,46 +185,19 @@ export function getFirebaseStorage() {
 }
 
 async function ensureUserProfileDocument(user: FirebaseUser) {
-  const { doc, getDoc, serverTimestamp, setDoc } = await import('firebase/firestore');
-  const db = getFirebaseDb();
-  const ref = doc(db, 'users', user.uid);
-  const snapshot = await getDoc(ref);
-  const nowIso = new Date().toISOString();
-
-  if (!snapshot.exists()) {
-    const profile = buildNewUserProfile({
-      uid: user.uid,
-      email: user.email ?? null,
-      displayName: user.displayName ?? null,
-      photoURL: user.photoURL ?? null,
-    });
-
-    await setDoc(
-      ref,
-      {
-        ...profile,
-        serverTimestamp: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    return;
-  }
-
-  const current = snapshot.data() as Record<string, unknown>;
-  await setDoc(
-    ref,
-    {
-      uid: user.uid,
-      email: user.email ?? (typeof current.email === 'string' ? current.email : null),
-      displayName:
-        user.displayName ?? (typeof current.displayName === 'string' ? current.displayName : null),
-      photoURL: user.photoURL ?? (typeof current.photoURL === 'string' ? current.photoURL : null),
-      lastLoginAt: nowIso,
-      updatedAt: nowIso,
-      serverTimestamp: serverTimestamp(),
+  const idToken = await user.getIdToken(true);
+  const res = await fetch('/api/auth/ensure-profile', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
     },
-    { merge: true },
-  );
+    credentials: 'same-origin',
+  });
+  if (!res.ok) {
+    const detail = await readResponseError(res);
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
