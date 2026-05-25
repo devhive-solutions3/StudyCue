@@ -38,6 +38,16 @@ export default function AdminUsersClient({ users }: { users: AdminUserRow[] }) {
     });
   }, [filter, query, users]);
 
+  function formatStorageUsage(user: AdminUserRow) {
+    const used = user.storageUsedBytes ?? 0;
+    const limit = user.storageLimitBytes ?? 0;
+    const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+    return {
+      label: `${formatStorageBytes(used)} / ${formatStorageBytes(limit)}`,
+      percent,
+    };
+  }
+
   async function updatePlan(user: AdminUserRow) {
     const nextPlan = String(planDrafts[user.uid] ?? user.plan ?? 'free');
     if (!['free', 'beta', 'premium'].includes(nextPlan)) return;
@@ -144,8 +154,11 @@ export default function AdminUsersClient({ users }: { users: AdminUserRow[] }) {
                 <tr>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Plan</th>
+                  <th className="px-4 py-3">Limits</th>
+                  <th className="px-4 py-3">Usage</th>
                   <th className="px-4 py-3">Beta</th>
                   <th className="px-4 py-3">Premium</th>
+                  <th className="px-4 py-3">Ads</th>
                   <th className="px-4 py-3">Verified</th>
                   <th className="px-4 py-3">Disabled</th>
                   <th className="px-4 py-3">Created</th>
@@ -180,13 +193,37 @@ export default function AdminUsersClient({ users }: { users: AdminUserRow[] }) {
                       <div className="font-semibold text-text-primary">{user.accountType || 'unknown'}</div>
                       <div className="mt-1 text-xs text-text-muted">{user.plan}</div>
                     </td>
+                    <td className="px-4 py-4 align-top">
+                      <div className="text-text-primary">{formatStorageBytes(user.storageLimitBytes)}</div>
+                      <div className="mt-1 text-xs text-text-muted">Cue daily: {user.cueDailyLimit ?? '—'}</div>
+                      <div className="mt-1 text-xs text-text-muted">
+                        Schedule imports: {user.scheduleImageImportsMonthly ?? '—'}/month
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <div className="text-text-primary">
+                        Cue today: {user.cueRequestsUsedToday ?? 0} / {user.cueDailyLimit ?? '—'}
+                      </div>
+                      <div className="mt-1 text-xs text-text-muted">
+                        Images this month: {user.scheduleImageImportsUsedThisMonth ?? 0} /{' '}
+                        {user.scheduleImageImportsMonthly ?? '—'}
+                      </div>
+                      <div className="mt-1 text-xs text-text-muted">
+                        Storage: {formatStorageUsage(user).label}
+                      </div>
+                      <div className="mt-1 text-xs text-text-muted">{formatStorageUsage(user).percent}% used</div>
+                    </td>
                     <td className="px-4 py-4 align-top">{user.betaTester ? 'Yes' : 'No'}</td>
                     <td className="px-4 py-4 align-top">{user.premiumAccess ? 'Yes' : 'No'}</td>
+                    <td className="px-4 py-4 align-top">{user.adsEnabled ? 'Yes' : 'No'}</td>
                     <td className="px-4 py-4 align-top">{user.emailVerified ? 'Yes' : 'No'}</td>
                     <td className="px-4 py-4 align-top">{user.disabled ? 'Yes' : 'No'}</td>
                     <td className="px-4 py-4 align-top">{formatAdminDate(user.createdAt)}</td>
                     <td className="px-4 py-4 align-top">{formatAdminDate(user.lastLogin)}</td>
-                    <td className="px-4 py-4 align-top">{formatStorageBytes(user.storageUsedBytes)}</td>
+                    <td className="px-4 py-4 align-top">
+                      <div className="text-text-primary">{formatStorageUsage(user).label}</div>
+                      <div className="mt-1 text-xs text-text-muted">{formatStorageUsage(user).percent}% used</div>
+                    </td>
                     <td className="px-4 py-4 align-top">
                       <div className="flex min-w-[220px] items-center gap-2">
                         <select

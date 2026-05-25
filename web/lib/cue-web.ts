@@ -86,6 +86,10 @@ export async function fetchCueResponseWeb(params: {
   getIdToken?: () => Promise<string>;
 }): Promise<string> {
   const proxyBase = publicEnv('AI_PROXY_URL') || defaultAiProxyBase();
+  const requestId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `cue-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   const authHeader: Record<string, string> = {};
   try {
@@ -94,6 +98,7 @@ export async function fetchCueResponseWeb(params: {
   } catch {
     /* optional */
   }
+  authHeader['X-StudyCue-Request-Id'] = requestId;
 
   const groqUrl = resolveProxyEndpoint(proxyBase, 'groq');
   const cueUrl = resolveProxyEndpoint(proxyBase, 'cue');

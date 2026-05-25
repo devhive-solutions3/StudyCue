@@ -12,12 +12,13 @@ const PROVIDER_PRICING_USD_PER_MILLION: Record<string, { input: number; output: 
 };
 
 const IS_DEV = process.env.NODE_ENV !== 'production';
+export const DEFAULT_USD_TO_PHP = Number(process.env.ADMIN_USD_TO_PHP || '56');
 
 export type CueUsageLogParams = {
   uid: string;
   email?: string | null;
   authenticated?: boolean;
-  provider: string;
+  provider: 'groq' | 'gemini';
   model: string;
   status: 'success' | 'error' | 'rate_limited';
   inputTokensEstimate: number;
@@ -26,6 +27,20 @@ export type CueUsageLogParams = {
   estimatedCostUsd: number;
   estimatedCostPhp: number;
   errorCode?: string | null;
+  endpoint: '/api/cue' | '/api/groq';
+};
+
+export type CueUsagePayloadParams = {
+  uid: string;
+  email?: string | null;
+  authenticated?: boolean;
+  provider: 'groq' | 'gemini';
+  model: string;
+  status: 'success' | 'error' | 'rate_limited';
+  requestPayload: unknown;
+  responseText?: string;
+  errorCode?: string | null;
+  endpoint: '/api/cue' | '/api/groq';
 };
 
 export function estimateTokensFromText(text: string): number {
@@ -75,7 +90,7 @@ export function estimateTokensFromCuePayload(payload: unknown): number {
 }
 
 export function estimateUsdCost(params: {
-  provider: string;
+  provider: 'groq' | 'gemini';
   inputTokens: number;
   outputTokens: number;
 }): number {
@@ -84,6 +99,55 @@ export function estimateUsdCost(params: {
     (params.inputTokens / 1_000_000) * pricing.input +
     (params.outputTokens / 1_000_000) * pricing.output
   );
+}
+
+export function buildCueUsageEstimates(params: {
+  provider: 'groq' | 'gemini';
+  requestPayload: unknown;
+  responseText?: string;
+  usdToPhp?: number;
+}) {
+  const inputTokensEstimate = estimateTokensFromCuePayload(params.requestPayload);
+  const outputTokensEstimate = estimateTokensFromText(params.responseText ?? '');
+  const totalTokensEstimate = inputTokensEstimate + outputTokensEstimate;
+  const estimatedCostUsd = estimateUsdCost({
+    provider: params.provider,
+    inputTokens: inputTokensEstimate,
+    outputTokens: outputTokensEstimate,
+  });
+  const estimatedCostPhp = estimatedCostUsd * (params.usdToPhp ?? DEFAULT_USD_TO_PHP);
+
+  return {
+    inputTokensEstimate,
+    outputTokensEstimate,
+    totalTokensEstimate,
+    estimatedCostUsd,
+    estimatedCostPhp,
+  };
+}
+
+export async function recordAiUsageLog(params: CueUsagePayloadParams) {
+  const estimates = buildCueUsageEstimates({
+    provider: params.provider,
+    requestPayload: params.requestPayload,
+    responseText: params.responseText,
+  });
+
+  return logCueUsage({
+    uid: params.uid,
+    email: params.email ?? null,
+    authenticated: params.authenticated,
+    provider: params.provider,
+    model: params.model,
+    status: params.status,
+    endpoint: params.endpoint,
+    inputTokensEstimate: estimates.inputTokensEstimate,
+    outputTokensEstimate: estimates.outputTokensEstimate,
+    totalTokensEstimate: estimates.totalTokensEstimate,
+    estimatedCostUsd: estimates.estimatedCostUsd,
+    estimatedCostPhp: estimates.estimatedCostPhp,
+    errorCode: params.errorCode ?? null,
+  });
 }
 
 export async function logCueUsage(params: CueUsageLogParams) {
@@ -108,11 +172,10 @@ export async function logCueUsage(params: CueUsageLogParams) {
   if (IS_DEV) {
     console.info('[ai-usage-log] prepare write', {
       uidDetected: uid !== 'anonymous' && uid !== 'unknown',
+      endpoint: params.endpoint,
       provider: params.provider,
       model: params.model,
       status: params.status,
-      inputTokensEstimate: params.inputTokensEstimate,
-      outputTokensEstimate: params.outputTokensEstimate,
       dateKey,
     });
   }
@@ -132,6 +195,7 @@ export async function logCueUsage(params: CueUsageLogParams) {
     dateKey,
     createdAt,
     errorCode: params.errorCode ?? null,
+    endpoint: params.endpoint,
     serverTimestamp: FieldValue.serverTimestamp(),
   });
 
@@ -157,11 +221,13 @@ export async function logCueUsage(params: CueUsageLogParams) {
     groqOutputTokens: FieldValue.increment(params.provider === 'groq' ? params.outputTokensEstimate : 0),
     groqTotalTokens: FieldValue.increment(params.provider === 'groq' ? params.totalTokensEstimate : 0),
     groqEstimatedCostUsd: FieldValue.increment(params.provider === 'groq' ? params.estimatedCostUsd : 0),
+    groqEstimatedCostPhp: FieldValue.increment(params.provider === 'groq' ? params.estimatedCostPhp : 0),
     geminiRequests: FieldValue.increment(params.provider === 'gemini' ? 1 : 0),
     geminiInputTokens: FieldValue.increment(params.provider === 'gemini' ? params.inputTokensEstimate : 0),
     geminiOutputTokens: FieldValue.increment(params.provider === 'gemini' ? params.outputTokensEstimate : 0),
     geminiTotalTokens: FieldValue.increment(params.provider === 'gemini' ? params.totalTokensEstimate : 0),
     geminiEstimatedCostUsd: FieldValue.increment(params.provider === 'gemini' ? params.estimatedCostUsd : 0),
+    geminiEstimatedCostPhp: FieldValue.increment(params.provider === 'gemini' ? params.estimatedCostPhp : 0),
     providerGroqRequests: FieldValue.increment(params.provider === 'groq' ? 1 : 0),
     providerGeminiRequests: FieldValue.increment(params.provider === 'gemini' ? 1 : 0),
   };
@@ -171,8 +237,13 @@ export async function logCueUsage(params: CueUsageLogParams) {
   await batch.commit();
 
   if (IS_DEV) {
-    console.info('[ai-usage-log] wrote aiUsageLogs', { dateKey, provider: params.provider, status: params.status });
-    console.info('[ai-usage-log] updated daily aggregate', { dateKey });
+    console.info('[ai-usage-log] aiUsageLogs write success', {
+      endpoint: params.endpoint,
+      dateKey,
+      provider: params.provider,
+      status: params.status,
+    });
+    console.info('[ai-usage-log] daily aggregate update success', { dateKey });
   }
 
   if (params.status !== 'success') {

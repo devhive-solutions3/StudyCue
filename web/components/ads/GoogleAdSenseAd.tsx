@@ -2,8 +2,11 @@
 
 import clsx from 'clsx';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 import { AD_CONSENT_KEY } from '@/components/consent/ConsentBar';
+import { getFirebaseDb, useWebAuth } from '@/lib/firebase-client';
+import { shouldShowAds } from '@/lib/plan-access';
 import {
   getAdsenseClient,
   getAdsenseDisplaySlot,
@@ -57,16 +60,40 @@ export default function GoogleAdSenseAd({
   className,
   label = 'Advertisement',
 }: GoogleAdSenseAdProps) {
+  const { user } = useWebAuth();
   const allowed = useAdConsentAllowed();
   const isClient = useIsClient();
   const pushedRef = useRef(false);
+  const [profileResolved, setProfileResolved] = useState(false);
+  const [profileAllowsAds, setProfileAllowsAds] = useState(false);
   const showLiveAd = isClient && allowed && isProductionAdHost();
 
   const client = getAdsenseClient();
   const slot = getAdsenseDisplaySlot();
 
   useEffect(() => {
-    if (!showLiveAd || pushedRef.current) return;
+    if (!user) return;
+
+    const db = getFirebaseDb();
+    return onSnapshot(
+      doc(db, 'users', user.uid),
+      (snapshot) => {
+        const profile = snapshot.exists() ? ((snapshot.data() as Record<string, unknown>) ?? null) : null;
+        setProfileAllowsAds(shouldShowAds(profile));
+        setProfileResolved(true);
+      },
+      () => {
+        setProfileAllowsAds(false);
+        setProfileResolved(true);
+      },
+    );
+  }, [user]);
+
+  const effectiveProfileResolved = user ? profileResolved : true;
+  const effectiveProfileAllowsAds = user ? profileAllowsAds : true;
+
+  useEffect(() => {
+    if (!showLiveAd || !effectiveProfileAllowsAds || pushedRef.current) return;
     pushedRef.current = true;
     try {
       window.adsbygoogle = window.adsbygoogle || [];
@@ -74,7 +101,7 @@ export default function GoogleAdSenseAd({
     } catch {
       /* AdSense blocked or not ready */
     }
-  }, [showLiveAd]);
+  }, [effectiveProfileAllowsAds, showLiveAd]);
 
   if (!isClient) {
     return (
@@ -85,6 +112,7 @@ export default function GoogleAdSenseAd({
   }
 
   if (!allowed) return null;
+  if (user && (!effectiveProfileResolved || !effectiveProfileAllowsAds)) return null;
 
   if (!isProductionAdHost()) {
     return (

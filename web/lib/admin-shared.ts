@@ -39,6 +39,12 @@ export type AdminUserRow = {
   createdAt: string | null;
   lastLogin: string | null;
   storageUsedBytes: number | null;
+  storageLimitBytes: number | null;
+  cueRequestsUsedToday: number | null;
+  cueDailyLimit: number | null;
+  scheduleImageImportsUsedThisMonth: number | null;
+  scheduleImageImportsMonthly: number | null;
+  adsEnabled: boolean;
 };
 
 export type AdminUsersResult = {
@@ -52,6 +58,7 @@ export type AdminUsersResult = {
 export type AdminUsageLogRow = {
   id: string;
   uid: string;
+  email?: string | null;
   provider: string;
   model: string;
   status: 'success' | 'error' | 'rate_limited';
@@ -63,6 +70,7 @@ export type AdminUsageLogRow = {
   dateKey: string;
   createdAt: string;
   errorCode: string | null;
+  endpoint?: string | null;
 };
 
 export type AiUsageDashboard = {
@@ -95,16 +103,24 @@ export type RevenueMetric = {
   key: string;
   scope: 'daily' | 'monthly';
   adsRevenuePhp: number;
-  premiumRevenuePhp: number;
+  premiumPricePhp: number;
   otherRevenuePhp: number;
-  groqCostPhp: number;
-  geminiCostPhp: number;
+  groqInputUsdPerMillion: number;
+  groqOutputUsdPerMillion: number;
+  geminiInputUsdPerMillion: number;
+  geminiOutputUsdPerMillion: number;
+  usdToPhp: number;
   firebaseCostPhp: number;
   vercelCostPhp: number;
   otherCostPhp: number;
   netPhp: number;
   notes: string;
   updatedAt: string | null;
+  premiumRevenuePhp?: number;
+  groqCostPhp?: number;
+  geminiCostPhp?: number;
+  revenuePhp?: number;
+  costPhp?: number;
 };
 
 export type RevenueDashboard = {
@@ -112,6 +128,31 @@ export type RevenueDashboard = {
     revenuePhp: number;
     costPhp: number;
     netPhp: number;
+  };
+  currentMonthKey: string;
+  currentMonthSummary: {
+    monthKey: string;
+    premiumUserCount: number;
+    premiumPricePhp: number;
+    premiumRevenuePhp: number;
+    adsRevenuePhp: number;
+    otherRevenuePhp: number;
+    aiCostPhp: number;
+    firebaseCostPhp: number;
+    vercelCostPhp: number;
+    otherCostPhp: number;
+    totalRevenuePhp: number;
+    totalCostPhp: number;
+    netPhp: number;
+    groqInputTokens: number;
+    groqOutputTokens: number;
+    groqTotalTokens: number;
+    geminiInputTokens: number;
+    geminiOutputTokens: number;
+    geminiTotalTokens: number;
+    groqCostPhp: number;
+    geminiCostPhp: number;
+    usdToPhp: number;
   };
   daily: RevenueMetric[];
   monthly: RevenueMetric[];
@@ -145,9 +186,9 @@ export function formatTokens(value: number): string {
 }
 
 export function formatStorageBytes(value: number | null): string {
-  if (!value || value <= 0) return '—';
+  if (value == null || !Number.isFinite(value)) return '—';
   const units = ['B', 'KB', 'MB', 'GB'];
-  let size = value;
+  let size = Math.max(0, value);
   let unitIndex = 0;
   while (size >= 1024 && unitIndex < units.length - 1) {
     size /= 1024;

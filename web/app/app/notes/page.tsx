@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 import type { NoteFile, NoteFolder } from '@studycue/types';
 
 import { useMirror } from '@/context/mirror-context';
-import { useWebAuth } from '@/lib/firebase-client';
+import { getFirebaseDb, useWebAuth } from '@/lib/firebase-client';
 import {
   getLocalNoteFile,
   isLocalNoteUrl,
@@ -15,6 +16,7 @@ import { nextNumericId } from '@/lib/mirror-bootstrap';
 import {
   buildNoteStorageFileName,
   buildNoteStoragePath,
+  adjustUserStorageUsedBytes,
   deleteNoteFileMetadata,
   deleteNoteFolderMetadata,
   deleteStoredNoteAsset,
@@ -22,6 +24,7 @@ import {
   noteFolderMetadataExists,
   noteFileDocPath,
   noteFolderDocPath,
+  reserveUserStorageBytes,
   saveNoteFileMetadata,
   saveNoteFolderMetadata,
 } from '@/lib/note-storage';
@@ -31,12 +34,15 @@ import {
   subscribeUploads,
   type NoteUploadTask,
 } from '@/lib/note-upload-store';
-import { publicFileStorageMode } from '@/lib/public-env';
 import {
-  notesRejectReasonAfterCompress,
-  notesRejectReasonBeforeCompress,
-  NOTES_LIMIT_HINT,
-} from '@/lib/upload-limits';
+  getMaxStoredFileBytes,
+  getMaxUploadInputBytes,
+  getPlanConfigForProfile,
+  getStorageLimitBytes,
+  getUserPlan,
+} from '@/lib/plan-access';
+import { publicFileStorageMode } from '@/lib/public-env';
+import { formatUploadLimit } from '@/lib/upload-limits';
 
 const SUPPORTED_MIME = new Set([
   'application/pdf',
@@ -158,14 +164,46 @@ export default function NotesRoutePage() {
   const [deletingFileId, setDeletingFileId] = useState<number | null>(null);
 
   const [uploadTasks, setUploadTasks] = useState<readonly NoteUploadTask[]>(() => getUploadTasks());
+  const [planProfile, setPlanProfile] = useState<Record<string, unknown> | null>(null);
   useEffect(() => {
     return subscribeUploads(() => {
       setUploadTasks(getUploadTasks());
     });
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const db = getFirebaseDb();
+    return onSnapshot(
+      doc(db, 'users', user.uid),
+      (snapshot) => {
+        setPlanProfile(snapshot.exists() ? ((snapshot.data() as Record<string, unknown>) ?? null) : null);
+      },
+      () => {
+        setPlanProfile(null);
+      },
+    );
+  }, [user]);
+
   const folders = useMemo(() => mirror.noteFolders ?? [], [mirror.noteFolders]);
   const files = useMemo(() => mirror.noteFiles ?? [], [mirror.noteFiles]);
+  const effectivePlanProfile = user ? planProfile : null;
+  const planConfig = useMemo(() => getPlanConfigForProfile(effectivePlanProfile), [effectivePlanProfile]);
+  const planLabel = useMemo(() => planConfig.displayName, [planConfig]);
+  const planName = useMemo(() => getUserPlan(effectivePlanProfile), [effectivePlanProfile]);
+  const storageLimitBytes = useMemo(() => getStorageLimitBytes(effectivePlanProfile), [effectivePlanProfile]);
+  const maxUploadInputBytes = useMemo(() => getMaxUploadInputBytes(effectivePlanProfile), [effectivePlanProfile]);
+  const maxStoredFileBytes = useMemo(() => getMaxStoredFileBytes(effectivePlanProfile), [effectivePlanProfile]);
+  const storageUsedBytes = useMemo(() => {
+    const value = effectivePlanProfile?.storageUsedBytes;
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  }, [effectivePlanProfile]);
+  const planLimitHint = useMemo(
+    () =>
+      `${planLabel} plan: ${formatUploadLimit(maxStoredFileBytes)} stored per file, ${formatUploadLimit(maxUploadInputBytes)} before compression, ${formatUploadLimit(storageLimitBytes)} total storage.`,
+    [maxStoredFileBytes, maxUploadInputBytes, planLabel, storageLimitBytes],
+  );
 
   const selectedFolder = folders.find((f) => f.id === selectedFolderId) ?? folders[0] ?? null;
   const selectedFiles = files.filter((f) => f.folderId === selectedFolder?.id);
@@ -230,6 +268,7 @@ export default function NotesRoutePage() {
 
     let nextFileId = nextNumericId(files);
     const useFirebaseStorage = publicFileStorageMode() === 'firebase';
+    let reservedStorageBytes = 0;
 
     for (const file of incoming) {
       if (!SUPPORTED_MIME.has(file.type) || !SUPPORTED_EXTENSIONS.has(extFromName(file.name))) {
@@ -237,18 +276,27 @@ export default function NotesRoutePage() {
         continue;
       }
 
-      const before = notesRejectReasonBeforeCompress(file);
-      if (before) {
-        setMsg(before);
+      if (file.size > maxUploadInputBytes) {
+        setMsg(
+          `This file is larger than your plan allows. "${file.name}" is ${formatUploadLimit(file.size)}, but ${planLabel} allows up to ${formatUploadLimit(maxUploadInputBytes)} before upload. Upgrade options are coming soon.`,
+        );
         continue;
       }
 
       const { blob, compressed } = useFirebaseStorage
         ? { blob: file as Blob, compressed: false }
         : await gzipBlobIfPossible(file);
-      const after = notesRejectReasonAfterCompress(file.name, blob);
-      if (after) {
-        setMsg(after);
+      if (blob.size > maxStoredFileBytes) {
+        setMsg(
+          `This file is larger than your plan allows. "${file.name}" would store as ${formatUploadLimit(blob.size)}, but ${planLabel} allows up to ${formatUploadLimit(maxStoredFileBytes)} per file. Upgrade options are coming soon.`,
+        );
+        continue;
+      }
+
+      if (storageUsedBytes + reservedStorageBytes + blob.size > storageLimitBytes) {
+        setMsg(
+          `You’ve reached your storage limit. ${planLabel} includes ${formatUploadLimit(storageLimitBytes)} total notes/file storage. Upgrade options are coming soon.`,
+        );
         continue;
       }
 
@@ -259,6 +307,33 @@ export default function NotesRoutePage() {
       const folderId = selectedFolder.id;
       const createdAt = new Date().toISOString();
       const contentType = compressed ? 'application/gzip' : file.type;
+      const storedSizeBytes = blob.size;
+
+      try {
+        const nextStorageUsed = await reserveUserStorageBytes(
+          user.uid,
+          storedSizeBytes,
+          storageLimitBytes,
+        );
+        reservedStorageBytes += storedSizeBytes;
+        setPlanProfile((prev) => ({
+          ...(prev ?? {}),
+          storageUsedBytes: nextStorageUsed,
+        }));
+      } catch (error) {
+        if (error instanceof Error && error.message === 'storage_limit_exceeded') {
+          setMsg(
+            `You’ve reached your storage limit. ${planLabel} includes ${formatUploadLimit(storageLimitBytes)} total notes/file storage. Upgrade options are coming soon.`,
+          );
+          continue;
+        }
+        setMsg(
+          error instanceof Error
+            ? `Could not reserve storage for "${file.name}": ${error.message}`
+            : `Could not reserve storage for "${file.name}".`,
+        );
+        continue;
+      }
 
       startNoteUpload({
         blob,
@@ -274,7 +349,7 @@ export default function NotesRoutePage() {
             originalName: file.name,
             safeFileName,
             extension: extFromName(file.name) || null,
-            sizeBytes: file.size,
+            sizeBytes: storedSizeBytes,
             storagePath,
             downloadUrl,
             downloadURL: downloadUrl,
@@ -304,6 +379,14 @@ export default function NotesRoutePage() {
           })();
         },
         onError: (errMsg) => {
+          void adjustUserStorageUsedBytes(user.uid, -storedSizeBytes)
+            .then((nextStorageUsed) => {
+              setPlanProfile((prev) => ({
+                ...(prev ?? {}),
+                storageUsedBytes: nextStorageUsed,
+              }));
+            })
+            .catch(() => {});
           setMsg(`Upload failed for "${file.name}": ${errMsg}`);
         },
       });
@@ -391,6 +474,22 @@ export default function NotesRoutePage() {
         ...prev,
         noteFiles: (prev.noteFiles ?? []).filter((row) => row.id !== file.id),
       }));
+      if (user) {
+        const decrementBytes =
+          typeof file.sizeBytes === 'number' && Number.isFinite(file.sizeBytes) ? file.sizeBytes : 0;
+        if (decrementBytes > 0) {
+          const nextStorageUsed = await adjustUserStorageUsedBytes(user.uid, -decrementBytes);
+          setPlanProfile((prev) => ({
+            ...(prev ?? {}),
+            storageUsedBytes: nextStorageUsed,
+          }));
+        } else if (process.env.NODE_ENV !== 'production') {
+          console.warn('[notes] delete file missing sizeBytes; storage counter not decremented', {
+            fileId: file.id,
+            folderId: file.folderId,
+          });
+        }
+      }
       if (process.env.NODE_ENV !== 'production') {
         console.info('[notes] delete file local state updated', {
           fileId: file.id,
@@ -520,6 +619,24 @@ export default function NotesRoutePage() {
         noteFolders: (prev.noteFolders ?? []).filter((row) => row.id !== folder.id),
         noteFiles: (prev.noteFiles ?? []).filter((row) => row.folderId !== folder.id),
       }));
+      if (user) {
+        const reclaimedBytes = allFolderFiles.reduce((sum, file) => {
+          const fileSize =
+            typeof file.sizeBytes === 'number' && Number.isFinite(file.sizeBytes) ? file.sizeBytes : 0;
+          return sum + Math.max(0, fileSize);
+        }, 0);
+        if (reclaimedBytes > 0) {
+          const nextStorageUsed = await adjustUserStorageUsedBytes(user.uid, -reclaimedBytes);
+          setPlanProfile((prev) => ({
+            ...(prev ?? {}),
+            storageUsedBytes: nextStorageUsed,
+          }));
+        } else if (process.env.NODE_ENV !== 'production') {
+          console.warn('[notes] delete folder missing file sizes; storage counter unchanged', {
+            folderId: folder.id,
+          });
+        }
+      }
       if (process.env.NODE_ENV !== 'production') {
         console.info('[notes] delete folder local state updated', {
           folderId: folder.id,
@@ -551,6 +668,11 @@ export default function NotesRoutePage() {
         <p className="mt-1 text-sm text-text-secondary">
           Create folders and upload PDF/PPT files. Files sync to Firebase Storage when available;
           otherwise they stay in this browser only.
+        </p>
+        <p className="mt-2 text-sm text-text-secondary">{planLimitHint}</p>
+        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-text-muted">
+          {planName === 'premium' ? 'StudyCue Plus' : planLabel} storage used:{' '}
+          {formatUploadLimit(storageUsedBytes)} / {formatUploadLimit(storageLimitBytes)}
         </p>
       </div>
 
@@ -646,7 +768,7 @@ export default function NotesRoutePage() {
               >
                 <span className="mb-3 text-[30px] text-accent">↑</span>
                 <p className="text-sm text-text-secondary">Drag and drop PDF/PPT files here</p>
-                <p className="mt-1 text-xs text-text-muted">{NOTES_LIMIT_HINT}</p>
+                <p className="mt-1 text-xs text-text-muted">{planLimitHint}</p>
                 <label className="sc-btn-secondary mt-4 cursor-pointer text-xs">
                   Choose files
                   <input

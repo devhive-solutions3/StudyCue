@@ -28,7 +28,7 @@ import {
   monthKeyFromIso,
   writeAdminAuditLog,
 } from '@/lib/admin-log';
-import { logCueUsage, estimateTokensFromCuePayload, estimateTokensFromText, estimateUsdCost } from '@/lib/ai-usage-logger';
+import { DEFAULT_USD_TO_PHP } from '@/lib/ai-usage-logger';
 import { requireAdminUser } from '@/lib/admin-auth';
 import {
   getAdminBlogPostById,
@@ -39,6 +39,7 @@ import {
 import {
   buildNewUserProfile,
   buildPlanUpdate,
+  getPlanConfig,
   normalizePlan,
   type UserPlan,
   USER_PLAN_CONFIG,
@@ -83,7 +84,7 @@ const ADMIN_SECTIONS: AdminSection[] = [
   },
 ];
 
-const PHP_PER_USD = Number(process.env.ADMIN_USD_TO_PHP || '56');
+const PHP_PER_USD = DEFAULT_USD_TO_PHP;
 const ADMIN_DATA_EMPTY_WARNING =
   'Firebase Admin credentials are not configured. Add FIREBASE_SERVICE_ACCOUNT_KEY or FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY/FIREBASE_PROJECT_ID.';
 const IS_DEV = process.env.NODE_ENV !== 'production';
@@ -177,9 +178,12 @@ function normalizeUserProfile(data: Record<string, unknown>) {
     email: typeof data.email === 'string' ? data.email : null,
     createdAt: normalizeIso(data.createdAt),
     lastLogin: normalizeIso(data.lastLogin ?? data.lastLoginAt),
-    storageUsedBytes: parseNullableNumber(
+    storageUsedBytes: parseNumber(
       data.storageUsedBytes ?? data.storageBytes ?? data.storageUsed ?? data.usedStorageBytes,
     ),
+    storageLimitBytes: parseNullableNumber(data.storageLimitBytes),
+    cueDailyLimit: parseNullableNumber(data.cueDailyLimit),
+    adsEnabled: parseBool(data.adsEnabled),
   };
 }
 
@@ -253,6 +257,8 @@ export async function readAdminUsers(): Promise<AdminUsersResult> {
   try {
     const auth = getFirebaseAdminAuth();
     const db = getFirebaseAdminDb();
+    const todayKey = dateKeyFromIso(isoNow());
+    const monthKey = monthKeyFromIso(isoNow());
     const authUsers: Awaited<ReturnType<typeof auth.listUsers>>['users'] = [];
 
     let nextPageToken: string | undefined;
@@ -264,10 +270,18 @@ export async function readAdminUsers(): Promise<AdminUsersResult> {
 
     const refs = authUsers.map((user) => db.doc(`users/${user.uid}`));
     const userDocs = refs.length > 0 ? await db.getAll(...refs) : [];
+    const usageDailyRefs = authUsers.map((user) => db.doc(`users/${user.uid}/usage/${todayKey}`));
+    const usageMonthlyRefs = authUsers.map((user) => db.doc(`users/${user.uid}/usage/${monthKey}`));
+    const [usageDailyDocs, usageMonthlyDocs] =
+      authUsers.length > 0
+        ? await Promise.all([db.getAll(...usageDailyRefs), db.getAll(...usageMonthlyRefs)])
+        : [[], []];
     const users = authUsers.map((user, index) => {
       const docSnapshot = userDocs[index];
       const docData = docSnapshot?.data() ?? {};
       const profile = normalizeUserProfile(docData);
+      const usageDailyData = (usageDailyDocs[index]?.data() ?? {}) as Record<string, unknown>;
+      const usageMonthlyData = (usageMonthlyDocs[index]?.data() ?? {}) as Record<string, unknown>;
       const derivedAccountType =
         typeof docData.accountType === 'string'
           ? docData.accountType
@@ -295,7 +309,22 @@ export async function readAdminUsers(): Promise<AdminUsersResult> {
         hasProfileDoc: Boolean(docSnapshot?.exists),
         createdAt: profile.createdAt ?? user.metadata.creationTime ?? null,
         lastLogin: profile.lastLogin ?? user.metadata.lastSignInTime ?? null,
-        storageUsedBytes: profile.storageUsedBytes,
+        storageUsedBytes: profile.storageUsedBytes ?? 0,
+        cueRequestsUsedToday: parseNumber(usageDailyData.cueRequestsUsed),
+        storageLimitBytes:
+          profile.storageLimitBytes ?? getPlanConfig(normalizePlan(profile.plan || derivedAccountType)).storageLimitBytes,
+        cueDailyLimit:
+          profile.cueDailyLimit ?? getPlanConfig(normalizePlan(profile.plan || derivedAccountType)).cueDailyLimit,
+        scheduleImageImportsUsedThisMonth: parseNumber(
+          usageMonthlyData.scheduleImageImportsUsed,
+        ),
+        scheduleImageImportsMonthly:
+          parseNullableNumber(docData.scheduleImageImportsMonthly) ??
+          getPlanConfig(normalizePlan(profile.plan || derivedAccountType)).scheduleImageImportsMonthly,
+        adsEnabled:
+          docSnapshot?.exists && 'adsEnabled' in docData
+            ? profile.adsEnabled
+            : getPlanConfig(normalizePlan(profile.plan || derivedAccountType)).adsEnabled,
       } satisfies AdminUserRow;
     });
 
@@ -341,13 +370,53 @@ export async function readAdminUsers(): Promise<AdminUsersResult> {
   }
 }
 
+async function readOverviewUserCounts() {
+  const db = getFirebaseAdminDb();
+
+  try {
+    const [totalCount, betaPlanCount, betaTypeCount, premiumPlanCount, premiumTypeCount] =
+      await Promise.all([
+        db.collection('users').count().get(),
+        db.collection('users').where('plan', '==', 'beta').count().get(),
+        db.collection('users').where('accountType', '==', 'beta').count().get(),
+        db.collection('users').where('plan', '==', 'premium').count().get(),
+        db.collection('users').where('accountType', '==', 'premium').count().get(),
+      ]);
+
+    const totalUsers = totalCount.data().count ?? 0;
+    const betaUsers = Math.max(betaPlanCount.data().count ?? 0, betaTypeCount.data().count ?? 0);
+    const premiumUsers = Math.max(
+      premiumPlanCount.data().count ?? 0,
+      premiumTypeCount.data().count ?? 0,
+    );
+    const freeUsers = Math.max(0, totalUsers - betaUsers - premiumUsers);
+
+    return {
+      totalUsers,
+      betaUsers,
+      freeUsers,
+      premiumUsers,
+      warning: null,
+    };
+  } catch {
+    const usersResult = await readAdminUsers();
+    const userCounts = classifyUserCounts(usersResult.users);
+    return {
+      totalUsers: usersResult.users.length,
+      betaUsers: userCounts.betaUsers,
+      freeUsers: userCounts.freeUsers,
+      premiumUsers: userCounts.premiumUsers,
+      warning: usersResult.warning,
+    };
+  }
+}
+
 export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { usersWarning: string | null }> {
   try {
     const db = getFirebaseAdminDb();
     const today = dateKeyFromIso(isoNow());
     const monthStart = `${monthKeyFromIso(isoNow())}-01`;
-    const usersResult = await readAdminUsers();
-    const userCounts = classifyUserCounts(usersResult.users);
+    const userCounts = await readOverviewUserCounts();
 
     const [aiTodayDoc, blogPosts, securityToday, revenueDocs] = await Promise.all([
       db.doc(`adminMetrics/aiUsage/daily/${today}`).get().catch(() => null),
@@ -366,7 +435,7 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
       revenueDocs?.docs.reduce((sum, doc) => sum + parseNumber(doc.data().netPhp), 0) ?? 0;
 
     return {
-      totalUsers: usersResult.users.length,
+      totalUsers: userCounts.totalUsers,
       betaUsers: userCounts.betaUsers,
       freeUsers: userCounts.freeUsers,
       premiumUsers: userCounts.premiumUsers,
@@ -374,7 +443,7 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
       publishedPosts: blogPosts?.data().count ?? 0,
       netThisMonthPhp,
       securityEventsToday: securityToday?.data().count ?? 0,
-      usersWarning: usersResult.warning,
+      usersWarning: userCounts.warning,
     };
   } catch (error) {
     if (isRecoverableAdminDataError(error)) {
@@ -416,7 +485,6 @@ export async function updateAdminUserPlan(params: {
       ? existing.storageLimitBytes
       : USER_PLAN_CONFIG[previousPlan].storageLimitBytes;
   const planUpdate = buildPlanUpdate(params.plan, {
-    preserveBetaTester: currentProfile.betaTester,
     previousBetaJoinedAt:
       typeof existing.betaJoinedAt === 'string' ? existing.betaJoinedAt : null,
   });
@@ -478,6 +546,7 @@ function buildAiUsageLogRow(
   return {
     id,
     uid: typeof data.uid === 'string' ? data.uid : 'unknown',
+    email: typeof data.email === 'string' ? data.email : null,
     provider: typeof data.provider === 'string' ? data.provider : 'unknown',
     model: typeof data.model === 'string' ? data.model : 'unknown',
     status:
@@ -492,6 +561,7 @@ function buildAiUsageLogRow(
     dateKey: typeof data.dateKey === 'string' ? data.dateKey : '',
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : isoNow(),
     errorCode: typeof data.errorCode === 'string' ? data.errorCode : null,
+    endpoint: typeof data.endpoint === 'string' ? data.endpoint : null,
   };
 }
 
@@ -640,51 +710,18 @@ export async function readAiUsageDashboard(): Promise<AiUsageDashboard> {
   }
 }
 
-export async function recordAiUsageLog(params: {
-  uid: string;
-  email?: string | null;
-  authenticated?: boolean;
-  provider: 'groq' | 'gemini';
-  model: string;
-  status: 'success' | 'error' | 'rate_limited';
-  requestPayload: unknown;
-  responseText?: string;
-  errorCode?: string | null;
-}) {
-  const inputTokensEstimate = estimateTokensFromCuePayload(params.requestPayload);
-  const outputTokensEstimate = estimateTokensFromText(params.responseText ?? '');
-  const totalTokensEstimate = inputTokensEstimate + outputTokensEstimate;
-  const estimatedCostUsd = estimateUsdCost({
-    provider: params.provider,
-    inputTokens: inputTokensEstimate,
-    outputTokens: outputTokensEstimate,
-  });
-  const estimatedCostPhp = estimatedCostUsd * PHP_PER_USD;
-  return logCueUsage({
-    uid: params.uid,
-    email: params.email ?? null,
-    authenticated: params.authenticated,
-    provider: params.provider,
-    model: params.model,
-    status: params.status,
-    inputTokensEstimate,
-    outputTokensEstimate,
-    totalTokensEstimate,
-    estimatedCostUsd,
-    estimatedCostPhp,
-    errorCode: params.errorCode ?? null,
-  });
-}
-
 function buildRevenueMetric(key: string, scope: 'daily' | 'monthly', data: Record<string, unknown>): RevenueMetric {
   return {
     key,
     scope,
     adsRevenuePhp: parseNumber(data.adsRevenuePhp),
-    premiumRevenuePhp: parseNumber(data.premiumRevenuePhp),
+    premiumPricePhp: parseNumber(data.premiumPricePhp ?? data.pricePhpMonthly) || 99,
     otherRevenuePhp: parseNumber(data.otherRevenuePhp),
-    groqCostPhp: parseNumber(data.groqCostPhp),
-    geminiCostPhp: parseNumber(data.geminiCostPhp),
+    groqInputUsdPerMillion: parseNumber(data.groqInputUsdPerMillion || 0.59),
+    groqOutputUsdPerMillion: parseNumber(data.groqOutputUsdPerMillion || 0.79),
+    geminiInputUsdPerMillion: parseNumber(data.geminiInputUsdPerMillion || 0.1),
+    geminiOutputUsdPerMillion: parseNumber(data.geminiOutputUsdPerMillion || 0.4),
+    usdToPhp: parseNumber(data.usdToPhp) || PHP_PER_USD,
     firebaseCostPhp: parseNumber(data.firebaseCostPhp),
     vercelCostPhp: parseNumber(data.vercelCostPhp),
     otherCostPhp: parseNumber(data.otherCostPhp),
@@ -694,12 +731,95 @@ function buildRevenueMetric(key: string, scope: 'daily' | 'monthly', data: Recor
   };
 }
 
+function estimateProviderCostPhp(params: {
+  inputTokens: number;
+  outputTokens: number;
+  inputUsdPerMillion: number;
+  outputUsdPerMillion: number;
+  usdToPhp: number;
+}) {
+  const usd =
+    (params.inputTokens / 1_000_000) * params.inputUsdPerMillion +
+    (params.outputTokens / 1_000_000) * params.outputUsdPerMillion;
+  return usd * params.usdToPhp;
+}
+
+async function readPremiumUserCount(): Promise<number> {
+  const db = getFirebaseAdminDb();
+
+  try {
+    const [planCount, accountTypeCount] = await Promise.all([
+      db.collection('users').where('plan', '==', 'premium').count().get(),
+      db.collection('users').where('accountType', '==', 'premium').count().get(),
+    ]);
+    return Math.max(planCount.data().count ?? 0, accountTypeCount.data().count ?? 0);
+  } catch {
+    const usersResult = await readAdminUsers();
+    return usersResult.users.filter((user) => normalizePlan(user.plan ?? user.accountType) === 'premium').length;
+  }
+}
+
+async function readAiUsageMonthlyMap() {
+  const db = getFirebaseAdminDb();
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 11);
+  const startKey = sixMonthsAgo.toISOString().slice(0, 10);
+  const snapshot = await db
+    .doc('adminMetrics/aiUsage')
+    .collection('daily')
+    .where(FieldPath.documentId(), '>=', startKey)
+    .get()
+    .catch(() => null);
+
+  const monthly = new Map<
+    string,
+    {
+      groqInputTokens: number;
+      groqOutputTokens: number;
+      groqTotalTokens: number;
+      geminiInputTokens: number;
+      geminiOutputTokens: number;
+      geminiTotalTokens: number;
+      totalEstimatedCostPhp: number;
+    }
+  >();
+
+  for (const doc of snapshot?.docs ?? []) {
+    const data = doc.data();
+    const monthKey = doc.id.slice(0, 7);
+    const current = monthly.get(monthKey) ?? {
+      groqInputTokens: 0,
+      groqOutputTokens: 0,
+      groqTotalTokens: 0,
+      geminiInputTokens: 0,
+      geminiOutputTokens: 0,
+      geminiTotalTokens: 0,
+      totalEstimatedCostPhp: 0,
+    };
+    current.groqInputTokens += parseNumber(data.groqInputTokens);
+    current.groqOutputTokens += parseNumber(data.groqOutputTokens);
+    current.groqTotalTokens += parseNumber(data.groqTotalTokens);
+    current.geminiInputTokens += parseNumber(data.geminiInputTokens);
+    current.geminiOutputTokens += parseNumber(data.geminiOutputTokens);
+    current.geminiTotalTokens += parseNumber(data.geminiTotalTokens);
+    current.totalEstimatedCostPhp += parseNumber(
+      data.totalEstimatedCostPhp ?? data.estimatedCostPhp,
+    );
+    monthly.set(monthKey, current);
+  }
+
+  return monthly;
+}
+
 export async function readRevenueDashboard(): Promise<RevenueDashboard> {
   try {
     const db = getFirebaseAdminDb();
-    const [dailySnapshot, monthlySnapshot] = await Promise.all([
+    const currentMonthKey = monthKeyFromIso(isoNow());
+    const [dailySnapshot, monthlySnapshot, premiumUserCount, aiUsageByMonth] = await Promise.all([
       db.doc('adminMetrics/revenue').collection('daily').orderBy(FieldPath.documentId(), 'desc').limit(30).get().catch(() => null),
       db.doc('adminMetrics/revenue').collection('monthly').orderBy(FieldPath.documentId(), 'desc').limit(12).get().catch(() => null),
+      readPremiumUserCount(),
+      readAiUsageMonthlyMap(),
     ]);
 
   const daily =
@@ -707,23 +827,146 @@ export async function readRevenueDashboard(): Promise<RevenueDashboard> {
   const monthly =
     monthlySnapshot?.docs.map((doc) => buildRevenueMetric(doc.id, 'monthly', doc.data())).sort((a, b) => b.key.localeCompare(a.key)) ?? [];
 
-  const source = monthly.length > 0 ? monthly : daily;
+  const normalizedMonthly = monthly.map((metric) => {
+    const aiUsage = aiUsageByMonth.get(metric.key) ?? {
+      groqInputTokens: 0,
+      groqOutputTokens: 0,
+      groqTotalTokens: 0,
+      geminiInputTokens: 0,
+      geminiOutputTokens: 0,
+      geminiTotalTokens: 0,
+      totalEstimatedCostPhp: 0,
+    };
+    const groqCostPhp = estimateProviderCostPhp({
+      inputTokens: aiUsage.groqInputTokens,
+      outputTokens: aiUsage.groqOutputTokens,
+      inputUsdPerMillion: metric.groqInputUsdPerMillion,
+      outputUsdPerMillion: metric.groqOutputUsdPerMillion,
+      usdToPhp: metric.usdToPhp,
+    });
+    const geminiCostPhp = estimateProviderCostPhp({
+      inputTokens: aiUsage.geminiInputTokens,
+      outputTokens: aiUsage.geminiOutputTokens,
+      inputUsdPerMillion: metric.geminiInputUsdPerMillion,
+      outputUsdPerMillion: metric.geminiOutputUsdPerMillion,
+      usdToPhp: metric.usdToPhp,
+    });
+    const premiumRevenuePhp = premiumUserCount * metric.premiumPricePhp;
+    const revenuePhp = metric.adsRevenuePhp + premiumRevenuePhp + metric.otherRevenuePhp;
+    const costPhp =
+      groqCostPhp +
+      geminiCostPhp +
+      metric.firebaseCostPhp +
+      metric.vercelCostPhp +
+      metric.otherCostPhp;
+
+    return {
+      ...metric,
+      premiumRevenuePhp,
+      groqCostPhp,
+      geminiCostPhp,
+      revenuePhp,
+      costPhp,
+      netPhp: revenuePhp - costPhp,
+      aiUsage,
+    };
+  });
+
+  const source = normalizedMonthly.length > 0 ? normalizedMonthly : [];
   const totals = source.reduce(
     (acc, metric) => {
-      const revenue = metric.adsRevenuePhp + metric.premiumRevenuePhp + metric.otherRevenuePhp;
-      const cost = metric.groqCostPhp + metric.geminiCostPhp + metric.firebaseCostPhp + metric.vercelCostPhp + metric.otherCostPhp;
-      acc.revenuePhp += revenue;
-      acc.costPhp += cost;
+      acc.revenuePhp += metric.revenuePhp;
+      acc.costPhp += metric.costPhp;
       acc.netPhp += metric.netPhp;
       return acc;
     },
     { revenuePhp: 0, costPhp: 0, netPhp: 0 },
   );
 
-    return { totals, daily, monthly };
+    const currentMonthMetric =
+      normalizedMonthly.find((metric) => metric.key === currentMonthKey) ??
+      {
+        ...buildRevenueMetric(currentMonthKey, 'monthly', {}),
+        premiumRevenuePhp: 0,
+        groqCostPhp: 0,
+        geminiCostPhp: 0,
+        revenuePhp: 0,
+        costPhp: 0,
+        aiUsage:
+          aiUsageByMonth.get(currentMonthKey) ?? {
+            groqInputTokens: 0,
+            groqOutputTokens: 0,
+            groqTotalTokens: 0,
+            geminiInputTokens: 0,
+            geminiOutputTokens: 0,
+            geminiTotalTokens: 0,
+            totalEstimatedCostPhp: 0,
+          },
+      };
+
+    return {
+      totals,
+      currentMonthKey,
+      currentMonthSummary: {
+        monthKey: currentMonthMetric.key,
+        premiumUserCount,
+        premiumPricePhp: currentMonthMetric.premiumPricePhp,
+        premiumRevenuePhp: currentMonthMetric.premiumRevenuePhp,
+        adsRevenuePhp: currentMonthMetric.adsRevenuePhp,
+        otherRevenuePhp: currentMonthMetric.otherRevenuePhp,
+        aiCostPhp: currentMonthMetric.groqCostPhp + currentMonthMetric.geminiCostPhp,
+        firebaseCostPhp: currentMonthMetric.firebaseCostPhp,
+        vercelCostPhp: currentMonthMetric.vercelCostPhp,
+        otherCostPhp: currentMonthMetric.otherCostPhp,
+        totalRevenuePhp: currentMonthMetric.revenuePhp,
+        totalCostPhp: currentMonthMetric.costPhp,
+        netPhp: currentMonthMetric.netPhp,
+        groqInputTokens: currentMonthMetric.aiUsage.groqInputTokens,
+        groqOutputTokens: currentMonthMetric.aiUsage.groqOutputTokens,
+        groqTotalTokens: currentMonthMetric.aiUsage.groqTotalTokens,
+        geminiInputTokens: currentMonthMetric.aiUsage.geminiInputTokens,
+        geminiOutputTokens: currentMonthMetric.aiUsage.geminiOutputTokens,
+        geminiTotalTokens: currentMonthMetric.aiUsage.geminiTotalTokens,
+        groqCostPhp: currentMonthMetric.groqCostPhp,
+        geminiCostPhp: currentMonthMetric.geminiCostPhp,
+        usdToPhp: currentMonthMetric.usdToPhp,
+      },
+      daily,
+      monthly: normalizedMonthly,
+    };
   } catch (error) {
     if (isRecoverableAdminDataError(error)) {
-      return { totals: { revenuePhp: 0, costPhp: 0, netPhp: 0 }, daily: [], monthly: [] };
+      const emptyMonthKey = monthKeyFromIso(isoNow());
+      return {
+        totals: { revenuePhp: 0, costPhp: 0, netPhp: 0 },
+        currentMonthKey: emptyMonthKey,
+        currentMonthSummary: {
+          monthKey: emptyMonthKey,
+          premiumUserCount: 0,
+          premiumPricePhp: 99,
+          premiumRevenuePhp: 0,
+          adsRevenuePhp: 0,
+          otherRevenuePhp: 0,
+          aiCostPhp: 0,
+          firebaseCostPhp: 0,
+          vercelCostPhp: 0,
+          otherCostPhp: 0,
+          totalRevenuePhp: 0,
+          totalCostPhp: 0,
+          netPhp: 0,
+          groqInputTokens: 0,
+          groqOutputTokens: 0,
+          groqTotalTokens: 0,
+          geminiInputTokens: 0,
+          geminiOutputTokens: 0,
+          geminiTotalTokens: 0,
+          groqCostPhp: 0,
+          geminiCostPhp: 0,
+          usdToPhp: PHP_PER_USD,
+        },
+        daily: [],
+        monthly: [],
+      };
     }
     throw error;
   }
@@ -751,20 +994,20 @@ export async function saveRevenueMetricAction(formData: FormData) {
   const scope = formValue(formData, 'scope') === 'monthly' ? 'monthly' : 'daily';
   const key = formValue(formData, 'key') || (scope === 'monthly' ? monthKeyFromIso(isoNow()) : dateKeyFromIso(isoNow()));
   const adsRevenuePhp = parseMoneyField(formData, 'adsRevenuePhp');
-  const premiumRevenuePhp = parseMoneyField(formData, 'premiumRevenuePhp');
+  const premiumPricePhp = parseMoneyField(formData, 'premiumPricePhp') || 99;
   const otherRevenuePhp = parseMoneyField(formData, 'otherRevenuePhp');
-  const groqCostPhp = parseMoneyField(formData, 'groqCostPhp');
-  const geminiCostPhp = parseMoneyField(formData, 'geminiCostPhp');
+  const groqInputUsdPerMillion = parseMoneyField(formData, 'groqInputUsdPerMillion') || 0.59;
+  const groqOutputUsdPerMillion = parseMoneyField(formData, 'groqOutputUsdPerMillion') || 0.79;
+  const geminiInputUsdPerMillion = parseMoneyField(formData, 'geminiInputUsdPerMillion') || 0.1;
+  const geminiOutputUsdPerMillion = parseMoneyField(formData, 'geminiOutputUsdPerMillion') || 0.4;
+  const usdToPhp = parseMoneyField(formData, 'usdToPhp') || PHP_PER_USD;
   const firebaseCostPhp = parseMoneyField(formData, 'firebaseCostPhp');
   const vercelCostPhp = parseMoneyField(formData, 'vercelCostPhp');
   const otherCostPhp = parseMoneyField(formData, 'otherCostPhp');
   const notes = formValue(formData, 'notes');
   const netPhp =
     adsRevenuePhp +
-    premiumRevenuePhp +
     otherRevenuePhp -
-    groqCostPhp -
-    geminiCostPhp -
     firebaseCostPhp -
     vercelCostPhp -
     otherCostPhp;
@@ -774,10 +1017,13 @@ export async function saveRevenueMetricAction(formData: FormData) {
     .set(
       {
         adsRevenuePhp,
-        premiumRevenuePhp,
+        premiumPricePhp,
         otherRevenuePhp,
-        groqCostPhp,
-        geminiCostPhp,
+        groqInputUsdPerMillion,
+        groqOutputUsdPerMillion,
+        geminiInputUsdPerMillion,
+        geminiOutputUsdPerMillion,
+        usdToPhp,
         firebaseCostPhp,
         vercelCostPhp,
         otherCostPhp,
