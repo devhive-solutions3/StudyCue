@@ -16,6 +16,59 @@ function SummaryCard({
   );
 }
 
+function FormField({
+  label,
+  name,
+  type = 'number',
+  step,
+  placeholder,
+  defaultValue,
+}: {
+  label: string;
+  name: string;
+  type?: string;
+  step?: string;
+  placeholder?: string;
+  defaultValue?: string | number;
+}) {
+  return (
+    <div className="space-y-2">
+      <label htmlFor={name} className="text-sm font-semibold text-text-primary">
+        {label}
+      </label>
+      <input
+        id={name}
+        name={name}
+        type={type}
+        step={step}
+        placeholder={placeholder}
+        defaultValue={defaultValue}
+        className="h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35"
+      />
+    </div>
+  );
+}
+
+function FormSection({
+  title,
+  helper,
+  children,
+}: {
+  title: string;
+  helper?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[22px] border border-white/10 bg-black/10 p-4 md:p-5">
+      <div className="mb-4 space-y-1">
+        <h3 className="text-sm font-bold text-text-primary">{title}</h3>
+        {helper ? <p className="text-xs leading-5 text-text-muted">{helper}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export default async function AdminRevenuePage() {
   const dataSource = readAdminDataSourceStatus();
   const dashboard = await readRevenueDashboard();
@@ -80,101 +133,153 @@ export default async function AdminRevenuePage() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <section className="rounded-[26px] border border-white/10 bg-white/5 p-5 shadow-[0_18px_48px_rgba(9,12,35,0.16)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6">
-          <h2 className="text-base font-bold text-text-primary">Add or update metrics</h2>
-          <form action={saveRevenueMetricAction} className="mt-5 space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Scope</label>
-                <select
-                  name="scope"
-                  defaultValue="daily"
-                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35"
-                >
-                  <option value="daily">Daily</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Key</label>
-                <input
+          <div>
+            <h2 className="text-base font-bold text-text-primary">Revenue calculator settings</h2>
+            <p className="mt-2 text-sm text-text-secondary">
+              Set monthly prices and costs used to estimate revenue, AI spending, and net income.
+            </p>
+          </div>
+          <form action={saveRevenueMetricAction} className="mt-6 space-y-6">
+            <FormSection title="Period">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label htmlFor="scope" className="text-sm font-semibold text-text-primary">
+                    Scope
+                  </label>
+                  <select
+                    id="scope"
+                    name="scope"
+                    defaultValue="daily"
+                    className="h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+                <FormField
+                  label="Key"
                   name="key"
+                  type="text"
                   placeholder="YYYY-MM-DD or YYYY-MM"
-                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35"
                 />
               </div>
+            </FormSection>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <FormSection
+                title="Revenue assumptions (PHP)"
+                helper="Used to estimate monthly revenue from Premium users."
+              >
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <FormField
+                    label="Ads revenue"
+                    name="adsRevenuePhp"
+                    step="0.01"
+                    placeholder="0"
+                  />
+                  <FormField
+                    label="Premium price"
+                    name="premiumPricePhp"
+                    step="0.01"
+                    placeholder="99"
+                  />
+                  <FormField
+                    label="Other revenue"
+                    name="otherRevenuePhp"
+                    step="0.01"
+                    placeholder="0"
+                  />
+                </div>
+              </FormSection>
+
+              <FormSection
+                title="AI token pricing"
+                helper="Prices are per 1M tokens in USD."
+              >
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    label="Groq input"
+                    name="groqInputUsdPerMillion"
+                    step="0.0001"
+                    defaultValue="0.59"
+                    placeholder="0.59"
+                  />
+                  <FormField
+                    label="Groq output"
+                    name="groqOutputUsdPerMillion"
+                    step="0.0001"
+                    defaultValue="0.79"
+                    placeholder="0.79"
+                  />
+                  <FormField
+                    label="Gemini input"
+                    name="geminiInputUsdPerMillion"
+                    step="0.0001"
+                    defaultValue="0.1"
+                    placeholder="0.10"
+                  />
+                  <FormField
+                    label="Gemini output"
+                    name="geminiOutputUsdPerMillion"
+                    step="0.0001"
+                    defaultValue="0.4"
+                    placeholder="0.40"
+                  />
+                  <FormField
+                    label="USD to PHP"
+                    name="usdToPhp"
+                    step="0.01"
+                    defaultValue={dashboard.currentMonthSummary.usdToPhp}
+                    placeholder="56"
+                  />
+                </div>
+              </FormSection>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Ads revenue (PHP)</label>
-                <input name="adsRevenuePhp" type="number" step="0.01" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
+            <FormSection title="Monthly infrastructure costs">
+              <div className="grid gap-4 md:grid-cols-3">
+                <FormField
+                  label="Firebase cost"
+                  name="firebaseCostPhp"
+                  step="0.01"
+                  placeholder="0"
+                />
+                <FormField
+                  label="Vercel cost"
+                  name="vercelCostPhp"
+                  step="0.01"
+                  placeholder="0"
+                />
+                <FormField
+                  label="Other cost"
+                  name="otherCostPhp"
+                  step="0.01"
+                  placeholder="0"
+                />
               </div>
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Premium price (PHP / premium user / month)</label>
-                <input name="premiumPricePhp" type="number" step="0.01" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Other revenue (PHP)</label>
-                <input name="otherRevenuePhp" type="number" step="0.01" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-            </div>
+            </FormSection>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Groq input price (USD / 1M tokens)</label>
-                <input name="groqInputUsdPerMillion" type="number" step="0.0001" defaultValue="0.59" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Groq output price (USD / 1M tokens)</label>
-                <input name="groqOutputUsdPerMillion" type="number" step="0.0001" defaultValue="0.79" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Gemini input price (USD / 1M tokens)</label>
-                <input name="geminiInputUsdPerMillion" type="number" step="0.0001" defaultValue="0.1" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Gemini output price (USD / 1M tokens)</label>
-                <input name="geminiOutputUsdPerMillion" type="number" step="0.0001" defaultValue="0.4" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-text-primary">USD to PHP</label>
-                <input name="usdToPhp" type="number" step="0.01" defaultValue={dashboard.currentMonthSummary.usdToPhp} className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Firebase cost (PHP)</label>
-                <input name="firebaseCostPhp" type="number" step="0.01" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Vercel cost (PHP)</label>
-                <input name="vercelCostPhp" type="number" step="0.01" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-text-primary">Other cost (PHP)</label>
-                <input name="otherCostPhp" type="number" step="0.01" className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/10 px-4 text-sm text-text-primary outline-none transition focus:border-accent/35" />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm font-semibold text-text-primary">Notes</label>
+            <FormSection title="Notes">
               <textarea
+                id="notes"
                 name="notes"
-                rows={4}
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm text-text-primary outline-none transition focus:border-accent/35"
+                rows={5}
+                placeholder="Add context for this saved estimate…"
+                className="w-full rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm text-text-primary outline-none transition focus:border-accent/35"
               />
-            </div>
+            </FormSection>
 
-            <button
-              type="submit"
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-accent/25 bg-accent/15 px-5 text-sm font-semibold text-text-primary transition hover:border-accent/40"
-            >
-              Save metric
-            </button>
+            <div className="flex flex-col gap-3 border-t border-white/8 pt-5 md:flex-row md:items-center md:justify-between">
+              <p className="text-xs leading-5 text-text-muted">
+                Values are estimates and can be updated anytime.
+              </p>
+              <button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-accent/25 bg-accent/15 px-5 text-sm font-semibold text-text-primary transition hover:border-accent/40"
+              >
+                Save settings
+              </button>
+            </div>
           </form>
         </section>
 

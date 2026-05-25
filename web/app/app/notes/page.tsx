@@ -6,6 +6,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import type { NoteFile, NoteFolder } from '@studycue/types';
 
 import { useMirror } from '@/context/mirror-context';
+import { compressNoteFile } from '@/lib/file-compression';
 import { getFirebaseDb, useWebAuth } from '@/lib/firebase-client';
 import {
   getLocalNoteFile,
@@ -95,24 +96,22 @@ function triggerFileDownload(url: string, fileName: string) {
   anchor.remove();
 }
 
-async function gzipBlobIfPossible(file: File): Promise<{ blob: Blob; compressed: boolean }> {
-  const CompressionCtor = (
-    window as unknown as { CompressionStream?: new (format: string) => CompressionStream }
-  ).CompressionStream;
-  if (!CompressionCtor) return { blob: file, compressed: false };
-  if (!SUPPORTED_MIME.has(file.type)) return { blob: file, compressed: false };
-
-  try {
-    const compressedBlob = await new Response(
-      file.stream().pipeThrough(new CompressionCtor('gzip')),
-    ).blob();
-    if (compressedBlob.size < file.size * 0.98) {
-      return { blob: compressedBlob, compressed: true };
-    }
-    return { blob: file, compressed: false };
-  } catch {
-    return { blob: file, compressed: false };
+function formatCompressionMessage(params: {
+  fileName: string;
+  originalSizeBytes: number;
+  storedSizeBytes: number;
+  savedBytes: number;
+  compressionMethod: string;
+  warning?: string;
+}) {
+  const { fileName, originalSizeBytes, storedSizeBytes, savedBytes, compressionMethod, warning } = params;
+  if (savedBytes > 0) {
+    return `Compressed "${fileName}" from ${formatUploadLimit(originalSizeBytes)} to ${formatUploadLimit(storedSizeBytes)}. Saved ${formatUploadLimit(savedBytes)} via ${compressionMethod}.`;
   }
+  if (warning) {
+    return warning;
+  }
+  return `No smaller version was produced for "${fileName}", so the original file was kept.`;
 }
 
 function UploadProgressBar({ task }: { task: NoteUploadTask }) {
@@ -267,7 +266,6 @@ export default function NotesRoutePage() {
     setMsg(null);
 
     let nextFileId = nextNumericId(files);
-    const useFirebaseStorage = publicFileStorageMode() === 'firebase';
     let reservedStorageBytes = 0;
 
     for (const file of incoming) {
@@ -283,17 +281,22 @@ export default function NotesRoutePage() {
         continue;
       }
 
-      const { blob, compressed } = useFirebaseStorage
-        ? { blob: file as Blob, compressed: false }
-        : await gzipBlobIfPossible(file);
-      if (blob.size > maxStoredFileBytes) {
+      const compression = await compressNoteFile(file, {
+        plan: planName,
+        maxStoredFileBytes,
+        targetBytes: maxStoredFileBytes,
+      });
+      const finalUpload = compression.file;
+      const storedSizeBytes = compression.compressedSizeBytes;
+      if (storedSizeBytes > maxStoredFileBytes) {
         setMsg(
-          `This file is larger than your plan allows. "${file.name}" would store as ${formatUploadLimit(blob.size)}, but ${planLabel} allows up to ${formatUploadLimit(maxStoredFileBytes)} per file. Upgrade options are coming soon.`,
+          compression.warning ||
+            `This file is still larger than your plan allows after compression. "${file.name}" would store as ${formatUploadLimit(storedSizeBytes)}, but ${planLabel} allows up to ${formatUploadLimit(maxStoredFileBytes)} per file. Upgrade options are coming soon.`,
         );
         continue;
       }
 
-      if (storageUsedBytes + reservedStorageBytes + blob.size > storageLimitBytes) {
+      if (storageUsedBytes + reservedStorageBytes + storedSizeBytes > storageLimitBytes) {
         setMsg(
           `You’ve reached your storage limit. ${planLabel} includes ${formatUploadLimit(storageLimitBytes)} total notes/file storage. Upgrade options are coming soon.`,
         );
@@ -306,8 +309,7 @@ export default function NotesRoutePage() {
       const storagePath = buildNoteStoragePath(user.uid, selectedFolder.id, safeFileName);
       const folderId = selectedFolder.id;
       const createdAt = new Date().toISOString();
-      const contentType = compressed ? 'application/gzip' : file.type;
-      const storedSizeBytes = blob.size;
+      const contentType = finalUpload.type || file.type || 'application/octet-stream';
 
       try {
         const nextStorageUsed = await reserveUserStorageBytes(
@@ -335,8 +337,19 @@ export default function NotesRoutePage() {
         continue;
       }
 
+      setMsg(
+        `${formatCompressionMessage({
+          fileName: file.name,
+          originalSizeBytes: compression.originalSizeBytes,
+          storedSizeBytes,
+          savedBytes: compression.savedBytes,
+          compressionMethod: compression.compressionMethod,
+          warning: compression.warning,
+        })} Plan file limit: ${formatUploadLimit(maxStoredFileBytes)}.`,
+      );
+
       startNoteUpload({
-        blob,
+        blob: finalUpload,
         storagePath,
         fileName: file.name,
         contentType,
@@ -350,12 +363,18 @@ export default function NotesRoutePage() {
             safeFileName,
             extension: extFromName(file.name) || null,
             sizeBytes: storedSizeBytes,
+            originalSizeBytes: compression.originalSizeBytes,
+            storedSizeBytes,
+            compressionSavedBytes: compression.savedBytes,
+            compressionRatio: compression.compressionRatio,
+            compressionMethod: compression.compressionMethod,
+            compressionWarning: compression.warning ?? null,
             storagePath,
             downloadUrl,
             downloadURL: downloadUrl,
-            compressed: compressed ? 1 : 0,
+            compressed: compression.usedCompressed ? 1 : 0,
             mimeType: file.type || null,
-            contentType: file.type || null,
+            contentType,
             createdAt,
             updatedAt: createdAt,
             storageProvider: isLocalNoteUrl(downloadUrl) ? 'local' : 'firebase',
@@ -370,10 +389,24 @@ export default function NotesRoutePage() {
             try {
               await saveNoteFileMetadata(user.uid, row);
             } catch (error) {
+              await deleteStoredNoteAsset(row).catch(() => {});
+              const nextStorageUsed = await adjustUserStorageUsedBytes(user.uid, -storedSizeBytes).catch(
+                () => null,
+              );
+              if (typeof nextStorageUsed === 'number') {
+                setPlanProfile((prev) => ({
+                  ...(prev ?? {}),
+                  storageUsedBytes: nextStorageUsed,
+                }));
+              }
+              commitMirror((prev) => ({
+                ...prev,
+                noteFiles: (prev.noteFiles ?? []).filter((existing) => existing.id !== row.id),
+              }));
               setMsg(
                 error instanceof Error
-                  ? `Uploaded "${file.name}", but metadata sync failed: ${error.message}`
-                  : `Uploaded "${file.name}", but metadata sync failed.`,
+                  ? `Upload rolled back for "${file.name}" because metadata sync failed: ${error.message}`
+                  : `Upload rolled back for "${file.name}" because metadata sync failed.`,
               );
             }
           })();
@@ -401,7 +434,10 @@ export default function NotesRoutePage() {
     }
 
     let blobToOpen = stored.blob;
-    if (file.compressed === 1) {
+    const usesLegacyGzip =
+      (file.compressionMethod === 'gzip' || file.contentType === 'application/gzip') &&
+      file.compressed === 1;
+    if (usesLegacyGzip) {
       const DecompressionCtor = (
         window as unknown as { DecompressionStream?: new (format: string) => DecompressionStream }
       ).DecompressionStream;
@@ -666,7 +702,7 @@ export default function NotesRoutePage() {
         <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">Study notes</p>
         <h1 className="sc-page-title text-text-primary">Notes</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Create folders and upload PDF/PPT files. Files sync to Firebase Storage when available;
+          Create folders and upload PDF, PPT, and PPTX files. Files sync to Firebase Storage when available;
           otherwise they stay in this browser only.
         </p>
         <p className="mt-2 text-sm text-text-secondary">{planLimitHint}</p>
@@ -767,7 +803,7 @@ export default function NotesRoutePage() {
                 className="mt-3 flex min-h-[190px] flex-col items-center justify-center rounded-[20px] border border-dashed border-border-strong bg-surface-2 p-6 text-center"
               >
                 <span className="mb-3 text-[30px] text-accent">↑</span>
-                <p className="text-sm text-text-secondary">Drag and drop PDF/PPT files here</p>
+                <p className="text-sm text-text-secondary">Drag and drop PDF, PPT, or PPTX files here</p>
                 <p className="mt-1 text-xs text-text-muted">{planLimitHint}</p>
                 <label className="sc-btn-secondary mt-4 cursor-pointer text-xs">
                   Choose files
@@ -813,10 +849,29 @@ export default function NotesRoutePage() {
                             {file.name}
                           </span>
                           <span className="block text-xs text-text-muted">
-                            {(file.sizeBytes / 1024 / 1024).toFixed(2)} MB
+                            {formatUploadLimit(file.storedSizeBytes ?? file.sizeBytes)}
+                            {typeof file.originalSizeBytes === 'number' &&
+                            file.originalSizeBytes > (file.storedSizeBytes ?? file.sizeBytes)
+                              ? ` · from ${formatUploadLimit(file.originalSizeBytes)}`
+                              : ''}
                             {file.compressed === 1 ? ' · compressed' : ''}
+                            {file.compressionMethod &&
+                            file.compressionMethod !== 'original-kept' &&
+                            file.compressionMethod !== 'ppt-original'
+                              ? ` · ${file.compressionMethod}`
+                              : ''}
                             {isLocal ? ' · local-only' : ' · synced'}
                           </span>
+                          {typeof file.compressionSavedBytes === 'number' &&
+                          file.compressionSavedBytes > 0 ? (
+                            <span className="block text-[11px] text-text-muted">
+                              Saved {formatUploadLimit(file.compressionSavedBytes)}
+                            </span>
+                          ) : file.compressionWarning ? (
+                            <span className="block text-[11px] text-text-muted">
+                              {file.compressionWarning}
+                            </span>
+                          ) : null}
                         </span>
                         <div className="flex items-center gap-3">
                           {isLocal ? (
