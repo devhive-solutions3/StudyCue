@@ -7,6 +7,7 @@ import MarketingThemeToggle from '@/components/marketing/MarketingThemeToggle';
 const NAV = [
   { href: '/', label: 'Home' },
   { href: '/features', label: 'Features' },
+  { href: '/pricing', label: 'Pricing' },
   { href: '/blog', label: 'Blog' },
   { href: '/help', label: 'Help' },
   { href: '/contact', label: 'Contact' },
@@ -103,6 +104,7 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
             </p>
             <FooterLink href="/">Home</FooterLink>
             <FooterLink href="/features">Features</FooterLink>
+            <FooterLink href="/pricing">Pricing</FooterLink>
             <FooterLink href="/blog">Blog</FooterLink>
             <FooterLink href="/help">Help</FooterLink>
             <FooterLink href="/contact">Contact</FooterLink>

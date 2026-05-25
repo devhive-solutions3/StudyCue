@@ -71,6 +71,7 @@ export default async function AdminAiUsagePage() {
                     <th className="px-4 py-3">Time</th>
                     <th className="px-4 py-3">UID</th>
                     <th className="px-4 py-3">Provider</th>
+                    <th className="px-4 py-3">Endpoint</th>
                     <th className="px-4 py-3">Model</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Tokens</th>
@@ -86,6 +87,7 @@ export default async function AdminAiUsagePage() {
                         <span className="break-all text-xs text-text-primary">{log.uid}</span>
                       </td>
                       <td className="px-4 py-4 align-top">{log.provider}</td>
+                      <td className="px-4 py-4 align-top">{log.endpoint ?? '—'}</td>
                       <td className="px-4 py-4 align-top">{log.model}</td>
                       <td className="px-4 py-4 align-top">{log.status}</td>
                       <td className="px-4 py-4 align-top">{formatTokens(log.totalTokensEstimate)}</td>

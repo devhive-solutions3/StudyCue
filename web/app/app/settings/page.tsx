@@ -22,8 +22,9 @@ import {
 } from '@/lib/firebase-client';
 import { getLocalProfilePhoto } from '@/lib/local-file-store';
 import { emptyMirror } from '@/lib/mirror-bootstrap';
-import { normalizePlan } from '@/lib/user-plan';
-import { PROFILE_LIMIT_HINT } from '@/lib/upload-limits';
+import { getStorageLimitBytes } from '@/lib/plan-access';
+import { getPlanConfig, normalizePlan } from '@/lib/user-plan';
+import { formatUploadLimit, PROFILE_LIMIT_HINT } from '@/lib/upload-limits';
 
 type Msg = { text: string; ok: boolean };
 
@@ -59,6 +60,8 @@ export default function SettingsRoutePage() {
   const [passwordLinkedNow, setPasswordLinkedNow] = useState(false);
   const [googleLinkedNow, setGoogleLinkedNow] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<'free' | 'beta' | 'premium' | null>(null);
+  const [storageUsedBytes, setStorageUsedBytes] = useState(0);
+  const [storageLimitBytes, setStorageLimitBytes] = useState<number | null>(null);
 
   const ids = getProviderIds(user);
   const googleLinked = googleLinkedNow || hasGoogleProvider(user);
@@ -243,12 +246,23 @@ export default function SettingsRoutePage() {
       try {
         const { doc, getDoc } = await import('firebase/firestore');
         const snapshot = await getDoc(doc(getFirebaseDb(), 'users', user.uid));
-        const data = snapshot.data() as { plan?: unknown; accountType?: unknown } | undefined;
+        const data = snapshot.data() as
+          | { plan?: unknown; accountType?: unknown; storageUsedBytes?: unknown; storageLimitBytes?: unknown }
+          | undefined;
         if (!active) return;
-        setCurrentPlan(normalizePlan(data?.plan ?? data?.accountType));
+        const normalizedPlan = normalizePlan(data?.plan ?? data?.accountType);
+        setCurrentPlan(normalizedPlan);
+        setStorageUsedBytes(
+          typeof data?.storageUsedBytes === 'number' && Number.isFinite(data.storageUsedBytes)
+            ? data.storageUsedBytes
+            : 0,
+        );
+        setStorageLimitBytes(getStorageLimitBytes(data ?? { plan: normalizedPlan }));
       } catch {
         if (!active) return;
         setCurrentPlan(null);
+        setStorageUsedBytes(0);
+        setStorageLimitBytes(null);
       }
     }
 
@@ -260,10 +274,18 @@ export default function SettingsRoutePage() {
 
   const planBadgeLabel =
     currentPlan === 'beta'
-      ? 'Beta Tester — full access during beta'
+      ? 'Beta Tester'
       : currentPlan === 'premium'
-        ? 'Premium'
+        ? 'StudyCue Plus'
         : 'Free plan';
+  const planBadgeSubtitle =
+    currentPlan === 'beta'
+      ? 'Premium-like feature access during beta with tester limits.'
+      : currentPlan === 'premium'
+        ? 'No ads, higher limits, advanced reports, and customization.'
+        : 'Core planner access with ads and starter limits.';
+  const planConfig = currentPlan ? getPlanConfig(currentPlan) : null;
+  const effectiveStorageLimitBytes = storageLimitBytes ?? planConfig?.storageLimitBytes ?? null;
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-full space-y-6 pb-10 md:max-w-2xl">
@@ -275,8 +297,21 @@ export default function SettingsRoutePage() {
           Manage your account, appearance, and privacy controls.
         </p>
         {currentPlan ? (
-          <div className="mt-3 inline-flex rounded-full border border-accent/20 bg-accent/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-text-primary">
-            {planBadgeLabel}
+          <div className="mt-3 max-w-xl rounded-[16px] border border-accent/20 bg-accent/12 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-primary">
+              {planBadgeLabel}
+            </p>
+            <p className="mt-1 text-sm text-text-secondary">{planBadgeSubtitle}</p>
+            {planConfig ? (
+              <p className="mt-2 text-xs text-text-muted">
+                Storage: {formatUploadLimit(storageUsedBytes)} /{' '}
+                {effectiveStorageLimitBytes ? formatUploadLimit(effectiveStorageLimitBytes) : '—'}
+                {' · '}
+                Cue daily limit: {planConfig.cueDailyLimit}
+                {' · '}
+                Ads: {planConfig.adsEnabled ? 'On' : 'Off'}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>

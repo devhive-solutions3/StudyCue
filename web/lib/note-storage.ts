@@ -94,6 +94,78 @@ export async function deleteNoteFolderMetadata(uid: string, folderId: number) {
   await deleteDoc(doc(db, 'users', uid, 'noteFolders', String(folderId)));
 }
 
+export async function reserveUserStorageBytes(
+  uid: string,
+  deltaBytes: number,
+  fallbackLimitBytes: number,
+) {
+  if (!uid.trim() || !Number.isFinite(deltaBytes) || deltaBytes <= 0) return 0;
+
+  const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+  const db = getFirebaseDb();
+  const ref = doc(db, 'users', uid);
+
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const data = (snapshot.data() ?? {}) as Record<string, unknown>;
+    const current =
+      typeof data.storageUsedBytes === 'number' && Number.isFinite(data.storageUsedBytes)
+        ? data.storageUsedBytes
+        : 0;
+    const limit =
+      typeof data.storageLimitBytes === 'number' && Number.isFinite(data.storageLimitBytes)
+        ? data.storageLimitBytes
+        : fallbackLimitBytes;
+
+    if (current + deltaBytes > limit) {
+      throw new Error('storage_limit_exceeded');
+    }
+
+    const next = current + deltaBytes;
+    transaction.set(
+      ref,
+      {
+        storageUsedBytes: next,
+        updatedAt: new Date().toISOString(),
+        serverTimestamp: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return next;
+  });
+}
+
+export async function adjustUserStorageUsedBytes(uid: string, deltaBytes: number) {
+  if (!uid.trim() || !Number.isFinite(deltaBytes) || deltaBytes === 0) return 0;
+
+  const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+  const db = getFirebaseDb();
+  const ref = doc(db, 'users', uid);
+
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const data = (snapshot.data() ?? {}) as Record<string, unknown>;
+    const current =
+      typeof data.storageUsedBytes === 'number' && Number.isFinite(data.storageUsedBytes)
+        ? data.storageUsedBytes
+        : 0;
+    const next = Math.max(0, current + deltaBytes);
+
+    transaction.set(
+      ref,
+      {
+        storageUsedBytes: next,
+        updatedAt: new Date().toISOString(),
+        serverTimestamp: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return next;
+  });
+}
+
 export async function noteFolderMetadataExists(uid: string, folderId: number) {
   const { doc, getDoc } = await import('firebase/firestore');
   const db = getFirebaseDb();
@@ -155,9 +227,15 @@ export type NoteAssetDeleteResult =
       storagePath: string | null;
     };
 
+function resolveFileDownloadUrl(file: NoteFile) {
+  return file.downloadUrl || file.downloadURL || '';
+}
+
 export async function deleteStoredNoteAsset(file: NoteFile) {
-  if (isLocalNoteUrl(file.downloadUrl)) {
-    const localMirrorKey = storagePathFromLocalNoteUrl(file.downloadUrl);
+  const resolvedDownloadUrl = resolveFileDownloadUrl(file);
+
+  if (resolvedDownloadUrl && isLocalNoteUrl(resolvedDownloadUrl)) {
+    const localMirrorKey = storagePathFromLocalNoteUrl(resolvedDownloadUrl);
     await deleteLocalNoteFile(localMirrorKey);
     return { status: 'local-deleted' as const, localMirrorKey };
   }
