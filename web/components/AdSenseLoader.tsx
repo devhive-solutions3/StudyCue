@@ -7,23 +7,22 @@ import { getAdsenseClient } from '@/lib/adsense-config';
 
 function readConsent(): 'granted' | 'denied' | null {
   if (typeof window === 'undefined') return null;
-  const v = localStorage.getItem(AD_CONSENT_KEY);
-  if (v === 'granted' || v === 'denied') return v;
+  const value = window.localStorage.getItem(AD_CONSENT_KEY);
+  if (value === 'granted' || value === 'denied') return value;
   return null;
 }
 
-/** Loads adsbygoogle.js once on marketing pages when consent is granted (or skip flag). */
-export default function GoogleAdLoader() {
-  const skip = process.env.NEXT_PUBLIC_SKIP_AD_CONSENT === '1';
+export default function AdSenseLoader() {
+  const skipConsent = process.env.NEXT_PUBLIC_SKIP_AD_CONSENT === '1';
   const client = getAdsenseClient();
-
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     function sync() {
-      const c = skip || readConsent() === 'granted';
-      setReady(!!client && c);
+      const consentGranted = skipConsent || readConsent() === 'granted';
+      setReady(Boolean(client) && consentGranted);
     }
+
     sync();
     window.addEventListener('studycue-consent-changed', sync);
     window.addEventListener('storage', sync);
@@ -31,14 +30,14 @@ export default function GoogleAdLoader() {
       window.removeEventListener('studycue-consent-changed', sync);
       window.removeEventListener('storage', sync);
     };
-  }, [client, skip]);
+  }, [client, skipConsent]);
 
   useEffect(() => {
     if (!ready || !client) return;
-    if (document.getElementById('adsense-loader')) return;
+    if (document.getElementById('studycue-adsense-script')) return;
 
     const script = document.createElement('script');
-    script.id = 'adsense-loader';
+    script.id = 'studycue-adsense-script';
     script.async = true;
     script.crossOrigin = 'anonymous';
     script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(client)}`;

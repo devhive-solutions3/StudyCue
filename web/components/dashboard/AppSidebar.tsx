@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useReducer, useState } from 'react';
 
 import { useDashboardUi } from '@/context/dashboard-ui';
+import AnimatedStudyCueLogo from '@/components/AnimatedStudyCueLogo';
 import { IconGlyph, type IconName } from '@/lib/icon-map';
 import { getLocalProfilePhoto } from '@/lib/local-file-store';
 import { useWebAuth } from '@/lib/firebase-client';
@@ -246,21 +247,10 @@ export default function AppSidebar({
               className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-[16px]"
               style={{ background: 'var(--sc-accent-soft)', boxShadow: 'var(--sc-shadow-accent)' }}
             >
-              <Image
-                src="/cue-icon-light.png"
-                alt="StudyCue"
-                width={44}
-                height={44}
-                className="h-11 w-11 object-contain dark:hidden"
-                priority
-              />
-              <Image
-                src="/cue-icon-dark-cropped.png"
-                alt="StudyCue"
-                width={44}
-                height={44}
-                className="hidden h-11 w-11 object-contain dark:block"
-                priority
+              <AnimatedStudyCueLogo
+                size={44}
+                ariaLabel="StudyCue mascot"
+                className="h-11 w-11 rounded-[12px]"
               />
             </span>
             {!collapsed ? (

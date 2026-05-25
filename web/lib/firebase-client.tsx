@@ -30,6 +30,7 @@ import {
 
 import { getFirebasePublicConfig, publicFileStorageMode } from '@/lib/public-env';
 import { saveLocalProfilePhoto } from '@/lib/local-file-store';
+import { buildNewUserProfile } from '@/lib/user-plan';
 
 export const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SIGNED_IN_AT_KEY = 'studycue.web.signedInAt';
@@ -184,6 +185,49 @@ export function getFirebaseStorage() {
   return getStorage(app);
 }
 
+async function ensureUserProfileDocument(user: FirebaseUser) {
+  const { doc, getDoc, serverTimestamp, setDoc } = await import('firebase/firestore');
+  const db = getFirebaseDb();
+  const ref = doc(db, 'users', user.uid);
+  const snapshot = await getDoc(ref);
+  const nowIso = new Date().toISOString();
+
+  if (!snapshot.exists()) {
+    const profile = buildNewUserProfile({
+      uid: user.uid,
+      email: user.email ?? null,
+      displayName: user.displayName ?? null,
+      photoURL: user.photoURL ?? null,
+    });
+
+    await setDoc(
+      ref,
+      {
+        ...profile,
+        serverTimestamp: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return;
+  }
+
+  const current = snapshot.data() as Record<string, unknown>;
+  await setDoc(
+    ref,
+    {
+      uid: user.uid,
+      email: user.email ?? (typeof current.email === 'string' ? current.email : null),
+      displayName:
+        user.displayName ?? (typeof current.displayName === 'string' ? current.displayName : null),
+      photoURL: user.photoURL ?? (typeof current.photoURL === 'string' ? current.photoURL : null),
+      lastLoginAt: nowIso,
+      updatedAt: nowIso,
+      serverTimestamp: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 const Ctx = createContext<AuthCtx | null>(null);
 
 export function WebAuthProvider({ children }: { children: ReactNode }) {
@@ -277,6 +321,12 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
           photoURL: u.photoURL,
           providerIds: u.providerData.map((p) => p.providerId),
         });
+
+        try {
+          await ensureUserProfileDocument(u);
+        } catch (error) {
+          if (IS_DEV) console.warn('User profile sync failed', { uid: u.uid, error });
+        }
 
         try {
           const token = await u.getIdToken(true);
@@ -378,6 +428,7 @@ export async function signInEmail(email: string, password: string) {
   const { auth } = getFirebase();
   const { signInWithEmailAndPassword } = await import('firebase/auth');
   const cred = await signInWithEmailAndPassword(auth, email, password);
+  await ensureUserProfileDocument(cred.user).catch(() => {});
   if (IS_DEV) console.info('Firebase email sign-in succeeded', { uid: cred.user.uid });
   return cred.user;
 }
@@ -394,6 +445,7 @@ export async function registerEmail(email: string, password: string, displayName
   );
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(cred.user, { displayName });
+  await ensureUserProfileDocument(cred.user).catch(() => {});
   if (IS_DEV) console.info('Firebase email registration succeeded', { uid: cred.user.uid });
   return cred.user;
 }

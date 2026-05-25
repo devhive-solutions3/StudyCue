@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 import GoogleAdSenseAd from '@/components/ads/GoogleAdSenseAd';
 
-import { getAllPosts } from '@/lib/posts';
+import { getPublishedBlogPosts } from '@/lib/blog-store';
 import { canonical } from '@/lib/site-config';
 
 export const metadata: Metadata = {
@@ -12,10 +12,13 @@ export const metadata: Metadata = {
   alternates: { canonical: canonical('/blog') },
 };
 
-export default function BlogIndexPage() {
-  const posts = getAllPosts();
+export default async function BlogIndexPage() {
+  const posts = await getPublishedBlogPosts();
   const featuredPost =
-    posts.find((post) => post.slug === 'studycue-beta-access') ?? posts[0] ?? null;
+    posts.find((post) => post.featured) ??
+    posts.find((post) => post.slug === 'studycue-beta-access') ??
+    posts[0] ??
+    null;
   const remainingPosts = posts.filter((post) => post.slug !== featuredPost?.slug);
 
   return (

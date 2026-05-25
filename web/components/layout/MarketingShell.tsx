@@ -1,7 +1,7 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import AnimatedStudyCueLogo from '@/components/AnimatedStudyCueLogo';
 import MarketingThemeToggle from '@/components/marketing/MarketingThemeToggle';
 
 const NAV = [
@@ -30,21 +30,10 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
               className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[12px]"
               style={{ background: 'var(--sc-accent-soft)' }}
             >
-              <Image
-                src="/cue-icon-light.png"
-                alt="StudyCue"
-                width={40}
-                height={40}
-                className="h-9 w-9 object-cover dark:hidden"
-                priority
-              />
-              <Image
-                src="/cue-icon-dark-cropped.png"
-                alt="StudyCue"
-                width={40}
-                height={40}
-                className="hidden h-9 w-9 object-cover dark:block"
-                priority
+              <AnimatedStudyCueLogo
+                size={36}
+                ariaLabel="StudyCue mascot"
+                className="h-9 w-9 rounded-[10px]"
               />
             </span>
             <span
