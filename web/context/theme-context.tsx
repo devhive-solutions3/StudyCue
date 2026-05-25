@@ -30,6 +30,7 @@ function resolveEffective(theme: AppTheme): 'light' | 'dark' {
 
 function applyTheme(theme: AppTheme) {
   const effective = resolveEffective(theme);
+  document.documentElement.dataset.theme = effective;
   if (effective === 'dark') {
     document.documentElement.classList.add('dark');
   } else {

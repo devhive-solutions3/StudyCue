@@ -6,21 +6,15 @@ import JsonLd from '@/components/seo/JsonLd';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-import { getAllPosts, getPostBySlug } from '@/lib/posts';
+import { getPublishedBlogPostBySlug } from '@/lib/blog-store';
 import { canonical, siteTitle } from '@/lib/site-config';
 import { PRODUCTION_CANONICAL_ORIGIN, siteName } from '@/lib/seo-config';
-
-export const dynamicParams = false;
-
-export function generateStaticParams() {
-  return getAllPosts().map((post) => ({ slug: post.slug }));
-}
 
 export async function generateMetadata(props: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const slug = decodeURIComponent((await props.params).slug);
-  const post = getPostBySlug(slug);
+  const post = await getPublishedBlogPostBySlug(slug);
   if (!post) return { title: siteTitle };
 
   const url = canonical(`/blog/${post.slug}`);
@@ -34,7 +28,7 @@ export async function generateMetadata(props: {
 
 export default async function BlogArticlePage(props: { params: Promise<{ slug: string }> }) {
   const slug = decodeURIComponent((await props.params).slug);
-  const post = getPostBySlug(slug);
+  const post = await getPublishedBlogPostBySlug(slug);
   if (!post) notFound();
 
   const ld = {

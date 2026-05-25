@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import PasswordField from '@/components/forms/PasswordField';
 import { useMirror } from '@/context/mirror-context';
@@ -18,9 +18,11 @@ import {
   scheduleAccountDeletion,
   uploadProfilePic,
   useWebAuth,
+  getFirebaseDb,
 } from '@/lib/firebase-client';
 import { getLocalProfilePhoto } from '@/lib/local-file-store';
 import { emptyMirror } from '@/lib/mirror-bootstrap';
+import { normalizePlan } from '@/lib/user-plan';
 import { PROFILE_LIMIT_HINT } from '@/lib/upload-limits';
 
 type Msg = { text: string; ok: boolean };
@@ -56,6 +58,7 @@ export default function SettingsRoutePage() {
 
   const [passwordLinkedNow, setPasswordLinkedNow] = useState(false);
   const [googleLinkedNow, setGoogleLinkedNow] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<'free' | 'beta' | 'premium' | null>(null);
 
   const ids = getProviderIds(user);
   const googleLinked = googleLinkedNow || hasGoogleProvider(user);
@@ -228,6 +231,40 @@ export default function SettingsRoutePage() {
     .join('')
     .toUpperCase() || 'SC';
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadProfilePlan() {
+      if (!user?.uid) {
+        setCurrentPlan(null);
+        return;
+      }
+
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const snapshot = await getDoc(doc(getFirebaseDb(), 'users', user.uid));
+        const data = snapshot.data() as { plan?: unknown; accountType?: unknown } | undefined;
+        if (!active) return;
+        setCurrentPlan(normalizePlan(data?.plan ?? data?.accountType));
+      } catch {
+        if (!active) return;
+        setCurrentPlan(null);
+      }
+    }
+
+    void loadProfilePlan();
+    return () => {
+      active = false;
+    };
+  }, [user?.uid]);
+
+  const planBadgeLabel =
+    currentPlan === 'beta'
+      ? 'Beta Tester — full access during beta'
+      : currentPlan === 'premium'
+        ? 'Premium'
+        : 'Free plan';
+
   return (
     <div className="mx-auto w-full min-w-0 max-w-full space-y-6 pb-10 md:max-w-2xl">
       {/* Header */}
@@ -237,6 +274,11 @@ export default function SettingsRoutePage() {
         <p className="mt-1 text-sm text-text-secondary">
           Manage your account, appearance, and privacy controls.
         </p>
+        {currentPlan ? (
+          <div className="mt-3 inline-flex rounded-full border border-accent/20 bg-accent/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-text-primary">
+            {planBadgeLabel}
+          </div>
+        ) : null}
       </div>
 
       {/* Global message */}

@@ -7,7 +7,16 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: ['/', '/features', '/blog', '/help', '/contact', '/privacy', '/terms', '/cookies'],
-      disallow: ['/app', '/login', '/register', '/forgot-password', '/auth/action', '/api/session'],
+      disallow: [
+        '/app',
+        '/admin',
+        '/api/admin',
+        '/login',
+        '/register',
+        '/forgot-password',
+        '/auth/action',
+        '/api/session',
+      ],
     },
     sitemap: `${PRODUCTION_CANONICAL_ORIGIN}/sitemap.xml`,
   };
