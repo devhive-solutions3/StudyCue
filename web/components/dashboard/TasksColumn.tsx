@@ -10,12 +10,15 @@ import { useMirror } from '@/context/mirror-context';
 import { nextNumericId } from '@/lib/mirror-bootstrap';
 import { isActiveTask, isTaskDone } from '@/lib/study-task-sync';
 
+const DASHBOARD_TASK_LIMIT = 5;
+
 export default function TasksColumn({ mirror }: { mirror: CloudMirrorV1 }) {
   const { commitMirror } = useMirror();
   const { newTaskSignal } = useDashboardUi();
 
   const [title, setTitle] = useState('');
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (!newTaskSignal) return;
@@ -70,17 +73,21 @@ export default function TasksColumn({ mirror }: { mirror: CloudMirrorV1 }) {
     if (activeTab === 'Overdue') return !done && !!due && due.isBefore(today, 'day');
     return isActiveTask(t);
   });
+  const visibleTasks = expanded ? filtered : filtered.slice(0, DASHBOARD_TASK_LIMIT);
+  const canExpand = filtered.length > DASHBOARD_TASK_LIMIT;
   const doneCount = mirror.tasks.filter((task) => isTaskDone(task)).length;
 
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') {
       console.info('[dashboard-tasks]', {
         activeTab,
-        visibleTaskCount: filtered.length,
+        visibleTaskCount: visibleTasks.length,
+        filteredTaskCount: filtered.length,
         totalTaskCount: mirror.tasks.length,
+        expanded,
       });
     }
-  }, [activeTab, filtered.length, mirror.tasks.length]);
+  }, [activeTab, expanded, filtered.length, mirror.tasks.length, visibleTasks.length]);
 
   return (
     <section>
@@ -106,7 +113,10 @@ export default function TasksColumn({ mirror }: { mirror: CloudMirrorV1 }) {
             <button
               key={tab}
               type="button"
-              onClick={() => setActiveTab(tab)}
+              onClick={() => {
+                setActiveTab(tab);
+                if (tab !== 'All') setExpanded(false);
+              }}
               className={[
                 'whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-extrabold',
                 activeTab === tab ? 'border-transparent bg-accent text-white' : 'border-transparent text-text-muted hover:bg-surface-2',
@@ -140,8 +150,14 @@ export default function TasksColumn({ mirror }: { mirror: CloudMirrorV1 }) {
               <p className="mt-1 text-xs text-text-muted">Add your first task to get started.</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {filtered.slice(0, 15).map((t) => {
+            <div className="space-y-3">
+              {activeTab === 'All' && canExpand ? (
+                <p className="text-xs text-text-muted">
+                  Showing {visibleTasks.length} of {filtered.length} open tasks
+                </p>
+              ) : null}
+              <div className="space-y-2">
+              {visibleTasks.map((t) => {
                 const done = isTaskDone(t);
                 return (
                   <button
@@ -155,6 +171,16 @@ export default function TasksColumn({ mirror }: { mirror: CloudMirrorV1 }) {
                   </button>
                 );
               })}
+              </div>
+              {activeTab === 'All' && canExpand ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((value) => !value)}
+                  className="text-xs font-extrabold text-accent transition hover:opacity-80"
+                >
+                  {expanded ? 'Show less' : 'Show all tasks'}
+                </button>
+              ) : null}
             </div>
           )}
         </div>
