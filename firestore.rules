@@ -37,5 +37,11 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
     }
+
+    // Bug reports are written by the server (Admin SDK). Lock down direct client access.
+    match /bugReports/{reportId} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
   }
 }

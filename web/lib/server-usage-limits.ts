@@ -16,6 +16,7 @@ type UsageDecision =
       dateKey?: string;
       monthKey?: string;
       resetAt: string;
+      reason?: never;
     }
   | {
       allowed: false;
@@ -136,83 +137,170 @@ function requestHasGroqImage(body: unknown) {
   });
 }
 
-async function reserveMonthlyScheduleImageImport(
+async function reserveScheduleImageCueUsage(
   uid: string,
   requestId?: string | null,
-): Promise<UsageDecision> {
+): Promise<{ daily: UsageDecision; scheduleImage: UsageDecision }> {
   const limits = await getPlanLimitsByUid(uid);
   const createdAt = isoNow();
+  const now = new Date(createdAt);
+  const dateKey = dateKeyFromIso(createdAt);
   const monthKey = monthKeyFromIso(createdAt);
-  const limit = limits.scheduleImageImportsMonthly;
-  const resetAt = nextUtcMonthIso(new Date(createdAt));
+  const dailyLimit = limits.cueDailyLimit;
+  const scheduleLimit = limits.scheduleImageImportsMonthly;
+  const dailyResetAt = nextUtcDayIso(now);
+  const scheduleResetAt = nextUtcMonthIso(now);
 
   if (!readFirebaseAdminStatus().configured) {
     if (IS_DEV) {
-      console.warn('[usage-limit] admin db unavailable; skipping schedule image enforcement');
+      console.warn('[usage-limit] admin db unavailable; skipping schedule image cue enforcement');
     }
-    return { allowed: true, used: 0, limit, monthKey, resetAt };
+    return {
+      daily: { allowed: true, used: 0, limit: dailyLimit, dateKey, resetAt: dailyResetAt },
+      scheduleImage: {
+        allowed: true,
+        used: 0,
+        limit: scheduleLimit,
+        monthKey,
+        resetAt: scheduleResetAt,
+      },
+    };
   }
 
   const db = getFirebaseAdminDb();
-  const ref = db.doc(`users/${uid}/usage/${monthKey}`);
+  const dailyRef = db.doc(`users/${uid}/usage/${dateKey}`);
+  const scheduleRef = db.doc(`users/${uid}/usage/${monthKey}`);
   const requestRef = requestId?.trim() ? db.doc(`users/${uid}/usageRequests/${requestId.trim()}`) : null;
+
   const result = await db.runTransaction(async (transaction) => {
-    const [snapshot, requestSnapshot] = await Promise.all([
-      transaction.get(ref),
+    const [dailySnapshot, scheduleSnapshot, requestSnapshot] = await Promise.all([
+      transaction.get(dailyRef),
+      transaction.get(scheduleRef),
       requestRef ? transaction.get(requestRef) : Promise.resolve(null),
     ]);
-    const current = snapshot.data() as Record<string, unknown> | undefined;
-    const used =
-      typeof current?.scheduleImageImportsUsed === 'number' ? current.scheduleImageImportsUsed : 0;
+
+    const dailyData = dailySnapshot.data() as Record<string, unknown> | undefined;
+    const scheduleData = scheduleSnapshot.data() as Record<string, unknown> | undefined;
     const requestData = (requestSnapshot?.data() ?? {}) as Record<string, unknown>;
+    const dailyUsed = typeof dailyData?.cueRequestsUsed === 'number' ? dailyData.cueRequestsUsed : 0;
+    const scheduleUsed =
+      typeof scheduleData?.scheduleImageImportsUsed === 'number'
+        ? scheduleData.scheduleImageImportsUsed
+        : 0;
+    const dailyAlreadyCounted = requestData.cueDailyCountedDateKey === dateKey;
+    const scheduleAlreadyCounted = requestData.scheduleImageCountedMonthKey === monthKey;
 
-    if (requestRef && requestData.scheduleImageCountedMonthKey === monthKey) {
-      return { allowed: true as const, used, limit, monthKey, resetAt };
-    }
-
-    if (used >= limit) {
+    if (!dailyAlreadyCounted && dailyUsed >= dailyLimit) {
       return {
-        allowed: false as const,
-        used,
-        limit,
-        monthKey,
-        resetAt,
-        reason: 'schedule_image_monthly' as const,
+        daily: {
+          allowed: false as const,
+          used: dailyUsed,
+          limit: dailyLimit,
+          dateKey,
+          resetAt: dailyResetAt,
+          reason: 'cue_daily' as const,
+        },
+        scheduleImage: {
+          allowed: true as const,
+          used: scheduleUsed,
+          limit: scheduleLimit,
+          monthKey,
+          resetAt: scheduleResetAt,
+        },
       };
     }
 
-    transaction.set(
-      ref,
-      {
-        scheduleImageImportsUsed: FieldValue.increment(1),
-        scheduleImageImportsMonthly: limit,
-        monthKey,
-        updatedAt: createdAt,
-        serverTimestamp: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    if (requestRef) {
+    if (!scheduleAlreadyCounted && scheduleUsed >= scheduleLimit) {
+      return {
+        daily: {
+          allowed: true as const,
+          used: dailyUsed,
+          limit: dailyLimit,
+          dateKey,
+          resetAt: dailyResetAt,
+        },
+        scheduleImage: {
+          allowed: false as const,
+          used: scheduleUsed,
+          limit: scheduleLimit,
+          monthKey,
+          resetAt: scheduleResetAt,
+          reason: 'schedule_image_monthly' as const,
+        },
+      };
+    }
+
+    const dailyIncrement = dailyAlreadyCounted ? 0 : 1;
+    const scheduleIncrement = scheduleAlreadyCounted ? 0 : 1;
+
+    if (dailyIncrement > 0) {
       transaction.set(
-        requestRef,
+        dailyRef,
         {
-          scheduleImageCountedMonthKey: monthKey,
+          cueRequestsUsed: FieldValue.increment(dailyIncrement),
+          cueDailyLimit: dailyLimit,
+          dateKey,
           updatedAt: createdAt,
           serverTimestamp: FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
     }
-    return { allowed: true as const, used: used + 1, limit, monthKey, resetAt };
+
+    if (scheduleIncrement > 0) {
+      transaction.set(
+        scheduleRef,
+        {
+          scheduleImageImportsUsed: FieldValue.increment(scheduleIncrement),
+          scheduleImageImportsMonthly: scheduleLimit,
+          monthKey,
+          updatedAt: createdAt,
+          serverTimestamp: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    if (requestRef && (dailyIncrement > 0 || scheduleIncrement > 0)) {
+      transaction.set(
+        requestRef,
+        {
+          ...(dailyIncrement > 0 ? { cueDailyCountedDateKey: dateKey } : {}),
+          ...(scheduleIncrement > 0 ? { scheduleImageCountedMonthKey: monthKey } : {}),
+          updatedAt: createdAt,
+          serverTimestamp: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    return {
+      daily: {
+        allowed: true as const,
+        used: dailyUsed + dailyIncrement,
+        limit: dailyLimit,
+        dateKey,
+        resetAt: dailyResetAt,
+      },
+      scheduleImage: {
+        allowed: true as const,
+        used: scheduleUsed + scheduleIncrement,
+        limit: scheduleLimit,
+        monthKey,
+        resetAt: scheduleResetAt,
+      },
+    };
   });
 
   if (IS_DEV) {
-    console.info('[usage-limit] schedule image reservation', {
+    console.info('[usage-limit] schedule image cue reservation', {
       uidDetected: Boolean(uid),
-      status: result.allowed ? 'reserved' : 'blocked',
+      dateKey,
       monthKey,
-      limit,
-      used: result.used,
+      dailyStatus: result.daily.allowed ? 'reserved' : 'blocked',
+      scheduleStatus: result.scheduleImage.allowed ? 'reserved' : 'blocked',
+      dailyUsed: result.daily.used,
+      scheduleUsed: result.scheduleImage.used,
     });
   }
 
@@ -221,20 +309,21 @@ async function reserveMonthlyScheduleImageImport(
 
 export async function reserveCueRequestUsage(uid: string, body: unknown, requestId?: string | null) {
   const [planLimits, profile] = await Promise.all([getPlanLimitsByUid(uid), getUserProfileByUid(uid)]);
-  const daily = await reserveDailyUsage(uid, requestId);
-  if (!daily.allowed) {
-    return {
-      allowed: false as const,
-      planLimits,
-      profile,
-      daily,
-      scheduleImage: null,
-      message: "You’ve reached your daily Cue AI limit for your plan.",
-    };
-  }
-
   const hasScheduleImage = requestHasGeminiInlineImage(body) || requestHasGroqImage(body);
+
   if (!hasScheduleImage) {
+    const daily = await reserveDailyUsage(uid, requestId);
+    if (!daily.allowed) {
+      return {
+        allowed: false as const,
+        planLimits,
+        profile,
+        daily,
+        scheduleImage: null,
+        message: "You’ve reached your daily Cue AI limit for your plan.",
+      };
+    }
+
     return {
       allowed: true as const,
       planLimits,
@@ -245,7 +334,18 @@ export async function reserveCueRequestUsage(uid: string, body: unknown, request
     };
   }
 
-  const scheduleImage = await reserveMonthlyScheduleImageImport(uid, requestId);
+  const { daily, scheduleImage } = await reserveScheduleImageCueUsage(uid, requestId);
+  if (!daily.allowed) {
+    return {
+      allowed: false as const,
+      planLimits,
+      profile,
+      daily,
+      scheduleImage,
+      message: "You’ve reached your daily Cue AI limit for your plan.",
+    };
+  }
+
   if (!scheduleImage.allowed) {
     return {
       allowed: false as const,

@@ -12,6 +12,8 @@ type Ui = {
   focusLockModalOpen: boolean;
   openFocusLockModal: () => void;
   closeFocusLockModal: () => void;
+  pendingNavHref: string | null;
+  setPendingNavHref: (href: string | null) => void;
 };
 
 const UiCtx = createContext<Ui | null>(null);
@@ -21,6 +23,7 @@ export function DashboardUiProvider({ children }: { children: ReactNode }) {
   const [newTaskSignal, setSignal] = useState(0);
   const [focusLocked, setFocusLocked] = useState(false);
   const [focusLockModalOpen, setFocusLockModalOpen] = useState(false);
+  const [pendingNavHref, setPendingNavHref] = useState<string | null>(null);
   const signalNewTask = useCallback(() => setSignal((x) => x + 1), []);
   const openFocusLockModal = useCallback(() => setFocusLockModalOpen(true), []);
   const closeFocusLockModal = useCallback(() => setFocusLockModalOpen(false), []);
@@ -37,8 +40,19 @@ export function DashboardUiProvider({ children }: { children: ReactNode }) {
         focusLockModalOpen,
         openFocusLockModal,
         closeFocusLockModal,
+        pendingNavHref,
+        setPendingNavHref,
       }) satisfies Ui,
-    [closeFocusLockModal, commandOpen, focusLockModalOpen, newTaskSignal, openFocusLockModal, signalNewTask, focusLocked],
+    [
+      closeFocusLockModal,
+      commandOpen,
+      focusLockModalOpen,
+      newTaskSignal,
+      openFocusLockModal,
+      pendingNavHref,
+      signalNewTask,
+      focusLocked,
+    ],
   );
 
   return <UiCtx.Provider value={value}>{children}</UiCtx.Provider>;

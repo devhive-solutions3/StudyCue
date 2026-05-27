@@ -1,4 +1,5 @@
 import { getFirebasePublicConfig } from '@/lib/public-env';
+import { STUDYCUE_COOKIE } from '@/lib/session';
 
 export type VerifiedFirebaseUser = {
   uid: string;
@@ -178,8 +179,23 @@ export async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFi
   return user;
 }
 
+function readSessionCookieToken(request: Request): string | null {
+  const cookieHeader = request.headers.get('cookie');
+  if (!cookieHeader) return null;
+  for (const entry of cookieHeader.split(';')) {
+    const [rawName, ...rawValue] = entry.trim().split('=');
+    if (rawName !== STUDYCUE_COOKIE) continue;
+    const token = rawValue.join('=').trim();
+    return token || null;
+  }
+  return null;
+}
+
 export async function requireFirebaseAuth(request: Request): Promise<VerifiedFirebaseUser | null> {
-  const token = readBearerToken(request);
-  if (!token) return null;
-  return verifyFirebaseIdToken(token);
+  const bearerToken = readBearerToken(request);
+  if (bearerToken) return verifyFirebaseIdToken(bearerToken);
+
+  const cookieToken = readSessionCookieToken(request);
+  if (!cookieToken) return null;
+  return verifyFirebaseIdToken(cookieToken);
 }

@@ -36,6 +36,7 @@ import {
   isBlogSlugTaken,
   type ManagedBlogPost,
 } from '@/lib/blog-store';
+import { readBugReportOverviewCounts } from '@/lib/bug-report-server';
 import {
   buildNewUserProfile,
   buildPlanUpdate,
@@ -81,6 +82,12 @@ const ADMIN_SECTIONS: AdminSection[] = [
     href: '/admin/security',
     description: 'Review audit trails, blocked admin access, rate limits, and API error signals.',
     metric: 'Audit trail',
+  },
+  {
+    title: 'Reports',
+    href: '/admin/reports',
+    description: 'Review user bug reports, screenshots, triage status, and internal admin notes.',
+    metric: 'Bug reports',
   },
 ];
 
@@ -232,6 +239,8 @@ function emptyOverviewStats(): AdminOverviewStats {
     publishedPosts: 0,
     netThisMonthPhp: 0,
     securityEventsToday: 0,
+    openBugReports: 0,
+    bugReportsToday: 0,
   };
 }
 
@@ -418,7 +427,7 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
     const monthStart = `${monthKeyFromIso(isoNow())}-01`;
     const userCounts = await readOverviewUserCounts();
 
-    const [aiTodayDoc, blogPosts, securityToday, revenueDocs] = await Promise.all([
+    const [aiTodayDoc, blogPosts, securityToday, revenueDocs, bugReportCounts] = await Promise.all([
       db.doc(`adminMetrics/aiUsage/daily/${today}`).get().catch(() => null),
       db.collection('blogPosts').where('status', '==', 'published').count().get().catch(() => null),
       db.collection('securityLogs').where('dateKey', '==', today).count().get().catch(() => null),
@@ -429,6 +438,7 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
         .where(FieldPath.documentId(), '>=', monthStart.slice(0, 7))
         .get()
         .catch(() => null),
+      readBugReportOverviewCounts().catch(() => null),
     ]);
 
     const netThisMonthPhp =
@@ -443,6 +453,8 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
       publishedPosts: blogPosts?.data().count ?? 0,
       netThisMonthPhp,
       securityEventsToday: securityToday?.data().count ?? 0,
+      openBugReports: bugReportCounts?.openReports ?? 0,
+      bugReportsToday: bugReportCounts?.reportsToday ?? 0,
       usersWarning: userCounts.warning,
     };
   } catch (error) {

@@ -15,6 +15,8 @@ const overviewCards = [
   { key: 'publishedPosts', label: 'Published posts', tone: 'bg-teal-100 text-teal-600' },
   { key: 'netThisMonthPhp', label: 'Net this month', tone: 'bg-purple-100 text-purple-600' },
   { key: 'securityEventsToday', label: 'Security events today', tone: 'bg-amber-100 text-amber-600' },
+  { key: 'openBugReports', label: 'Open bug reports', tone: 'bg-rose-100 text-rose-600', href: '/admin/reports' },
+  { key: 'bugReportsToday', label: 'Bug reports today', tone: 'bg-orange-100 text-orange-600', href: '/admin/reports' },
 ] as const;
 
 export default async function AdminDashboardPage() {
@@ -60,15 +62,26 @@ export default async function AdminDashboardPage() {
             card.key === 'netThisMonthPhp'
               ? adminMoney(stats[card.key])
               : formatCompactNumber(stats[card.key]);
+          const inner = (
+            <>
+              <div className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] ${card.tone}`}>
+                {card.label}
+              </div>
+              <p className="mt-4 text-3xl font-black tracking-tight text-text-primary">{value}</p>
+            </>
+          );
           return (
             <article
               key={card.key}
               className="rounded-[24px] border border-white/10 bg-white/5 p-5 shadow-[0_16px_48px_rgba(9,12,35,0.18)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6"
             >
-              <div className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] ${card.tone}`}>
-                {card.label}
-              </div>
-              <p className="mt-4 text-3xl font-black tracking-tight text-text-primary">{value}</p>
+              {'href' in card && card.href ? (
+                <Link href={card.href} className="block transition hover:opacity-90">
+                  {inner}
+                </Link>
+              ) : (
+                inner
+              )}
             </article>
           );
         })}

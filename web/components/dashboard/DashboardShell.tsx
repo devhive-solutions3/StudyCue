@@ -10,7 +10,7 @@ import GlowBackground from '@/components/layout/GlowBackground';
 import AddTaskFab from './AddTaskFab';
 import AppSidebar from './AppSidebar';
 import AppTopbar from './AppTopbar';
-import FocusLockModal from './FocusLockModal';
+import FocusTimerModals, { FocusTimerUiBridge } from '@/components/focus/FocusTimerModals';
 import MobileBottomNav from './MobileBottomNav';
 
 const SIDEBAR_COLLAPSED_KEY = 'studycue_sidebar_collapsed';
@@ -59,6 +59,8 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             ? 'Stats'
         : pathname === '/app/settings'
           ? 'Settings'
+          : pathname === '/app/report-bug'
+            ? 'Bug reports'
             : pathname === '/app/profile'
               ? 'Profile'
               : 'Workspace';
@@ -94,7 +96,8 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         </div>
         <AddTaskFab />
         <MobileBottomNav />
-        <FocusLockModal />
+        <FocusTimerUiBridge />
+        <FocusTimerModals />
       </div>
     </GlowBackground>
   );
