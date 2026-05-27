@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 
 import { getFirebaseDb, useWebAuth } from '@/lib/firebase-client';
-import { canUsePremiumStudyTools, getUserPlan } from '@/lib/plan-access';
+import { canUseStudyToolsAi, getUserPlan } from '@/lib/plan-access';
 
 export function usePremiumStudyTools() {
   const { user, ready } = useWebAuth();
@@ -20,7 +20,7 @@ export function usePremiumStudyTools() {
       (snapshot) => {
         const profile = snapshot.exists() ? (snapshot.data() as Record<string, unknown>) : null;
         setProfileUid(user.uid);
-        setAllowed(canUsePremiumStudyTools(profile));
+        setAllowed(canUseStudyToolsAi(profile));
         const plan = getUserPlan(profile);
         setPlanLabel(plan === 'beta' ? 'Beta' : plan === 'premium' ? 'StudyCue Plus' : 'Free');
       },

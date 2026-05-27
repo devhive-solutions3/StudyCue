@@ -6,10 +6,16 @@ import { useEffect, useRef, useState } from 'react';
 
 import SaveStudyItemModal from '@/components/study-tools/SaveStudyItemModal';
 import StudySourcePicker from '@/components/study-tools/StudySourcePicker';
+import StudyToolsUsageIndicator from '@/components/study-tools/StudyToolsUsageIndicator';
 import { useMirror } from '@/context/mirror-context';
 import { useWebAuth } from '@/lib/firebase-client';
+import { readCueGeneratedQuiz } from '@/lib/cue-study-session';
 import { readStudySourceFromSession, saveStudySourceToSession } from '@/lib/study-source-session';
 import { studyGenerateBlockedMessage } from '@/lib/study-source-validation';
+import {
+  STUDY_TOOLS_DAILY_LIMIT_MESSAGE,
+  studyToolsFetchHeaders,
+} from '@/lib/study-tools-request';
 import {
   getSavedQuiz,
   listSavedQuizzes,
@@ -22,6 +28,10 @@ import {
   countQuizzesForFolder,
   defaultQuizTitle,
 } from '@/lib/study-tools-save-titles';
+import {
+  getQuizOptionVisualState,
+  quizOptionButtonClassName,
+} from '@/lib/study-tools-quiz-ui';
 import type { QuizQuestion, SavedQuiz, StudySourceSelection } from '@/lib/study-tools-types';
 import { hasReadyStudySource } from '@/lib/study-tools-types';
 import { QUIZ_QUESTION_OPTIONS } from '@/lib/study-tools-types';
@@ -32,13 +42,27 @@ export default function QuizGeneratorClient() {
   const { mirror, commitMirror } = useMirror();
   const folders = mirror.noteFolders ?? [];
 
-  const [source, setSource] = useState<StudySourceSelection | null>(() =>
-    readStudySourceFromSession(),
-  );
+  const cueQuizBootstrap =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('fromCue')
+      ? readCueGeneratedQuiz()
+      : null;
+
+  const [source, setSource] = useState<StudySourceSelection | null>(() => {
+    if (cueQuizBootstrap) {
+      return {
+        sourceType: cueQuizBootstrap.sourceType,
+        sourceName: cueQuizBootstrap.sourceName,
+        text: '',
+      };
+    }
+    return readStudySourceFromSession();
+  });
   const [uploadPending, setUploadPending] = useState(false);
   const [numQuestions, setNumQuestions] = useState(10);
-  const storedQuestionsRef = useRef<QuizQuestion[] | null>(null);
-  const [attemptQuestions, setAttemptQuestions] = useState<QuizQuestion[] | null>(null);
+  const storedQuestionsRef = useRef<QuizQuestion[] | null>(cueQuizBootstrap?.questions ?? null);
+  const [attemptQuestions, setAttemptQuestions] = useState<QuizQuestion[] | null>(
+    cueQuizBootstrap?.questions ?? null,
+  );
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [score, setScore] = useState(0);
@@ -124,7 +148,7 @@ export default function QuizGeneratorClient() {
     try {
       const response = await fetch('/api/study-tools/generate-quiz', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: studyToolsFetchHeaders(),
         credentials: 'same-origin',
         body: JSON.stringify({
           text: readySource.text,
@@ -137,7 +161,13 @@ export default function QuizGeneratorClient() {
         error?: string;
         quiz?: QuizQuestion[];
       } | null;
-      if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+      if (!response.ok) {
+        const message =
+          response.status === 429
+            ? payload?.error ?? STUDY_TOOLS_DAILY_LIMIT_MESSAGE
+            : payload?.error || `HTTP ${response.status}`;
+        throw new Error(message);
+      }
       const generated = payload?.quiz ?? [];
       storedQuestionsRef.current = generated;
       setAttemptQuestions(generated);
@@ -195,6 +225,9 @@ export default function QuizGeneratorClient() {
   }) {
     if (!user || !storedQuestionsRef.current) return;
     const finalScore = finished ? score : null;
+    const folderName =
+      payload.folderName ?? (payload.folderId == null ? 'Uncategorized' : null);
+
     if (activeSavedId) {
       if (finalScore != null) {
         await updateQuizAttempt(user.uid, activeSavedId, finalScore);
@@ -205,14 +238,25 @@ export default function QuizGeneratorClient() {
         sourceName: source?.sourceName ?? 'Study source',
         sourceType: source?.sourceType ?? 'paste',
         folderId: payload.folderId,
-        folderName: payload.folderName,
+        folderName,
         noteFileId: source?.noteFileId ?? null,
         questions: storedQuestionsRef.current,
         scoreLastAttempt: finalScore,
       });
       setActiveSavedId(row.quizId);
+      try {
+        setAllQuizzes(await listSavedQuizzes(user.uid));
+      } catch {
+        setAllQuizzes((prev) => [row, ...prev.filter((item) => item.quizId !== row.quizId)]);
+      }
+      return;
     }
-    setAllQuizzes(await listSavedQuizzes(user.uid));
+
+    try {
+      setAllQuizzes(await listSavedQuizzes(user.uid));
+    } catch {
+      // Quiz was updated; list refresh is best-effort.
+    }
   }
 
   async function handleFinishSave() {
@@ -244,6 +288,7 @@ export default function QuizGeneratorClient() {
           Turn notes into multiple-choice questions with citations. Saved quizzes appear in your Notes
           folders.
         </p>
+        <StudyToolsUsageIndicator className="mt-2" />
       </div>
 
       {!quiz ? (
@@ -287,24 +332,24 @@ export default function QuizGeneratorClient() {
               </p>
               <h2 className="text-lg font-semibold text-text-primary">{current.question}</h2>
               <div className="space-y-2">
-                {current.options.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    disabled={selected != null}
-                    onClick={() => submitAnswer(option)}
-                    className={[
-                      'w-full rounded-[12px] border px-4 py-3 text-left text-sm',
-                      selected === option
-                        ? option.trim() === current.correctAnswer.trim()
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-900'
-                          : 'border-rose-400 bg-rose-50 text-rose-900'
-                        : 'border-border bg-surface-2 hover:bg-surface',
-                    ].join(' ')}
-                  >
-                    {option}
-                  </button>
-                ))}
+                {current.options.map((option) => {
+                  const optionState = getQuizOptionVisualState({
+                    option,
+                    selectedAnswer: selected,
+                    correctAnswer: current.correctAnswer,
+                  });
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      disabled={optionState.isAnswered}
+                      onClick={() => submitAnswer(option)}
+                      className={quizOptionButtonClassName(optionState)}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
               </div>
               {selected ? (
                 <p className="text-sm text-text-secondary">

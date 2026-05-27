@@ -245,6 +245,14 @@ export default function AdminUsersClient({ users }: { users: AdminUserRow[] }) {
                             {user.cueRequestsUsedToday ?? 0}/{user.cueDailyLimit ?? '—'}
                           </p>
                           <p>
+                            <span className="font-semibold text-text-primary">Study tools:</span>{' '}
+                            {user.studyToolGenerationsUsedToday ?? 0}/{user.studyToolDailyLimit ?? '—'}
+                          </p>
+                          <p>
+                            <span className="font-semibold text-text-primary">Quiz / Cards:</span>{' '}
+                            {user.quizGenerationsUsedToday ?? 0} / {user.flashcardGenerationsUsedToday ?? 0}
+                          </p>
+                          <p>
                             <span className="font-semibold text-text-primary">Images:</span>{' '}
                             {user.scheduleImageImportsUsedThisMonth ?? 0}/
                             {user.scheduleImageImportsMonthly ?? '—'}

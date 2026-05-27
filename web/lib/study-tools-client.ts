@@ -1,5 +1,6 @@
 'use client';
 
+import { getAuth } from 'firebase/auth';
 import {
   collection,
   deleteDoc,
@@ -12,6 +13,45 @@ import {
 } from 'firebase/firestore';
 
 import { getFirebaseDb } from '@/lib/firebase-client';
+
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
+function resolveAuthenticatedUid(expectedUid: string): string {
+  const authUid = getAuth().currentUser?.uid;
+  if (!authUid) {
+    throw new Error('Sign in to save study items.');
+  }
+  if (authUid !== expectedUid) {
+    throw new Error('Session mismatch. Sign out and sign in again.');
+  }
+  return authUid;
+}
+
+function stripUndefined<T extends Record<string, unknown>>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function logStudyToolsSaveDev(
+  operation: 'saveQuiz' | 'saveFlashcardDeck' | 'listQuizzes' | 'listDecks',
+  params: Record<string, unknown>,
+) {
+  if (!IS_DEV) return;
+  console.info(`[study-tools] ${operation}`, params);
+}
+
+function logStudyToolsSaveError(
+  operation: string,
+  params: Record<string, unknown>,
+  error: unknown,
+) {
+  if (!IS_DEV) return;
+  const err = error as { code?: string; message?: string };
+  console.warn(`[study-tools] ${operation} failed`, {
+    ...params,
+    errorCode: err?.code,
+    errorMessage: err?.message,
+  });
+}
 import { quizFolderId } from '@/lib/study-tools-save-titles';
 import {
   expandDeckForUi,
@@ -63,17 +103,20 @@ export async function saveQuiz(
     scoreLastAttempt?: number | null;
   },
 ): Promise<SavedQuiz> {
+  const authUid = resolveAuthenticatedUid(uid);
   const now = new Date().toISOString();
   const quizId = newId('quiz');
   const folderId = params.folderId ?? null;
+  const savePath = `users/${authUid}/quizzes/${quizId}`;
   const firestoreDoc = quizDocumentForFirestore({
     quizId,
-    uid,
+    uid: authUid,
     title: params.title.trim() || 'Quiz',
     sourceName: params.sourceName,
     sourceType: params.sourceType,
     folderId,
-    folderName: params.folderName ?? null,
+    folderName:
+      params.folderName ?? (folderId == null ? 'Uncategorized' : null),
     noteFileId: params.noteFileId ?? null,
     noteFolderId: folderId,
     questions: params.questions,
@@ -83,7 +126,29 @@ export async function saveQuiz(
     updatedAt: now,
     lastTakenAt: params.scoreLastAttempt != null ? now : null,
   });
-  await setDoc(doc(getFirebaseDb(), 'users', uid, 'quizzes', quizId), firestoreDoc);
+  const payload = stripUndefined(firestoreDoc as unknown as Record<string, unknown>);
+
+  logStudyToolsSaveDev('saveQuiz', {
+    uidExists: true,
+    savePath,
+    folderId,
+    sourceType: params.sourceType,
+    questionCount: params.questions.length,
+  });
+
+  try {
+    await setDoc(doc(getFirebaseDb(), 'users', authUid, 'quizzes', quizId), payload);
+  } catch (error) {
+    logStudyToolsSaveError('saveQuiz', { savePath, folderId }, error);
+    const code = (error as { code?: string })?.code;
+    if (code === 'permission-denied') {
+      throw new Error(
+        'Could not save quiz. Sign in again, or ask your workspace admin to deploy the latest Firestore rules.',
+      );
+    }
+    throw error;
+  }
+
   return parseSavedQuiz(firestoreDoc as unknown as Record<string, unknown>);
 }
 
@@ -135,17 +200,20 @@ export async function saveFlashcardDeck(
     cards: FlashcardItem[];
   },
 ): Promise<SavedFlashcardDeck> {
+  const authUid = resolveAuthenticatedUid(uid);
   const now = new Date().toISOString();
   const deckId = newId('deck');
   const folderId = params.folderId ?? null;
+  const savePath = `users/${authUid}/flashcardDecks/${deckId}`;
   const firestoreDoc = flashcardDeckDocumentForFirestore({
     deckId,
-    uid,
+    uid: authUid,
     title: params.title.trim() || 'Flashcard deck',
     sourceName: params.sourceName,
     sourceType: params.sourceType,
     folderId,
-    folderName: params.folderName ?? null,
+    folderName:
+      params.folderName ?? (folderId == null ? 'Uncategorized' : null),
     noteFileId: params.noteFileId ?? null,
     noteFolderId: folderId,
     cards: params.cards,
@@ -155,7 +223,29 @@ export async function saveFlashcardDeck(
     updatedAt: now,
     lastReviewedAt: null,
   });
-  await setDoc(doc(getFirebaseDb(), 'users', uid, 'flashcardDecks', deckId), firestoreDoc);
+  const payload = stripUndefined(firestoreDoc as unknown as Record<string, unknown>);
+
+  logStudyToolsSaveDev('saveFlashcardDeck', {
+    uidExists: true,
+    savePath,
+    folderId,
+    sourceType: params.sourceType,
+    cardCount: params.cards.length,
+  });
+
+  try {
+    await setDoc(doc(getFirebaseDb(), 'users', authUid, 'flashcardDecks', deckId), payload);
+  } catch (error) {
+    logStudyToolsSaveError('saveFlashcardDeck', { savePath, folderId }, error);
+    const code = (error as { code?: string })?.code;
+    if (code === 'permission-denied') {
+      throw new Error(
+        'Could not save deck. Sign in again, or ask your workspace admin to deploy the latest Firestore rules.',
+      );
+    }
+    throw error;
+  }
+
   return parseSavedDeck(firestoreDoc as unknown as Record<string, unknown>);
 }
 

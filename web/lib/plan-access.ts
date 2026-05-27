@@ -77,6 +77,14 @@ export function getCueDailyLimit(profile: ProfileLike | null | undefined) {
   return readNumber(profile?.cueDailyLimit, fallback);
 }
 
+export function getStudyToolDailyLimit(profile: ProfileLike | null | undefined) {
+  const fallback = getPlanConfigForProfile(profile).studyToolDailyLimit;
+  return readNumber(
+    (profile as ProfileLike & { studyToolDailyLimit?: unknown })?.studyToolDailyLimit,
+    fallback,
+  );
+}
+
 export function getScheduleImageImportLimit(profile: ProfileLike | null | undefined) {
   const fallback = getPlanConfigForProfile(profile).scheduleImageImportsMonthly;
   return readNumber(profile?.scheduleImageImportsMonthly, fallback);
@@ -117,6 +125,12 @@ export function canUsePremiumStudyTools(profile: ProfileLike | null | undefined)
   const plan = getUserPlan(profile);
   if (plan === 'beta' || plan === 'premium') return true;
   return readBoolean(profile?.premiumAccess, false);
+}
+
+/** Study Tools AI (quiz, flashcards, file study) — Beta and Premium plans only. */
+export function canUseStudyToolsAi(profile: ProfileLike | null | undefined) {
+  const plan = getUserPlan(profile);
+  return plan === 'beta' || plan === 'premium';
 }
 
 export function canUploadFile(

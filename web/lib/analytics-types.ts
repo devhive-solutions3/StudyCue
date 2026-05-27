@@ -7,6 +7,7 @@ export const ANALYTICS_EVENT_TYPES = [
   'note_upload',
   'bug_report_submit',
   'storage_update',
+  'study_tool_generation',
 ] as const;
 
 export type AnalyticsEventType = (typeof ANALYTICS_EVENT_TYPES)[number];

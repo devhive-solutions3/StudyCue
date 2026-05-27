@@ -115,6 +115,9 @@ async function incrementDailyCounters(params: {
       }
       break;
     }
+    case 'study_tool_generation':
+      payload.studyToolGenerations = FieldValue.increment(1);
+      break;
     default:
       break;
   }
@@ -256,23 +259,33 @@ export async function trackServerAnalyticsEvent(
   });
 }
 
-export async function recordCueMessageAnalytics(params: {
+export async function recordAiRequestAnalytics(params: {
   uid: string;
   userPlan: AnalyticsUserPlan;
   provider: string;
   model: string;
   status: string;
   endpoint: string;
+  feature: AnalyticsFeature;
   inputTokensEstimate?: number;
   outputTokensEstimate?: number;
   totalTokensEstimate?: number;
 }) {
+  const route =
+    params.feature === 'quiz_generator'
+      ? '/app/quiz'
+      : params.feature === 'flashcards'
+        ? '/app/flashcards'
+        : params.feature === 'file_study'
+          ? '/app/file-study'
+          : '/app/chat';
+
   await trackServerAnalyticsEvent({
     uid: params.uid,
     userPlan: params.userPlan,
     eventType: 'cue_message',
-    feature: 'cue_ai',
-    route: '/app/chat',
+    feature: params.feature,
+    route,
     metadata: {
       provider: params.provider,
       model: params.model,
@@ -286,6 +299,23 @@ export async function recordCueMessageAnalytics(params: {
     incrementPageView: false,
   });
 }
+
+/** @deprecated Use recordAiRequestAnalytics */
+export const recordCueMessageAnalytics = (params: {
+  uid: string;
+  userPlan: AnalyticsUserPlan;
+  provider: string;
+  model: string;
+  status: string;
+  endpoint: string;
+  inputTokensEstimate?: number;
+  outputTokensEstimate?: number;
+  totalTokensEstimate?: number;
+}) =>
+  recordAiRequestAnalytics({
+    ...params,
+    feature: 'cue_ai',
+  });
 
 export async function refreshDailyStorageSnapshot() {
   if (!readFirebaseAdminStatus().configured) return;

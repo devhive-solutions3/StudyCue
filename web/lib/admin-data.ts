@@ -22,6 +22,8 @@ import {
   type RevenueMetric,
   type SecurityEventRow,
 } from '@/lib/admin-shared';
+import { studyToolsDateKey } from '@/lib/study-tools-time';
+import { countActivePublishedAnnouncements } from '@/lib/announcements-server';
 import {
   dateKeyFromIso,
   isoNow,
@@ -59,6 +61,18 @@ const ADMIN_SECTIONS: AdminSection[] = [
     href: '/admin/analytics',
     description: 'Privacy-safe product usage, retention, and feature adoption metrics.',
     metric: 'Product analytics',
+  },
+  {
+    title: 'Study Tools',
+    href: '/admin/study-tools',
+    description: 'Track quiz, flashcard, and file study generations with plan limits and sources.',
+    metric: 'Study tools telemetry',
+  },
+  {
+    title: 'Announcements',
+    href: '/admin/announcements',
+    description: 'Create and publish in-app announcements for Beta, Premium, or all users.',
+    metric: 'In-app messaging',
   },
   {
     title: 'Users',
@@ -254,6 +268,10 @@ function emptyOverviewStats(): AdminOverviewStats {
     d1RetentionRate: 0,
     d7RetentionRate: 0,
     mostUsedFeature: null,
+    activeAnnouncements: 0,
+    studyToolGenerationsToday: 0,
+    quizGenerationsToday: 0,
+    flashcardGenerationsToday: 0,
   };
 }
 
@@ -280,6 +298,7 @@ export async function readAdminUsers(): Promise<AdminUsersResult> {
     const auth = getFirebaseAdminAuth();
     const db = getFirebaseAdminDb();
     const todayKey = dateKeyFromIso(isoNow());
+    const studyToolsTodayKey = studyToolsDateKey(isoNow());
     const monthKey = monthKeyFromIso(isoNow());
     const authUsers: Awaited<ReturnType<typeof auth.listUsers>>['users'] = [];
 
@@ -293,16 +312,24 @@ export async function readAdminUsers(): Promise<AdminUsersResult> {
     const refs = authUsers.map((user) => db.doc(`users/${user.uid}`));
     const userDocs = refs.length > 0 ? await db.getAll(...refs) : [];
     const usageDailyRefs = authUsers.map((user) => db.doc(`users/${user.uid}/usage/${todayKey}`));
+    const studyToolsUsageRefs = authUsers.map((user) =>
+      db.doc(`users/${user.uid}/usage/${studyToolsTodayKey}`),
+    );
     const usageMonthlyRefs = authUsers.map((user) => db.doc(`users/${user.uid}/usage/${monthKey}`));
-    const [usageDailyDocs, usageMonthlyDocs] =
+    const [usageDailyDocs, studyToolsUsageDocs, usageMonthlyDocs] =
       authUsers.length > 0
-        ? await Promise.all([db.getAll(...usageDailyRefs), db.getAll(...usageMonthlyRefs)])
-        : [[], []];
+        ? await Promise.all([
+            db.getAll(...usageDailyRefs),
+            db.getAll(...studyToolsUsageRefs),
+            db.getAll(...usageMonthlyRefs),
+          ])
+        : [[], [], []];
     const users = authUsers.map((user, index) => {
       const docSnapshot = userDocs[index];
       const docData = docSnapshot?.data() ?? {};
       const profile = normalizeUserProfile(docData);
       const usageDailyData = (usageDailyDocs[index]?.data() ?? {}) as Record<string, unknown>;
+      const studyToolsUsageData = (studyToolsUsageDocs[index]?.data() ?? {}) as Record<string, unknown>;
       const usageMonthlyData = (usageMonthlyDocs[index]?.data() ?? {}) as Record<string, unknown>;
       const derivedAccountType =
         typeof docData.accountType === 'string'
@@ -314,6 +341,7 @@ export async function readAdminUsers(): Promise<AdminUsersResult> {
               : profile.premiumAccess
                 ? 'premium'
                 : 'free';
+      const planForLimits = normalizePlan(profile.plan || derivedAccountType);
 
       return {
         uid: user.uid,
@@ -333,10 +361,15 @@ export async function readAdminUsers(): Promise<AdminUsersResult> {
         lastLogin: profile.lastLogin ?? user.metadata.lastSignInTime ?? null,
         storageUsedBytes: profile.storageUsedBytes ?? 0,
         cueRequestsUsedToday: parseNumber(usageDailyData.cueRequestsUsed),
+        studyToolGenerationsUsedToday: parseNumber(studyToolsUsageData.studyToolGenerationsUsed),
+        quizGenerationsUsedToday: parseNumber(studyToolsUsageData.quizGenerationsUsed),
+        flashcardGenerationsUsedToday: parseNumber(studyToolsUsageData.flashcardGenerationsUsed),
         storageLimitBytes:
-          profile.storageLimitBytes ?? getPlanConfig(normalizePlan(profile.plan || derivedAccountType)).storageLimitBytes,
-        cueDailyLimit:
-          profile.cueDailyLimit ?? getPlanConfig(normalizePlan(profile.plan || derivedAccountType)).cueDailyLimit,
+          profile.storageLimitBytes ?? getPlanConfig(planForLimits).storageLimitBytes,
+        cueDailyLimit: profile.cueDailyLimit ?? getPlanConfig(planForLimits).cueDailyLimit,
+        studyToolDailyLimit:
+          parseNullableNumber(studyToolsUsageData.studyToolDailyLimit) ??
+          getPlanConfig(planForLimits).studyToolDailyLimit,
         scheduleImageImportsUsedThisMonth: parseNumber(
           usageMonthlyData.scheduleImageImportsUsed,
         ),
@@ -440,9 +473,10 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
     const monthStart = `${monthKeyFromIso(isoNow())}-01`;
     const userCounts = await readOverviewUserCounts();
 
-    const [aiTodayDoc, blogPosts, securityToday, revenueDocs, bugReportCounts, analyticsExtras] =
+    const [aiTodayDoc, studyToolsTodayDoc, blogPosts, securityToday, revenueDocs, bugReportCounts, analyticsExtras, activeAnnouncements] =
       await Promise.all([
       db.doc(`adminMetrics/aiUsage/daily/${today}`).get().catch(() => null),
+      db.doc(`adminMetrics/studyTools/daily/${today}`).get().catch(() => null),
       db.collection('blogPosts').where('status', '==', 'published').count().get().catch(() => null),
       db.collection('securityLogs').where('dateKey', '==', today).count().get().catch(() => null),
       db
@@ -454,6 +488,7 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
         .catch(() => null),
       readBugReportOverviewCounts().catch(() => null),
       readAnalyticsOverviewExtras().catch(() => null),
+      countActivePublishedAnnouncements().catch(() => 0),
     ]);
 
     const netThisMonthPhp =
@@ -476,6 +511,10 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
       d1RetentionRate: analyticsExtras?.d1RetentionRate ?? 0,
       d7RetentionRate: analyticsExtras?.d7RetentionRate ?? 0,
       mostUsedFeature: analyticsExtras?.mostUsedFeature ?? null,
+      activeAnnouncements,
+      studyToolGenerationsToday: parseNumber(studyToolsTodayDoc?.data()?.generations),
+      quizGenerationsToday: parseNumber(studyToolsTodayDoc?.data()?.quizGenerations),
+      flashcardGenerationsToday: parseNumber(studyToolsTodayDoc?.data()?.flashcardGenerations),
       usersWarning: userCounts.warning,
     };
   } catch (error) {

@@ -101,7 +101,9 @@ function SaveStudyItemModalForm({
     try {
       let resolvedFolderId: number | null = folderId === '' ? null : folderId;
       let resolvedFolderName: string | null =
-        resolvedFolderId != null ? folderNameById.get(resolvedFolderId) ?? null : null;
+        resolvedFolderId != null
+          ? (folderNameById.get(resolvedFolderId) ?? null)
+          : 'Uncategorized';
 
       const trimmedNewFolder = newFolderName.trim();
       if (trimmedNewFolder) {
@@ -119,8 +121,12 @@ function SaveStudyItemModalForm({
           createdAt: now,
           updatedAt: now,
         };
-        await saveNoteFolderMetadata(user.uid, row);
         onFolderCreated?.(row);
+        try {
+          await saveNoteFolderMetadata(user.uid, row);
+        } catch {
+          throw new Error('Could not create folder. Please try an existing folder.');
+        }
         resolvedFolderId = row.id;
         resolvedFolderName = row.name;
       }
