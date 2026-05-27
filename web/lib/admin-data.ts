@@ -36,6 +36,7 @@ import {
   isBlogSlugTaken,
   type ManagedBlogPost,
 } from '@/lib/blog-store';
+import { readAnalyticsOverviewExtras } from '@/lib/analytics-admin-data';
 import { readBugReportOverviewCounts } from '@/lib/bug-report-server';
 import {
   buildNewUserProfile,
@@ -52,6 +53,12 @@ const ADMIN_SECTIONS: AdminSection[] = [
     href: '/admin',
     description: 'High-level platform health, admin metrics, and protected system status.',
     metric: 'Platform status',
+  },
+  {
+    title: 'Analytics',
+    href: '/admin/analytics',
+    description: 'Privacy-safe product usage, retention, and feature adoption metrics.',
+    metric: 'Product analytics',
   },
   {
     title: 'Users',
@@ -241,6 +248,12 @@ function emptyOverviewStats(): AdminOverviewStats {
     securityEventsToday: 0,
     openBugReports: 0,
     bugReportsToday: 0,
+    activeUsersToday: 0,
+    activeUsersThisWeek: 0,
+    signupsToday: 0,
+    d1RetentionRate: 0,
+    d7RetentionRate: 0,
+    mostUsedFeature: null,
   };
 }
 
@@ -427,7 +440,8 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
     const monthStart = `${monthKeyFromIso(isoNow())}-01`;
     const userCounts = await readOverviewUserCounts();
 
-    const [aiTodayDoc, blogPosts, securityToday, revenueDocs, bugReportCounts] = await Promise.all([
+    const [aiTodayDoc, blogPosts, securityToday, revenueDocs, bugReportCounts, analyticsExtras] =
+      await Promise.all([
       db.doc(`adminMetrics/aiUsage/daily/${today}`).get().catch(() => null),
       db.collection('blogPosts').where('status', '==', 'published').count().get().catch(() => null),
       db.collection('securityLogs').where('dateKey', '==', today).count().get().catch(() => null),
@@ -439,6 +453,7 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
         .get()
         .catch(() => null),
       readBugReportOverviewCounts().catch(() => null),
+      readAnalyticsOverviewExtras().catch(() => null),
     ]);
 
     const netThisMonthPhp =
@@ -455,6 +470,12 @@ export async function readAdminOverviewStats(): Promise<AdminOverviewStats & { u
       securityEventsToday: securityToday?.data().count ?? 0,
       openBugReports: bugReportCounts?.openReports ?? 0,
       bugReportsToday: bugReportCounts?.reportsToday ?? 0,
+      activeUsersToday: analyticsExtras?.activeUsersToday ?? 0,
+      activeUsersThisWeek: analyticsExtras?.activeUsersThisWeek ?? 0,
+      signupsToday: analyticsExtras?.signupsToday ?? 0,
+      d1RetentionRate: analyticsExtras?.d1RetentionRate ?? 0,
+      d7RetentionRate: analyticsExtras?.d7RetentionRate ?? 0,
+      mostUsedFeature: analyticsExtras?.mostUsedFeature ?? null,
       usersWarning: userCounts.warning,
     };
   } catch (error) {

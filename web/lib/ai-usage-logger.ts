@@ -3,6 +3,7 @@ import 'server-only';
 import { FieldValue } from 'firebase-admin/firestore';
 
 import { dateKeyFromIso, isoNow, writeSecurityLog } from '@/lib/admin-log';
+import { planFromProfile, recordCueMessageAnalytics } from '@/lib/analytics-tracker';
 import { getFirebaseAdminDb, readFirebaseAdminStatus } from '@/lib/firebase-admin';
 
 const PROVIDER_PRICING_USD_PER_MILLION: Record<string, { input: number; output: number }> = {
@@ -27,7 +28,12 @@ export type CueUsageLogParams = {
   estimatedCostUsd: number;
   estimatedCostPhp: number;
   errorCode?: string | null;
-  endpoint: '/api/cue' | '/api/groq';
+  endpoint:
+    | '/api/cue'
+    | '/api/groq'
+    | '/api/study-tools/generate-quiz'
+    | '/api/study-tools/generate-flashcards'
+    | '/api/study-tools/file-study';
 };
 
 export type CueUsagePayloadParams = {
@@ -40,7 +46,12 @@ export type CueUsagePayloadParams = {
   requestPayload: unknown;
   responseText?: string;
   errorCode?: string | null;
-  endpoint: '/api/cue' | '/api/groq';
+  endpoint:
+    | '/api/cue'
+    | '/api/groq'
+    | '/api/study-tools/generate-quiz'
+    | '/api/study-tools/generate-flashcards'
+    | '/api/study-tools/file-study';
 };
 
 export function estimateTokensFromText(text: string): number {
@@ -235,6 +246,22 @@ export async function logCueUsage(params: CueUsageLogParams) {
   batch.set(db.doc(`adminMetrics/aiUsage/daily/${dateKey}`), aggregatePayload, { merge: true });
   batch.set(db.doc(`users/${uid}/usage/${dateKey}`), aggregatePayload, { merge: true });
   await batch.commit();
+
+  if (uid !== 'anonymous' && uid !== 'unknown') {
+    const profileSnap = await db.doc(`users/${uid}`).get().catch(() => null);
+    const profile = profileSnap?.exists ? (profileSnap.data() as Record<string, unknown>) : null;
+    void recordCueMessageAnalytics({
+      uid,
+      userPlan: planFromProfile(profile),
+      provider: params.provider,
+      model: params.model,
+      status: params.status,
+      endpoint: params.endpoint,
+      inputTokensEstimate: params.inputTokensEstimate,
+      outputTokensEstimate: params.outputTokensEstimate,
+      totalTokensEstimate: params.totalTokensEstimate,
+    }).catch(() => {});
+  }
 
   if (IS_DEV) {
     console.info('[ai-usage-log] aiUsageLogs write success', {

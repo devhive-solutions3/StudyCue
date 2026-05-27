@@ -21,6 +21,7 @@ import {
   isBugReportSolved,
 } from '@/lib/bug-report-types';
 import { isoNow, writeAdminAuditLog } from '@/lib/admin-log';
+import { trackServerAnalyticsEvent, planFromProfile } from '@/lib/analytics-tracker';
 import { getFirebaseAdminDb, getFirebaseAdminStorage } from '@/lib/firebase-admin';
 import { getUserPlanByUid, getUserProfileByUid } from '@/lib/server-user-plan';
 import { getUserPlan } from '@/lib/plan-access';
@@ -189,6 +190,21 @@ export async function createBugReport(params: {
     followUps: [],
     serverTimestamp: FieldValue.serverTimestamp(),
   });
+
+  void trackServerAnalyticsEvent({
+    uid: params.uid,
+    userPlan: planFromProfile(profile ?? { plan: userPlan }),
+    eventType: 'bug_report_submit',
+    feature: 'bug_reports',
+    route: '/app/report-bug',
+    metadata: {
+      hasScreenshot: false,
+      status: 'open',
+      reportId,
+    },
+    markActive: true,
+    incrementPageView: false,
+  }).catch(() => {});
 
   return record;
 }
