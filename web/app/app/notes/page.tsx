@@ -168,7 +168,7 @@ function UploadProgressBar({ task }: { task: NoteUploadTask }) {
 
 export default function NotesRoutePage() {
   const router = useRouter();
-  const { user } = useWebAuth();
+  const { user, getIdToken } = useWebAuth();
   const { mirror, commitMirror, persistNow } = useMirror();
   const { allowed: premiumStudyTools, planLabel: studyToolsPlanLabel, loading: planLoading } =
     usePremiumStudyTools();
@@ -278,6 +278,7 @@ export default function NotesRoutePage() {
   async function runWithNoteSource(
     file: NoteFile,
     action: (source: Awaited<ReturnType<typeof buildStudySourceFromNoteFile>>) => void,
+    options?: { checkGenerationLimit?: boolean },
   ) {
     if (!noteFileSupportsTextExtraction(file)) {
       setMsg(
@@ -290,10 +291,13 @@ export default function NotesRoutePage() {
     setMsg(null);
     try {
       const folderName = folders.find((folder) => folder.id === file.folderId)?.name;
-      const source = await buildStudySourceFromNoteFile(file, folderName);
+      const source = await buildStudySourceFromNoteFile(file, folderName, {
+        getIdToken,
+        checkGenerationLimit: options?.checkGenerationLimit === true,
+      });
       action(source);
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : 'Could not read this note file.');
+      setMsg(error instanceof Error ? error.message : 'Could not read text from this note file.');
     } finally {
       setStudyActionLoading(false);
     }
@@ -308,18 +312,26 @@ export default function NotesRoutePage() {
 
   async function handleGenerateQuizFromFile(file: NoteFile) {
     if (!requirePremiumStudyTools('Generate Quiz')) return;
-    await runWithNoteSource(file, (source) => {
-      saveStudySourceToSession(source);
-      router.push('/app/quiz');
-    });
+    await runWithNoteSource(
+      file,
+      (source) => {
+        saveStudySourceToSession(source);
+        router.push('/app/quiz');
+      },
+      { checkGenerationLimit: true },
+    );
   }
 
   async function handleGenerateFlashcardsFromFile(file: NoteFile) {
     if (!requirePremiumStudyTools('Generate Flashcards')) return;
-    await runWithNoteSource(file, (source) => {
-      saveStudySourceToSession(source);
-      router.push('/app/flashcards');
-    });
+    await runWithNoteSource(
+      file,
+      (source) => {
+        saveStudySourceToSession(source);
+        router.push('/app/flashcards');
+      },
+      { checkGenerationLimit: true },
+    );
   }
   const folderUploads = uploadTasks.filter(
     (task) => task.folderId === selectedFolder?.id && task.status !== 'done',

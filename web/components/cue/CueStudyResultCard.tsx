@@ -5,14 +5,9 @@ import { useMemo, useState } from 'react';
 
 import SaveStudyItemModal from '@/components/study-tools/SaveStudyItemModal';
 import { useMirror } from '@/context/mirror-context';
-import { useWebAuth } from '@/lib/firebase-client';
+import { formatCueSessionExpiresIn, patchCueStudySessionSaved } from '@/lib/cue-study-session-client';
 import type { CueStudyResultPayload } from '@/lib/cue-web';
-import {
-  clearCueGeneratedDeck,
-  clearCueGeneratedQuiz,
-  saveCueGeneratedDeck,
-  saveCueGeneratedQuiz,
-} from '@/lib/cue-study-session';
+import { useWebAuth } from '@/lib/firebase-client';
 import { saveFlashcardDeck, saveQuiz } from '@/lib/study-tools-client';
 import {
   countDecksForFolder,
@@ -36,12 +31,18 @@ function resolveFolderId(
   return { folderId: null, folderName: requestedFolderName.trim() };
 }
 
+function studyToolHref(result: CueStudyResultPayload) {
+  const base = result.kind === 'quiz' ? '/app/quiz' : '/app/flashcards';
+  return `${base}?sessionId=${encodeURIComponent(result.sessionId)}`;
+}
+
 export default function CueStudyResultCard({ result }: { result: CueStudyResultPayload }) {
   const { user } = useWebAuth();
   const { mirror } = useMirror();
   const folders = useMemo(() => mirror.noteFolders ?? [], [mirror.noteFolders]);
   const [saveOpen, setSaveOpen] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [savedTargetId, setSavedTargetId] = useState<string | null>(null);
 
   const folderDefaults = useMemo(
     () => resolveFolderId(folders, result.requestedFolderName),
@@ -65,25 +66,8 @@ export default function CueStudyResultCard({ result }: { result: CueStudyResultP
     });
   }, [folderDefaults, result]);
 
-  function handleStart() {
-    if (result.kind === 'quiz') {
-      saveCueGeneratedQuiz({
-        sourceName: result.sourceName,
-        sourceType: 'upload',
-        questions: result.questions,
-        requestedFolderName: result.requestedFolderName,
-      });
-      window.location.href = '/app/quiz?fromCue=1';
-      return;
-    }
-    saveCueGeneratedDeck({
-      sourceName: result.sourceName,
-      sourceType: 'upload',
-      cards: result.cards,
-      requestedFolderName: result.requestedFolderName,
-    });
-    window.location.href = '/app/flashcards?fromCue=1';
-  }
+  const href = studyToolHref(result);
+  const expiresLabel = formatCueSessionExpiresIn(result.expiresAt);
 
   async function handleSaved(payload: {
     title: string;
@@ -92,7 +76,7 @@ export default function CueStudyResultCard({ result }: { result: CueStudyResultP
   }) {
     if (!user) return;
     if (result.kind === 'quiz') {
-      await saveQuiz(user.uid, {
+      const saved = await saveQuiz(user.uid, {
         title: payload.title,
         sourceName: result.sourceName,
         sourceType: 'upload',
@@ -100,11 +84,12 @@ export default function CueStudyResultCard({ result }: { result: CueStudyResultP
         folderName: payload.folderName,
         questions: result.questions,
       });
-      clearCueGeneratedQuiz();
+      await patchCueStudySessionSaved(result.sessionId, saved.quizId);
+      setSavedTargetId(saved.quizId);
       setSavedNotice('Quiz saved.');
       return;
     }
-    await saveFlashcardDeck(user.uid, {
+    const saved = await saveFlashcardDeck(user.uid, {
       title: payload.title,
       sourceName: result.sourceName,
       sourceType: 'upload',
@@ -112,7 +97,8 @@ export default function CueStudyResultCard({ result }: { result: CueStudyResultP
       folderName: payload.folderName,
       cards: result.cards,
     });
-    clearCueGeneratedDeck();
+    await patchCueStudySessionSaved(result.sessionId, saved.deckId);
+    setSavedTargetId(saved.deckId);
     setSavedNotice('Flashcard deck saved.');
   }
 
@@ -128,18 +114,31 @@ export default function CueStudyResultCard({ result }: { result: CueStudyResultP
       <p className="mt-1 text-xs text-text-secondary">
         {result.sourceName} · {countLabel}
       </p>
+      <p className="mt-1 text-[11px] text-text-muted">
+        Temporary for 24 hours unless saved · {expiresLabel}
+      </p>
       {savedNotice ? <p className="mt-2 text-xs font-semibold text-emerald-700">{savedNotice}</p> : null}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" onClick={handleStart} className="sc-btn-primary text-xs">
+        <Link href={href} className="sc-btn-primary text-xs">
           {result.kind === 'quiz' ? 'Start quiz' : 'Review cards'}
-        </button>
-        <button type="button" onClick={() => setSaveOpen(true)} className="sc-btn-secondary text-xs">
-          {result.kind === 'quiz' ? 'Save quiz' : 'Save deck'}
-        </button>
-        <Link
-          href={result.kind === 'quiz' ? '/app/quiz' : '/app/flashcards'}
-          className="sc-btn-secondary text-xs"
-        >
+        </Link>
+        {!savedTargetId ? (
+          <button type="button" onClick={() => setSaveOpen(true)} className="sc-btn-secondary text-xs">
+            {result.kind === 'quiz' ? 'Save quiz' : 'Save deck'}
+          </button>
+        ) : (
+          <Link
+            href={
+              result.kind === 'quiz'
+                ? `/app/quiz?retake=${encodeURIComponent(savedTargetId)}`
+                : `/app/flashcards`
+            }
+            className="sc-btn-secondary text-xs"
+          >
+            Open saved {result.kind === 'quiz' ? 'quiz' : 'deck'}
+          </Link>
+        )}
+        <Link href={href} className="sc-btn-secondary text-xs">
           Open in {result.kind === 'quiz' ? 'Quiz Generator' : 'Flashcards'}
         </Link>
       </div>

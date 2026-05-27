@@ -11,6 +11,8 @@ import type { FlashcardItem, QuizQuestion } from '@/lib/study-tools-types';
 export type CueStudyResultPayload =
   | {
       kind: 'quiz';
+      sessionId: string;
+      expiresAt: string;
       sourceName: string;
       count: number;
       requestedFolderName?: string | null;
@@ -18,6 +20,8 @@ export type CueStudyResultPayload =
     }
   | {
       kind: 'flashcards';
+      sessionId: string;
+      expiresAt: string;
       sourceName: string;
       count: number;
       requestedFolderName?: string | null;
@@ -335,6 +339,8 @@ export type CueStudyGenerateResponse =
       count: number;
       requestedFolderName?: string | null;
       quiz: QuizQuestion[];
+      sessionId: string | null;
+      expiresAt: string | null;
     }
   | {
       ok: true;
@@ -344,6 +350,8 @@ export type CueStudyGenerateResponse =
       count: number;
       requestedFolderName?: string | null;
       flashcards: FlashcardItem[];
+      sessionId: string | null;
+      expiresAt: string | null;
     };
 
 export async function fetchCueStudyGenerate(params: {
@@ -403,10 +411,15 @@ export async function fetchCueStudyGenerate(params: {
   }
 
   if (payload.kind === 'quiz') {
+    if (!payload.sessionId || !payload.expiresAt) {
+      throw new Error('Study session could not be saved. Please try again.');
+    }
     return {
       message: payload.message,
       studyResult: {
         kind: 'quiz',
+        sessionId: payload.sessionId,
+        expiresAt: payload.expiresAt,
         sourceName: payload.sourceName,
         count: payload.count,
         requestedFolderName: payload.requestedFolderName ?? null,
@@ -415,10 +428,16 @@ export async function fetchCueStudyGenerate(params: {
     };
   }
 
+  if (!payload.sessionId || !payload.expiresAt) {
+    throw new Error('Study session could not be saved. Please try again.');
+  }
+
   return {
     message: payload.message,
     studyResult: {
       kind: 'flashcards',
+      sessionId: payload.sessionId,
+      expiresAt: payload.expiresAt,
       sourceName: payload.sourceName,
       count: payload.count,
       requestedFolderName: payload.requestedFolderName ?? null,

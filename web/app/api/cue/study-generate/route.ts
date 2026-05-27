@@ -15,6 +15,8 @@ import {
   StudyToolsRateLimitError,
   StudyToolsValidationError,
 } from '@/lib/study-tools-server';
+import { createCueStudySession } from '@/lib/cue-study-sessions-server';
+import type { CueStudySessionSourceType } from '@/lib/cue-study-session-types';
 import type { StudySourceType } from '@/lib/study-tools-types';
 
 export const runtime = 'nodejs';
@@ -53,6 +55,8 @@ export async function POST(request: Request) {
     body.sourceType === 'paste' || body.sourceType === 'upload' || body.sourceType === 'notes'
       ? body.sourceType
       : 'upload';
+  const sessionSourceType: CueStudySessionSourceType =
+    sourceType === 'paste' ? 'paste' : sourceType === 'notes' ? 'notes' : 'cue_attachment';
   const count =
     typeof body.count === 'number' && Number.isFinite(body.count)
       ? Math.round(body.count)
@@ -81,6 +85,21 @@ export async function POST(request: Request) {
       headers.set('x-studycue-study-tool-daily-limit', String(daily.limit));
       headers.set('x-studycue-study-tool-daily-used', String(daily.used));
       headers.set('x-studycue-study-tool-daily-reset-at', daily.resetAt);
+      const session = await createCueStudySession({
+        uid: viewer.uid,
+        type: 'quiz',
+        sourceName,
+        sourceType: sessionSourceType,
+        questions: quiz,
+        requestedFolderName,
+      });
+      if (!session?.sessionId) {
+        return NextResponse.json(
+          { error: 'Could not save your temporary quiz session. Please try again.' },
+          { status: 503 },
+        );
+      }
+
       return NextResponse.json(
         {
           ok: true,
@@ -90,6 +109,8 @@ export async function POST(request: Request) {
           count: quiz.length,
           requestedFolderName,
           quiz,
+          sessionId: session?.sessionId ?? null,
+          expiresAt: session?.expiresAt ?? null,
         },
         { headers },
       );
@@ -110,6 +131,21 @@ export async function POST(request: Request) {
     headers.set('x-studycue-study-tool-daily-limit', String(daily.limit));
     headers.set('x-studycue-study-tool-daily-used', String(daily.used));
     headers.set('x-studycue-study-tool-daily-reset-at', daily.resetAt);
+    const session = await createCueStudySession({
+      uid: viewer.uid,
+      type: 'flashcards',
+      sourceName,
+      sourceType: sessionSourceType,
+      cards: flashcards,
+      requestedFolderName,
+    });
+    if (!session?.sessionId) {
+      return NextResponse.json(
+        { error: 'Could not save your temporary flashcard session. Please try again.' },
+        { status: 503 },
+      );
+    }
+
     return NextResponse.json(
       {
         ok: true,
@@ -119,6 +155,8 @@ export async function POST(request: Request) {
         count: flashcards.length,
         requestedFolderName,
         flashcards,
+        sessionId: session?.sessionId ?? null,
+        expiresAt: session?.expiresAt ?? null,
       },
       { headers },
     );

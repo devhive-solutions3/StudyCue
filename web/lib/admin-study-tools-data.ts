@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { dateKeyFromIso, isoNow } from '@/lib/admin-log';
+import { isoNow } from '@/lib/admin-log';
 import { getFirebaseAdminDb, readFirebaseAdminStatus } from '@/lib/firebase-admin';
 import { studyToolsDateKey } from '@/lib/study-tools-time';
 
@@ -30,6 +30,10 @@ export type StudyToolsTopUserRow = {
   lastGeneratedAt: string | null;
   fromPages: number;
   fromCue: number;
+  savedQuizzes: number;
+  savedFlashcardDecks: number;
+  storageUsedBytes: number;
+  storageLimitBytes: number;
 };
 
 export type StudyToolsAdminDashboard = {
@@ -42,7 +46,10 @@ export type StudyToolsAdminDashboard = {
     rateLimitedToday: number;
     activeBetaUsers: number;
     activePremiumUsers: number;
+    savedQuizzesTotal: number;
+    savedFlashcardDecksTotal: number;
   };
+  storageNote: string;
   byPlan: {
     betaQuiz: number;
     betaFlashcards: number;
@@ -68,7 +75,11 @@ export async function readStudyToolsAdminDashboard(): Promise<StudyToolsAdminDas
       rateLimitedToday: 0,
       activeBetaUsers: 0,
       activePremiumUsers: 0,
+      savedQuizzesTotal: 0,
+      savedFlashcardDecksTotal: 0,
     },
+    storageNote:
+      'Saved quizzes and flashcard decks are stored in Firestore under each user. They share the plan notes/file storage quota (Beta 1 GB, Premium 5 GB).',
     byPlan: {
       betaQuiz: 0,
       betaFlashcards: 0,
@@ -82,31 +93,22 @@ export async function readStudyToolsAdminDashboard(): Promise<StudyToolsAdminDas
   if (!readFirebaseAdminStatus().configured) return empty;
 
   const db = getFirebaseAdminDb();
-  const todayUtc = dateKeyFromIso(isoNow());
-  const todayManila = studyToolsDateKey();
+  const todayManila = studyToolsDateKey(isoNow());
 
-  const [dailyMetrics, eventsSnap, emailByUid] = await Promise.all([
-    db.doc(`adminMetrics/studyTools/daily/${todayUtc}`).get(),
+  const [dailyMetrics, eventsSnap, savedQuizzesCount, savedDecksCount, emailByUid] = await Promise.all([
+    db.doc(`adminMetrics/studyTools/daily/${todayManila}`).get(),
     db
       .collection('studyToolEvents')
       .orderBy('createdAt', 'desc')
       .limit(250)
       .get()
       .catch(() => null),
+    db.collectionGroup('quizzes').count().get().catch(() => null),
+    db.collectionGroup('flashcardDecks').count().get().catch(() => null),
     new Map<string, string | null>(),
   ]);
 
   const metrics = (dailyMetrics.data() ?? {}) as Record<string, unknown>;
-  const summary = {
-    quizGenerationsToday: readNumber(metrics.quizGenerations),
-    flashcardGenerationsToday: readNumber(metrics.flashcardGenerations),
-    fileStudyGenerationsToday: readNumber(metrics.fileStudyGenerations),
-    cueQuizGenerationsToday: readNumber(metrics.cueQuizGenerations),
-    cueFlashcardGenerationsToday: readNumber(metrics.cueFlashcardGenerations),
-    rateLimitedToday: readNumber(metrics.rateLimited),
-    activeBetaUsers: 0,
-    activePremiumUsers: 0,
-  };
 
   const events =
     eventsSnap?.docs.map((doc) => {
@@ -126,7 +128,38 @@ export async function readStudyToolsAdminDashboard(): Promise<StudyToolsAdminDas
       };
     }) ?? [];
 
-  const todayEvents = events.filter((e) => e.dateKey === todayUtc && e.status === 'success');
+  const isTodayManila = (createdAt: string) =>
+    createdAt ? studyToolsDateKey(createdAt) === todayManila : false;
+
+  const todayEvents = events.filter((e) => e.status === 'success' && isTodayManila(e.createdAt));
+  const todayAllStatus = events.filter((e) => isTodayManila(e.createdAt));
+
+  const summary = {
+    quizGenerationsToday: todayEvents.filter((e) => e.toolType === 'quiz').length,
+    flashcardGenerationsToday: todayEvents.filter((e) => e.toolType === 'flashcards').length,
+    fileStudyGenerationsToday: todayEvents.filter((e) => e.toolType === 'file_study').length,
+    cueQuizGenerationsToday: todayEvents.filter(
+      (e) => e.toolType === 'quiz' && e.sourceSurface === 'cue_ai',
+    ).length,
+    cueFlashcardGenerationsToday: todayEvents.filter(
+      (e) => e.toolType === 'flashcards' && e.sourceSurface === 'cue_ai',
+    ).length,
+    rateLimitedToday: todayAllStatus.filter((e) => e.status === 'rate_limited').length,
+    activeBetaUsers: 0,
+    activePremiumUsers: 0,
+    savedQuizzesTotal: savedQuizzesCount?.data().count ?? 0,
+    savedFlashcardDecksTotal: savedDecksCount?.data().count ?? 0,
+  };
+
+  // Prefer event-derived totals; fall back to metrics doc if events are empty (older data).
+  if (todayEvents.length === 0) {
+    summary.quizGenerationsToday = readNumber(metrics.quizGenerations);
+    summary.flashcardGenerationsToday = readNumber(metrics.flashcardGenerations);
+    summary.fileStudyGenerationsToday = readNumber(metrics.fileStudyGenerations);
+    summary.cueQuizGenerationsToday = readNumber(metrics.cueQuizGenerations);
+    summary.cueFlashcardGenerationsToday = readNumber(metrics.cueFlashcardGenerations);
+    summary.rateLimitedToday = readNumber(metrics.rateLimited);
+  }
   const betaUsers = new Set<string>();
   const premiumUsers = new Set<string>();
 
@@ -194,14 +227,43 @@ export async function readStudyToolsAdminDashboard(): Promise<StudyToolsAdminDas
     .slice(0, 25)
     .map(([uid]) => uid);
 
+  const profileByUid = new Map<
+    string,
+    { email: string | null; storageUsedBytes: number; storageLimitBytes: number }
+  >();
+
   await Promise.all(
     topUids.map(async (uid) => {
       try {
         const profile = await db.doc(`users/${uid}`).get();
-        const email = profile.data()?.email;
-        emailByUid.set(uid, typeof email === 'string' ? email : null);
+        const data = profile.data() ?? {};
+        const email = typeof data.email === 'string' ? data.email : null;
+        emailByUid.set(uid, email);
+        profileByUid.set(uid, {
+          email,
+          storageUsedBytes: readNumber(data.storageUsedBytes),
+          storageLimitBytes: readNumber(data.storageLimitBytes),
+        });
       } catch {
         emailByUid.set(uid, null);
+        profileByUid.set(uid, { email: null, storageUsedBytes: 0, storageLimitBytes: 0 });
+      }
+    }),
+  );
+
+  const savedCounts = await Promise.all(
+    topUids.map(async (uid) => {
+      try {
+        const [quizzes, decks] = await Promise.all([
+          db.collection(`users/${uid}/quizzes`).count().get(),
+          db.collection(`users/${uid}/flashcardDecks`).count().get(),
+        ]);
+        return {
+          quizzes: quizzes.data().count,
+          decks: decks.data().count,
+        };
+      } catch {
+        return { quizzes: 0, decks: 0 };
       }
     }),
   );
@@ -229,6 +291,10 @@ export async function readStudyToolsAdminDashboard(): Promise<StudyToolsAdminDas
       lastGeneratedAt: agg.lastAt,
       fromPages: agg.fromPages,
       fromCue: agg.fromCue,
+      savedQuizzes: savedCounts[index]?.quizzes ?? 0,
+      savedFlashcardDecks: savedCounts[index]?.decks ?? 0,
+      storageUsedBytes: profileByUid.get(uid)?.storageUsedBytes ?? 0,
+      storageLimitBytes: profileByUid.get(uid)?.storageLimitBytes ?? 0,
     };
   });
 
@@ -245,5 +311,12 @@ export async function readStudyToolsAdminDashboard(): Promise<StudyToolsAdminDas
     endpoint: event.endpoint,
   }));
 
-  return { summary, byPlan, topUsers, recentEvents };
+  return {
+    summary,
+    byPlan,
+    topUsers,
+    recentEvents,
+    storageNote:
+      'Saved quizzes and flashcard decks live in Firestore (users/{uid}/quizzes and flashcardDecks). They count toward the same plan storage quota as Notes files (Beta 1 GB, Premium 5 GB, Free 100 MB).',
+  };
 }

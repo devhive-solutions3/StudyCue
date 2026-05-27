@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { dateKeyFromIso, isoNow, monthKeyFromIso } from '@/lib/admin-log';
+import { isoNow, monthKeyFromIso } from '@/lib/admin-log';
+import { studyToolsDateKey } from '@/lib/study-tools-time';
 import { weekKeyFromIso } from '@/lib/analytics-tracker';
 import type { AnalyticsFeature, AnalyticsUserPlan } from '@/lib/analytics-types';
 import { getFirebaseAdminDb, readFirebaseAdminStatus } from '@/lib/firebase-admin';
@@ -23,7 +24,7 @@ export async function logStudyToolGenerationEvent(params: {
   if (!readFirebaseAdminStatus().configured) return;
 
   const createdAt = isoNow();
-  const dateKey = dateKeyFromIso(createdAt);
+  const dateKey = studyToolsDateKey(createdAt);
   const feature: AnalyticsFeature =
     params.tool === 'quiz' ? 'quiz_generator' : params.tool === 'flashcards' ? 'flashcards' : 'file_study';
 

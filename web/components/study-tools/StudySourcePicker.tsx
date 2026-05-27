@@ -3,12 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useMirror } from '@/context/mirror-context';
+import { useWebAuth } from '@/lib/firebase-client';
 import { STUDY_UPLOAD_ACCEPT, STUDY_UPLOAD_MIME_HINT } from '@/lib/study-file-extract';
-import {
-  extractTextFromNoteFile,
-  noteFileExtractionMessage,
-  noteFileSupportsTextExtraction,
-} from '@/lib/note-study-text';
+import { noteFileExtractionMessage, noteFileSupportsTextExtraction } from '@/lib/note-study-text';
+import { buildStudySourceFromNoteFile } from '@/lib/study-tools-note-source';
 import { extractTextFromStudyFile } from '@/lib/study-tools-text-extraction';
 import type { StudySourceSelection, StudySourceType } from '@/lib/study-tools-types';
 import { STUDY_SOURCE_MAX_CHARS } from '@/lib/study-tools-types';
@@ -27,6 +25,7 @@ export default function StudySourcePicker({
   onUploadPendingChange?: (pending: boolean) => void;
 }) {
   const { mirror } = useMirror();
+  const { getIdToken } = useWebAuth();
   const [tab, setTab] = useState<Tab>('paste');
   const [pasteText, setPasteText] = useState('');
   const [pasteName, setPasteName] = useState('');
@@ -176,23 +175,13 @@ export default function StudySourcePicker({
     }
     setLoading(true);
     try {
-      const text = await extractTextFromNoteFile(selectedNoteFile);
-      if (text.length > STUDY_SOURCE_MAX_CHARS) {
-        throw new Error(`Text must be under ${STUDY_SOURCE_MAX_CHARS.toLocaleString()} characters.`);
-      }
       const folder = folders.find((row) => row.id === selectedNoteFile.folderId);
-      applySelection({
-        sourceType: 'notes',
-        sourceName: selectedNoteFile.name,
-        text,
-        noteFileId: selectedNoteFile.id,
-        folderId: selectedNoteFile.folderId,
-        noteFolderId: selectedNoteFile.folderId,
-        folderName: folder?.name,
-        noteStoragePath: selectedNoteFile.storagePath,
+      const selection = await buildStudySourceFromNoteFile(selectedNoteFile, folder?.name, {
+        getIdToken,
       });
+      applySelection(selection);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not read note.');
+      setError(caught instanceof Error ? caught.message : 'Could not read text from this note file.');
       applySelection(null);
     } finally {
       setLoading(false);

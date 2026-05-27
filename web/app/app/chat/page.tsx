@@ -7,6 +7,7 @@ import * as React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import CueRecentStudyTools from '@/components/cue/CueRecentStudyTools';
 import CueStudyResultCard from '@/components/cue/CueStudyResultCard';
 import { parseCueCommandFromResponse, type CueCommand } from '@/lib/cue-chat-response';
 import {
@@ -326,6 +327,7 @@ export default function ChatRoutePage() {
           </label>
         </div>
         <div className="flex min-h-[320px] flex-1 flex-col gap-3.5 overflow-y-auto px-6 py-5 text-[14.5px] leading-[1.55] text-text-primary">
+          <CueRecentStudyTools />
           {msgs.map((m, idx) =>
             m.role === 'cue' ? (
               <div key={`${idx}-cue`} className="flex items-start gap-2.5">

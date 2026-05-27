@@ -8,8 +8,10 @@ import StudySourcePicker from '@/components/study-tools/StudySourcePicker';
 import StudyToolsUsageIndicator from '@/components/study-tools/StudyToolsUsageIndicator';
 import { useMirror } from '@/context/mirror-context';
 import { useWebAuth } from '@/lib/firebase-client';
-import { readCueGeneratedDeck } from '@/lib/cue-study-session';
+import { patchCueStudySessionSaved } from '@/lib/cue-study-session-client';
 import { readStudySourceFromSession, saveStudySourceToSession } from '@/lib/study-source-session';
+import { useCueStudySessionLoader } from '@/hooks/use-cue-study-session-loader';
+import { useSearchParams } from 'next/navigation';
 import { studyGenerateBlockedMessage } from '@/lib/study-source-validation';
 import {
   STUDY_TOOLS_DAILY_LIMIT_MESSAGE,
@@ -29,32 +31,21 @@ import { hasReadyStudySource } from '@/lib/study-tools-types';
 import { FLASHCARD_COUNT_OPTIONS } from '@/lib/study-tools-types';
 
 export default function FlashcardsClient() {
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('sessionId');
+  const cueSession = useCueStudySessionLoader(sessionId, 'flashcards');
   const { user } = useWebAuth();
   const { mirror, commitMirror } = useMirror();
   const folders = mirror.noteFolders ?? [];
 
-  const cueDeckBootstrap =
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('fromCue')
-      ? readCueGeneratedDeck()
-      : null;
-
-  const [source, setSource] = useState<StudySourceSelection | null>(() => {
-    if (cueDeckBootstrap) {
-      return {
-        sourceType: cueDeckBootstrap.sourceType,
-        sourceName: cueDeckBootstrap.sourceName,
-        text: '',
-      };
-    }
-    return readStudySourceFromSession();
-  });
+  const [source, setSource] = useState<StudySourceSelection | null>(() => readStudySourceFromSession());
   const [uploadPending, setUploadPending] = useState(false);
   const [numCards, setNumCards] = useState(10);
-  const [cards, setCards] = useState<FlashcardItem[] | null>(() => cueDeckBootstrap?.cards ?? null);
+  const [cards, setCards] = useState<FlashcardItem[] | null>(null);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [known, setKnown] = useState(0);
-  const [review, setReview] = useState(() => cueDeckBootstrap?.cards.length ?? 0);
+  const [review, setReview] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deckId, setDeckId] = useState<string | null>(null);
@@ -66,6 +57,32 @@ export default function FlashcardsClient() {
     if (!user) return;
     void listFlashcardDecks(user.uid).then(setAllDecks);
   }, [user]);
+
+  const sessionCards =
+    cueSession.session?.type === 'flashcards' ? cueSession.session.cards : null;
+  const sessionMeta =
+    cueSession.session?.type === 'flashcards' ? cueSession.session : null;
+  const displayCards = cards ?? sessionCards;
+
+  useEffect(() => {
+    if (!sessionCards || cards) return;
+    void Promise.resolve().then(() => {
+      setReview(sessionCards.length);
+      setIndex(0);
+      setKnown(0);
+      setFlipped(false);
+    });
+  }, [sessionCards, cards]);
+  const activeCueSessionId = sessionId ?? sessionMeta?.sessionId ?? null;
+  const activeSource =
+    source ??
+    (sessionMeta
+      ? {
+          sourceType: 'upload' as const,
+          sourceName: sessionMeta.sourceName,
+          text: '',
+        }
+      : null);
 
   function handleSourceReady(selection: StudySourceSelection | null) {
     setSource(selection);
@@ -124,18 +141,18 @@ export default function FlashcardsClient() {
   }
 
   function openSaveModal() {
-    if (!user || !cards) return;
-    const defaultFolderId = source?.folderId ?? source?.noteFolderId ?? null;
+    if (!user || !displayCards) return;
+    const defaultFolderId = activeSource?.folderId ?? activeSource?.noteFolderId ?? null;
     const folderName =
-      source?.folderName ??
+      activeSource?.folderName ??
       folders.find((folder) => folder.id === defaultFolderId)?.name ??
       null;
-    const existingCount = countDecksForFolder(allDecks, defaultFolderId, source?.sourceName);
+    const existingCount = countDecksForFolder(allDecks, defaultFolderId, activeSource?.sourceName);
     setSaveDefaults({
       title: defaultFlashcardDeckTitle({
         folderName,
-        sourceName: source?.sourceName,
-        sourceType: source?.sourceType,
+        sourceName: activeSource?.sourceName,
+        sourceType: activeSource?.sourceType ?? 'upload',
         existingCount,
       }),
       folderId: defaultFolderId,
@@ -148,32 +165,35 @@ export default function FlashcardsClient() {
     folderId: number | null;
     folderName: string | null;
   }) {
-    if (!user || !cards || !source) return;
+    if (!user || !displayCards || !activeSource) return;
     const row = await saveFlashcardDeck(user.uid, {
       title: payload.title,
-      sourceName: source.sourceName,
-      sourceType: source.sourceType,
+      sourceName: activeSource.sourceName,
+      sourceType: activeSource.sourceType,
       folderId: payload.folderId,
       folderName: payload.folderName,
-      noteFileId: source.noteFileId ?? null,
-      cards,
+      noteFileId: activeSource.noteFileId ?? null,
+      cards: displayCards,
     });
     setDeckId(row.deckId);
+    if (activeCueSessionId) {
+      await patchCueStudySessionSaved(activeCueSessionId, row.deckId);
+    }
     setAllDecks(await listFlashcardDecks(user.uid));
   }
 
   function markKnown(isKnown: boolean) {
-    if (!cards) return;
+    if (!displayCards) return;
     if (isKnown) setKnown((value) => value + 1);
     else setReview((value) => Math.max(0, value - 1));
     setFlipped(false);
-    setIndex((value) => Math.min(value + 1, cards.length - 1));
+    setIndex((value) => Math.min(value + 1, displayCards.length - 1));
     if (user && deckId) {
       void updateFlashcardDeckProgress(user.uid, deckId, known + (isKnown ? 1 : 0), review);
     }
   }
 
-  const current = cards?.[index];
+  const current = displayCards?.[index];
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-16">
@@ -186,7 +206,21 @@ export default function FlashcardsClient() {
         </p>
       </div>
 
-      {!cards ? (
+      {sessionId && cueSession.loading ? (
+        <p className="text-sm text-text-secondary">Loading your Cue flashcards…</p>
+      ) : null}
+
+      {sessionId && cueSession.error ? (
+        <div className="rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">Temporary deck unavailable</p>
+          <p className="mt-1">{cueSession.error}</p>
+          <Link href="/app/chat" className="mt-3 inline-block text-sm font-semibold text-accent underline">
+            Back to Cue
+          </Link>
+        </div>
+      ) : null}
+
+      {!displayCards && !(sessionId && (cueSession.loading || cueSession.error)) ? (
         <>
           <StudySourcePicker
             source={source}
@@ -218,10 +252,10 @@ export default function FlashcardsClient() {
             </button>
           </div>
         </>
-      ) : (
+      ) : displayCards ? (
         <div className="space-y-4 rounded-[16px] border border-border bg-surface p-6 text-center">
           <p className="text-xs text-text-muted">
-            Card {index + 1} of {cards.length} · Known {known} · Review {review}
+            Card {index + 1} of {displayCards.length} · Known {known} · Review {review}
           </p>
           <button
             type="button"
@@ -253,7 +287,7 @@ export default function FlashcardsClient() {
             </button>
             <button
               type="button"
-              onClick={() => setIndex((value) => Math.min(cards.length - 1, value + 1))}
+              onClick={() => setIndex((value) => Math.min(displayCards.length - 1, value + 1))}
               className="sc-btn-secondary"
             >
               Next
@@ -268,7 +302,7 @@ export default function FlashcardsClient() {
             </button>
           </div>
         </div>
-      )}
+      ) : null}
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 

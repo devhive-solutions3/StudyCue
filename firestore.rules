@@ -59,6 +59,11 @@ service cloud.firestore {
       match /seenAnnouncements/{announcementId} {
         allow read, write: if isOwner(uid);
       }
+      // Temporary Cue quiz/flashcard sessions — server (Admin SDK) only.
+      // Enable Firestore TTL on field `expiresAt` for automatic deletion.
+      match /cueStudySessions/{sessionId} {
+        allow read, write: if false;
+      }
     }
 
     match /announcements/{announcementId} {
