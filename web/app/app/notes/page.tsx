@@ -28,12 +28,17 @@ import {
   deleteStoredNoteAsset,
   listNoteFileMetadata,
   noteFolderMetadataExists,
-  noteFileDocPath,
-  noteFolderDocPath,
   reserveUserStorageBytes,
   saveNoteFileMetadata,
   saveNoteFolderMetadata,
 } from '@/lib/note-storage';
+import {
+  isNotesUploadFile,
+  NOTES_UPLOAD_ACCEPT,
+  NOTES_UPLOAD_HINT,
+  notesUploadSkipMessage,
+} from '@/lib/note-upload-constants';
+import { noteFileDocPath, noteFolderDocPath } from '@/lib/notes-paths';
 import {
   getUploadTasks,
   startNoteUpload,
@@ -59,13 +64,6 @@ import {
   listSavedQuizzes,
 } from '@/lib/study-tools-client';
 import type { SavedFlashcardDeck, SavedQuiz } from '@/lib/study-tools-types';
-
-const SUPPORTED_MIME = new Set([
-  'application/pdf',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-]);
-const SUPPORTED_EXTENSIONS = new Set(['pdf', 'ppt', 'pptx']);
 
 function cleanName(name: string) {
   return name.trim().replace(/\s+/g, ' ');
@@ -396,8 +394,8 @@ export default function NotesRoutePage() {
     let reservedStorageBytes = 0;
 
     for (const file of incoming) {
-      if (!SUPPORTED_MIME.has(file.type) || !SUPPORTED_EXTENSIONS.has(extFromName(file.name))) {
-        setMsg(`Skipped "${file.name}" — only PDF, PPT, and PPTX files are supported.`);
+      if (!isNotesUploadFile(file)) {
+        setMsg(notesUploadSkipMessage(file.name));
         continue;
       }
 
@@ -849,7 +847,7 @@ export default function NotesRoutePage() {
         <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">Study notes</p>
         <h1 className="sc-page-title text-text-primary">Notes</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Create folders and upload PDF, PPT, and PPTX files. Files sync to Firebase Storage when available;
+          Create folders and upload study note files (PDF, PPTX, DOCX, TXT, MD). Files sync to Firebase Storage when available;
           otherwise they stay in this browser only.
         </p>
         <p className="mt-2 text-sm text-text-secondary">{planLimitHint}</p>
@@ -950,14 +948,14 @@ export default function NotesRoutePage() {
                 className="mt-3 flex min-h-[190px] flex-col items-center justify-center rounded-[20px] border border-dashed border-border-strong bg-surface-2 p-6 text-center"
               >
                 <span className="mb-3 text-[30px] text-accent">↑</span>
-                <p className="text-sm text-text-secondary">Drag and drop PDF, PPT, or PPTX files here</p>
+                <p className="text-sm text-text-secondary">{NOTES_UPLOAD_HINT}</p>
                 <p className="mt-1 text-xs text-text-muted">{planLimitHint}</p>
                 <label className="sc-btn-secondary mt-4 cursor-pointer text-xs">
                   Choose files
                   <input
                     type="file"
                     multiple
-                    accept=".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    accept={NOTES_UPLOAD_ACCEPT}
                     className="hidden"
                     onChange={(e) => {
                       if (!e.target.files) return;

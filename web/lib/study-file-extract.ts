@@ -11,10 +11,28 @@ export const STUDY_EXTRACTABLE_EXTENSIONS = new Set([
 
 /** Shown in file picker; legacy Office formats are rejected with a clear message. */
 export const STUDY_UPLOAD_ACCEPT =
-  '.txt,.md,.json,.pdf,.pptx,.docx,text/plain,text/markdown,application/json,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  '.pdf,.docx,.pptx,.txt,.md,.json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown,text/x-markdown,application/json,application/octet-stream';
 
 export const STUDY_UPLOAD_MIME_HINT =
   'PDF, PowerPoint (.pptx), Word (.docx), or text (.txt, .md). Legacy .ppt may need conversion.';
+
+export const STUDY_SUPPORTED_EXTENSIONS = [
+  'pdf',
+  'docx',
+  'pptx',
+  'txt',
+  'md',
+  'markdown',
+  'json',
+] as const;
+
+export function isAllowedStudyUploadFileName(fileName: string): boolean {
+  const ext = extensionFromFileName(fileName);
+  if (STUDY_SUPPORTED_EXTENSIONS.includes(ext as (typeof STUDY_SUPPORTED_EXTENSIONS)[number])) {
+    return true;
+  }
+  return isExtractableStudyFile(fileName);
+}
 
 export const STUDY_EXTRACT_MAX_BYTES = 15 * 1024 * 1024;
 

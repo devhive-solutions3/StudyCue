@@ -9,6 +9,7 @@ import {
   isLocalNoteUrl,
   storagePathFromLocalNoteUrl,
 } from '@/lib/local-file-store';
+export { buildNoteStoragePath, noteFileDocPath, noteFolderDocPath } from '@/lib/notes-paths';
 
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
@@ -28,18 +29,6 @@ function normalizeSafeName(name: string) {
 
 export function buildNoteStorageFileName(originalName: string) {
   return `${Date.now()}-${normalizeSafeName(originalName)}`;
-}
-
-export function buildNoteStoragePath(uid: string, folderId: number, safeFileName: string) {
-  return `users/${uid}/notes/${folderId}/${safeFileName}`;
-}
-
-export function noteFolderDocPath(uid: string, folderId: number) {
-  return `users/${uid}/noteFolders/${folderId}`;
-}
-
-export function noteFileDocPath(uid: string, folderId: number, fileId: number) {
-  return `${noteFolderDocPath(uid, folderId)}/files/${fileId}`;
 }
 
 export async function saveNoteFolderMetadata(uid: string, folder: NoteFolder) {

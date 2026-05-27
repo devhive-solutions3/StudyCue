@@ -6,7 +6,7 @@ import type { NoteFile } from '@studycue/types';
 
 import { extractStudyFileText } from '@/lib/study-file-extract-server';
 import { getFirebaseAdminDb, getFirebaseAdminStorage, readFirebaseAdminStatus } from '@/lib/firebase-admin';
-import { noteFileDocPath } from '@/lib/note-storage';
+import { noteFileDocPath } from '@/lib/notes-paths';
 import {
   noteFileExtractionMessage,
   noteFileSupportsTextExtraction,
