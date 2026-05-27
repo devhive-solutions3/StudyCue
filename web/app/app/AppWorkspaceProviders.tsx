@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
+import AppAnalyticsTracker from '@/components/analytics/AppAnalyticsTracker';
 import GlowBackground from '@/components/layout/GlowBackground';
 import { TransitionCard } from '@/components/layout/AppTransitionOverlay';
 import DashboardShell from '@/components/dashboard/DashboardShell';
@@ -82,6 +83,7 @@ export default function AppWorkspaceProviders({ children }: Readonly<{ children:
       <FocusTimerProvider>
         <DashboardUiProvider>
           <DashboardShell>
+            <AppAnalyticsTracker />
             <MirrorGate>{children}</MirrorGate>
           </DashboardShell>
         </DashboardUiProvider>

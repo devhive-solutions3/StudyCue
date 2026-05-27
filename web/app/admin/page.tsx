@@ -17,6 +17,11 @@ const overviewCards = [
   { key: 'securityEventsToday', label: 'Security events today', tone: 'bg-amber-100 text-amber-600' },
   { key: 'openBugReports', label: 'Open bug reports', tone: 'bg-rose-100 text-rose-600', href: '/admin/reports' },
   { key: 'bugReportsToday', label: 'Bug reports today', tone: 'bg-orange-100 text-orange-600', href: '/admin/reports' },
+  { key: 'activeUsersToday', label: 'Active users today', tone: 'bg-teal-100 text-teal-600', href: '/admin/analytics' },
+  { key: 'activeUsersThisWeek', label: 'Active this week', tone: 'bg-blue-100 text-blue-600', href: '/admin/analytics' },
+  { key: 'signupsToday', label: 'Signups today', tone: 'bg-purple-100 text-purple-600', href: '/admin/analytics' },
+  { key: 'd1RetentionRate', label: 'D1 retention', tone: 'bg-amber-100 text-amber-600', href: '/admin/analytics' },
+  { key: 'd7RetentionRate', label: 'D7 retention', tone: 'bg-amber-100 text-amber-600', href: '/admin/analytics' },
 ] as const;
 
 export default async function AdminDashboardPage() {
@@ -61,7 +66,9 @@ export default async function AdminDashboardPage() {
           const value =
             card.key === 'netThisMonthPhp'
               ? adminMoney(stats[card.key])
-              : formatCompactNumber(stats[card.key]);
+              : card.key === 'd1RetentionRate' || card.key === 'd7RetentionRate'
+                ? `${Math.round((stats[card.key] ?? 0) * 1000) / 10}%`
+                : formatCompactNumber(stats[card.key] ?? 0);
           const inner = (
             <>
               <div className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] ${card.tone}`}>

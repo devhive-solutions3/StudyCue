@@ -22,6 +22,12 @@ export type AdminOverviewStats = {
   securityEventsToday: number;
   openBugReports: number;
   bugReportsToday: number;
+  activeUsersToday?: number;
+  activeUsersThisWeek?: number;
+  signupsToday?: number;
+  d1RetentionRate?: number;
+  d7RetentionRate?: number;
+  mostUsedFeature?: string | null;
 };
 
 export type AdminUserRow = {

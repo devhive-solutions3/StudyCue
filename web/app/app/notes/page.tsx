@@ -1,11 +1,16 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 
 import type { NoteFile, NoteFolder } from '@studycue/types';
 
+import NotesFolderStudyOutputs from '@/components/notes/NotesFolderStudyOutputs';
+import NotesStudyPanel from '@/components/study-tools/NotesStudyPanel';
+import PremiumStudyToolLockedModal from '@/components/study-tools/PremiumStudyToolLockedModal';
 import { useMirror } from '@/context/mirror-context';
+import { usePremiumStudyTools } from '@/hooks/use-premium-study-tools';
 import { compressNoteFile } from '@/lib/file-compression';
 import { getFirebaseDb, useWebAuth } from '@/lib/firebase-client';
 import {
@@ -44,6 +49,16 @@ import {
 } from '@/lib/plan-access';
 import { publicFileStorageMode } from '@/lib/public-env';
 import { formatUploadLimit } from '@/lib/upload-limits';
+import { noteFileExtractionMessage, noteFileSupportsTextExtraction } from '@/lib/note-study-text';
+import { buildStudySourceFromNoteFile } from '@/lib/study-tools-note-source';
+import { saveStudySourceToSession } from '@/lib/study-source-session';
+import {
+  deleteFlashcardDeck,
+  deleteSavedQuiz,
+  listFlashcardDecks,
+  listSavedQuizzes,
+} from '@/lib/study-tools-client';
+import type { SavedFlashcardDeck, SavedQuiz } from '@/lib/study-tools-types';
 
 const SUPPORTED_MIME = new Set([
   'application/pdf',
@@ -152,11 +167,22 @@ function UploadProgressBar({ task }: { task: NoteUploadTask }) {
 }
 
 export default function NotesRoutePage() {
+  const router = useRouter();
   const { user } = useWebAuth();
   const { mirror, commitMirror, persistNow } = useMirror();
+  const { allowed: premiumStudyTools, planLabel: studyToolsPlanLabel, loading: planLoading } =
+    usePremiumStudyTools();
 
   const [folderName, setFolderName] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
+  const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
+  const [studyPanelSource, setStudyPanelSource] = useState<{ name: string; text: string } | null>(
+    null,
+  );
+  const [studyActionLoading, setStudyActionLoading] = useState(false);
+  const [lockedFeature, setLockedFeature] = useState<string | null>(null);
+  const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
+  const [savedDecks, setSavedDecks] = useState<SavedFlashcardDeck[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [deletingFolderId, setDeletingFolderId] = useState<number | null>(null);
@@ -206,6 +232,95 @@ export default function NotesRoutePage() {
 
   const selectedFolder = folders.find((f) => f.id === selectedFolderId) ?? folders[0] ?? null;
   const selectedFiles = files.filter((f) => f.folderId === selectedFolder?.id);
+  const selectedFile =
+    selectedFileId != null
+      ? selectedFiles.find((file) => file.id === selectedFileId) ?? null
+      : null;
+
+  useEffect(() => {
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear study outputs when signed out
+      setSavedQuizzes([]);
+      setSavedDecks([]);
+      return;
+    }
+    let cancelled = false;
+    void Promise.all([listSavedQuizzes(user.uid), listFlashcardDecks(user.uid)]).then(
+      ([quizzes, decks]) => {
+        if (!cancelled) {
+          setSavedQuizzes(quizzes);
+          setSavedDecks(decks);
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  async function refreshStudyOutputs() {
+    if (!user) return;
+    const [quizzes, decks] = await Promise.all([
+      listSavedQuizzes(user.uid),
+      listFlashcardDecks(user.uid),
+    ]);
+    setSavedQuizzes(quizzes);
+    setSavedDecks(decks);
+  }
+
+  function requirePremiumStudyTools(featureLabel: string): boolean {
+    if (planLoading) return false;
+    if (premiumStudyTools) return true;
+    setLockedFeature(featureLabel);
+    return false;
+  }
+
+  async function runWithNoteSource(
+    file: NoteFile,
+    action: (source: Awaited<ReturnType<typeof buildStudySourceFromNoteFile>>) => void,
+  ) {
+    if (!noteFileSupportsTextExtraction(file)) {
+      setMsg(
+        noteFileExtractionMessage(file) ??
+          'Text extraction for this file type is coming soon.',
+      );
+      return;
+    }
+    setStudyActionLoading(true);
+    setMsg(null);
+    try {
+      const folderName = folders.find((folder) => folder.id === file.folderId)?.name;
+      const source = await buildStudySourceFromNoteFile(file, folderName);
+      action(source);
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : 'Could not read this note file.');
+    } finally {
+      setStudyActionLoading(false);
+    }
+  }
+
+  async function handleStudyFile(file: NoteFile) {
+    if (!requirePremiumStudyTools('Study')) return;
+    await runWithNoteSource(file, (source) => {
+      setStudyPanelSource({ name: source.sourceName, text: source.text });
+    });
+  }
+
+  async function handleGenerateQuizFromFile(file: NoteFile) {
+    if (!requirePremiumStudyTools('Generate Quiz')) return;
+    await runWithNoteSource(file, (source) => {
+      saveStudySourceToSession(source);
+      router.push('/app/quiz');
+    });
+  }
+
+  async function handleGenerateFlashcardsFromFile(file: NoteFile) {
+    if (!requirePremiumStudyTools('Generate Flashcards')) return;
+    await runWithNoteSource(file, (source) => {
+      saveStudySourceToSession(source);
+      router.push('/app/flashcards');
+    });
+  }
   const folderUploads = uploadTasks.filter(
     (task) => task.folderId === selectedFolder?.id && task.status !== 'done',
   );
@@ -388,6 +503,26 @@ export default function NotesRoutePage() {
           void (async () => {
             try {
               await saveNoteFileMetadata(user.uid, row);
+              const storageAfter =
+                typeof planProfile?.storageUsedBytes === 'number'
+                  ? planProfile.storageUsedBytes + storedSizeBytes
+                  : storedSizeBytes;
+              void fetch('/api/analytics/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                  eventType: 'note_upload',
+                  feature: 'notes',
+                  route: '/app/notes',
+                  metadata: {
+                    fileType: extFromName(file.name) || 'pdf',
+                    storedSizeBytes,
+                    compressionSavedBytes: compression.savedBytes,
+                    storageUsedBytes: storageAfter,
+                  },
+                }),
+              }).catch(() => {});
             } catch (error) {
               await deleteStoredNoteAsset(row).catch(() => {});
               const nextStorageUsed = await adjustUserStorageUsedBytes(user.uid, -storedSizeBytes).catch(
@@ -832,6 +967,56 @@ export default function NotesRoutePage() {
                 </div>
               )}
 
+              {selectedFile ? (
+                <div className="mt-4 rounded-[14px] border border-accent/30 bg-accent/5 p-3">
+                  <p className="text-xs font-semibold text-text-primary">
+                    Selected: <span className="text-accent">{selectedFile.name}</span>
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={studyActionLoading}
+                      onClick={() => void handleStudyFile(selectedFile)}
+                      className="sc-btn-secondary text-xs disabled:opacity-60"
+                    >
+                      Study
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studyActionLoading}
+                      onClick={() => void handleGenerateQuizFromFile(selectedFile)}
+                      className="sc-btn-secondary text-xs disabled:opacity-60"
+                    >
+                      Generate quiz
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studyActionLoading}
+                      onClick={() => void handleGenerateFlashcardsFromFile(selectedFile)}
+                      className="sc-btn-secondary text-xs disabled:opacity-60"
+                    >
+                      Generate flashcards
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFileId(null)}
+                      className="text-xs font-semibold text-text-muted"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {!noteFileSupportsTextExtraction(selectedFile) ? (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-200">
+                      {noteFileExtractionMessage(selectedFile)}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-text-muted">
+                      Study tools use extracted text only — your note file is not changed.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+
               <div className="mt-4 space-y-2">
                 {selectedFiles.length === 0 && folderUploads.length === 0 ? (
                   <p className="text-sm text-text-muted">No files in this folder yet.</p>
@@ -839,10 +1024,25 @@ export default function NotesRoutePage() {
                   selectedFiles.map((file) => {
                     const isLocal = isLocalNoteUrl(file.downloadUrl);
                     const isDeleting = deletingFileId === file.id;
+                    const isSelected = selectedFileId === file.id;
                     return (
                       <div
                         key={file.id}
-                        className="flex min-h-[58px] items-center justify-between gap-3 rounded-[16px] border border-border bg-surface-2 px-3 py-2"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedFileId(file.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedFileId(file.id);
+                          }
+                        }}
+                        className={[
+                          'flex min-h-[58px] cursor-pointer items-center justify-between gap-3 rounded-[16px] border px-3 py-2',
+                          isSelected
+                            ? 'border-accent bg-accent/5'
+                            : 'border-border bg-surface-2 hover:bg-surface',
+                        ].join(' ')}
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium text-text-primary">
@@ -873,7 +1073,7 @@ export default function NotesRoutePage() {
                             </span>
                           ) : null}
                         </span>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3" onClick={(event) => event.stopPropagation()}>
                           {isLocal ? (
                             <button
                               type="button"
@@ -906,12 +1106,43 @@ export default function NotesRoutePage() {
                   })
                 )}
               </div>
+
+              {selectedFolder ? (
+                <NotesFolderStudyOutputs
+                  folderId={selectedFolder.id}
+                  quizzes={savedQuizzes}
+                  decks={savedDecks}
+                  onDeleteQuiz={(quizId) => {
+                    if (!user) return;
+                    void deleteSavedQuiz(user.uid, quizId).then(refreshStudyOutputs);
+                  }}
+                  onDeleteDeck={(deckId) => {
+                    if (!user) return;
+                    void deleteFlashcardDeck(user.uid, deckId).then(refreshStudyOutputs);
+                  }}
+                />
+              ) : null}
             </>
           ) : (
             <p className="mt-3 text-sm text-text-muted">Create a folder first to upload files.</p>
           )}
         </section>
       </div>
+
+      {studyPanelSource ? (
+        <NotesStudyPanel
+          sourceName={studyPanelSource.name}
+          text={studyPanelSource.text}
+          onClose={() => setStudyPanelSource(null)}
+        />
+      ) : null}
+
+      <PremiumStudyToolLockedModal
+        open={lockedFeature != null}
+        featureLabel={lockedFeature ?? 'Study tools'}
+        planLabel={studyToolsPlanLabel}
+        onClose={() => setLockedFeature(null)}
+      />
     </div>
   );
 }

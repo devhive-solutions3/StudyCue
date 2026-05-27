@@ -112,6 +112,13 @@ export function canUseGroupPlanning(profile: ProfileLike | null | undefined) {
   return readBoolean(profile?.groupPlanningEnabled, fallback);
 }
 
+/** Beta, Premium, or explicit premiumAccess — not treated as paid Premium in billing UI. */
+export function canUsePremiumStudyTools(profile: ProfileLike | null | undefined) {
+  const plan = getUserPlan(profile);
+  if (plan === 'beta' || plan === 'premium') return true;
+  return readBoolean(profile?.premiumAccess, false);
+}
+
 export function canUploadFile(
   profile: ProfileLike | null | undefined,
   currentStorageUsedBytes: number,

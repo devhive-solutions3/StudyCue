@@ -4,6 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { requireFirebaseAuth } from '@/lib/firebase-server-auth';
 import { getBetaSignupsEnabled } from '@/lib/beta-config-server';
 import { getFirebaseAdminDb, readFirebaseAdminStatus } from '@/lib/firebase-admin';
+import { trackProfileLoginAnalytics, trackProfileSignupAnalytics } from '@/lib/analytics-auth';
 import { buildNewUserProfile } from '@/lib/user-plan';
 
 export const runtime = 'nodejs';
@@ -21,10 +22,14 @@ export async function POST(request: Request) {
   const ref = db.doc(`users/${viewer.uid}`);
   const nowIso = new Date().toISOString();
 
+  let isNewUser = false;
+  let profileForAnalytics: Record<string, unknown> | null = null;
+
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
 
     if (!snapshot.exists) {
+      isNewUser = true;
       const betaSignupsEnabled = await getBetaSignupsEnabled();
       const profile = buildNewUserProfile({
         uid: viewer.uid,
@@ -33,6 +38,7 @@ export async function POST(request: Request) {
         photoURL: viewer.picture ?? null,
         plan: betaSignupsEnabled ? 'beta' : 'free',
       });
+      profileForAnalytics = profile;
 
       transaction.set(
         ref,
@@ -46,6 +52,11 @@ export async function POST(request: Request) {
     }
 
     const current = (snapshot.data() ?? {}) as Record<string, unknown>;
+    profileForAnalytics = {
+      ...current,
+      uid: viewer.uid,
+      lastLoginAt: nowIso,
+    };
     transaction.set(
       ref,
       {
@@ -62,6 +73,21 @@ export async function POST(request: Request) {
       { merge: true },
     );
   });
+
+  if (profileForAnalytics) {
+    if (isNewUser) {
+      void trackProfileSignupAnalytics({
+        uid: viewer.uid,
+        profile: profileForAnalytics,
+        signupSource: null,
+      }).catch(() => {});
+    } else {
+      void trackProfileLoginAnalytics({
+        uid: viewer.uid,
+        profile: profileForAnalytics,
+      }).catch(() => {});
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

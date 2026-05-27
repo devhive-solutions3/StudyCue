@@ -42,6 +42,26 @@ const ICONS = {
       <path d="M5.3 7h5.4M5.3 9.2h5.4" />
     </>
   ),
+  quiz: (
+    <>
+      <circle cx="8" cy="8" r="4.2" />
+      <path d="M6.2 8.2l1.2 1.2 2.6-2.6" />
+    </>
+  ),
+  flashcards: (
+    <>
+      <rect x="4.5" y="4.2" width="7" height="8.6" rx="1.2" />
+      <path d="M5.8 7.2h4.4M5.8 9.4h3.2" />
+      <path d="M6.8 3.8h5.4" />
+    </>
+  ),
+  fileStudy: (
+    <>
+      <path d="M4.2 4.2h5.2l2.6 2.6v5.6H4.2z" />
+      <path d="M9.4 4.2v2.6h2.6" />
+      <path d="M6 10.2h4" />
+    </>
+  ),
   settings: (
     <>
       <circle cx="8" cy="8" r="1.8" />

@@ -23,6 +23,8 @@ const MAIN_ITEMS: Item[] = [
 const STUDY_ITEMS: Item[] = [
   { href: '/app/focus-timer', label: 'Focus Timer', icon: 'timer' },
   { href: '/app/notes', label: 'Notes', icon: 'notes' },
+  { href: '/app/quiz', label: 'Quiz Generator', icon: 'quiz' },
+  { href: '/app/flashcards', label: 'Flashcards', icon: 'flashcards' },
 ];
 
 const BOTTOM_ITEMS: Item[] = [

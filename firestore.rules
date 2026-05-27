@@ -36,12 +36,35 @@ service cloud.firestore {
       match /meta/{docId} {
         allow read, write: if isOwner(uid);
       }
+      match /quizzes/{quizId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /flashcardDecks/{deckId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /analytics/{dateKey} {
+        allow read, write: if false;
+      }
     }
 
     // Bug reports are written by the server (Admin SDK). Lock down direct client access.
     match /bugReports/{reportId} {
       allow read: if request.auth != null && resource.data.uid == request.auth.uid;
       allow create, update, delete: if false;
+    }
+
+    // Product analytics — server (Admin SDK) writes only.
+    match /analyticsEvents/{eventId} {
+      allow read, write: if false;
+    }
+    match /analyticsDaily/{dateKey} {
+      allow read, write: if false;
+    }
+    match /activeUsersDaily/{dateKey}/users/{uid} {
+      allow read, write: if false;
+    }
+    match /analyticsFeatureDaily/{dateKey}/features/{feature}/users/{uid} {
+      allow read, write: if false;
     }
   }
 }
