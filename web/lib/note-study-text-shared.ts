@@ -20,7 +20,7 @@ export function noteFileExtractionMessage(file: NoteFile): string | null {
     return 'Legacy .doc text extraction is not supported yet. Please convert to .docx or paste the notes.';
   }
   if (noteFileSupportsTextExtraction(file)) return null;
-  return 'This file type cannot be used as study source yet. Try upload or paste text.';
+  return 'This file type is not supported yet. Try PDF, DOCX, PPTX, TXT, or MD.';
 }
 
 export function isNoteFileLocalOnly(file: NoteFile): boolean {

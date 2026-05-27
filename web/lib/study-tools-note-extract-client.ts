@@ -20,6 +20,9 @@ export type NoteStudyExtractResponse = {
 
 function formatStudyFetchError(error: unknown, fallback: string): string {
   if (error instanceof Error) {
+    if (/noteFileDocPath|client function from the server|use client/i.test(error.message)) {
+      return 'Could not read this note file. Please try again.';
+    }
     if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
       return 'Could not reach the study tools server. Check your connection and try again.';
     }

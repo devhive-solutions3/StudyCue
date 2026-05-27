@@ -4,7 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useMirror } from '@/context/mirror-context';
 import { useWebAuth } from '@/lib/firebase-client';
-import { STUDY_UPLOAD_ACCEPT, STUDY_UPLOAD_MIME_HINT } from '@/lib/study-file-extract';
+import {
+  isAllowedStudyUploadFileName,
+  STUDY_UPLOAD_ACCEPT,
+  STUDY_UPLOAD_MIME_HINT,
+} from '@/lib/study-file-extract';
 import { noteFileExtractionMessage, noteFileSupportsTextExtraction } from '@/lib/note-study-text';
 import { buildStudySourceFromNoteFile } from '@/lib/study-tools-note-source';
 import { extractTextFromStudyFile } from '@/lib/study-tools-text-extraction';
@@ -100,6 +104,14 @@ export default function StudySourcePicker({
   }
 
   function handleUploadFileChange(file: File | null) {
+    if (file && !isAllowedStudyUploadFileName(file.name)) {
+      setError(
+        'This file type is not supported yet. Try PDF, DOCX, PPTX, TXT, or MD.',
+      );
+      setUploadFile(null);
+      if (uploadInputRef.current) uploadInputRef.current.value = '';
+      return;
+    }
     setUploadFile(file);
     setError(null);
     setTruncateNotice(null);

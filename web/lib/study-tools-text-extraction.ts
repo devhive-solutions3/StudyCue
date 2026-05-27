@@ -148,7 +148,9 @@ export async function extractTextFromStudyFile(file: File): Promise<StudyFileExt
 
   if (isPlainTextStudyFile(file.name)) {
     text = await extractPlainText(file);
-    extractionMethod = 'plain-text';
+    const plainExt = extensionFromFileName(file.name);
+    extractionMethod =
+      plainExt === 'md' || plainExt === 'markdown' ? 'markdown-text' : 'plain-text';
   } else {
     switch (ext) {
       case 'pdf':
