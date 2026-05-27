@@ -19,6 +19,7 @@ import { syncStudyCalendarTasks } from '@/lib/study-task-sync';
 
 const SAVE_DEBOUNCE_MS = 850;
 const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const INITIAL_SNAPSHOT_TIMEOUT_MS = 6000;
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
 export type MirrorContextValue = {
@@ -95,25 +96,29 @@ export function MirrorProvider({
     const db = getFirebaseDb();
     const ref = doc(db, 'users', uid, 'mirror', 'snapshot');
     let didInit = false;
+    const seedEmptyMirror = () => {
+      if (didInit) return;
+      didInit = true;
+      const seed = emptyMirror();
+      setMirror(seed);
+      latestRef.current = seed;
+      setLoading(false);
+      void persistNow().catch(() => {});
+    };
+    const initFallback = window.setTimeout(seedEmptyMirror, INITIAL_SNAPSHOT_TIMEOUT_MS);
     const unsub = onSnapshot(
       ref,
       (snap) => {
         const raw = (snap.data() as { json?: string } | undefined)?.json;
         if (!raw) {
-          if (!didInit) {
-            didInit = true;
-            const seed = emptyMirror();
-            setMirror(seed);
-            latestRef.current = seed;
-            setLoading(false);
-            void persistNow().catch(() => {});
-          }
+          seedEmptyMirror();
           return;
         }
         try {
           const parsed = JSON.parse(raw) as CloudMirrorV1;
           const n = syncStudyCalendarTasks(normalizeMirror(parsed));
           didInit = true;
+          window.clearTimeout(initFallback);
           setMirror(n);
           latestRef.current = n;
           setError(null);
@@ -125,12 +130,16 @@ export function MirrorProvider({
       },
       (snapshotErr) => {
         didInit = true;
+        window.clearTimeout(initFallback);
         if (IS_DEV) console.warn('[mirror] snapshot listen failed', snapshotErr);
         setError('Cloud sync is temporarily unavailable for this account.');
         setLoading(false);
       },
     );
-    return () => unsub();
+    return () => {
+      window.clearTimeout(initFallback);
+      unsub();
+    };
   }, [uid, persistNow]);
 
   useEffect(() => {
