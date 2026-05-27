@@ -14,21 +14,25 @@ export const AD_CONSENT_KEY = 'studycue.ads_consent';
 export default function ConsentBar() {
   const skip = process.env.NEXT_PUBLIC_SKIP_AD_CONSENT === '1';
   const client = getAdsenseClient();
+  const [mounted, setMounted] = useState(false);
 
-  const [open, setOpen] = useState(() => {
-    if (skip || typeof window === 'undefined') return false;
-    const v = localStorage.getItem(AD_CONSENT_KEY);
-    return v !== 'granted' && v !== 'denied';
-  });
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     function onConsent() {
       const v = localStorage.getItem(AD_CONSENT_KEY);
       setOpen(!(v === 'granted' || v === 'denied'));
     }
+    const id = window.setTimeout(() => {
+      setMounted(true);
+      if (!skip) onConsent();
+    }, 0);
     window.addEventListener('studycue-consent-changed', onConsent);
-    return () => window.removeEventListener('studycue-consent-changed', onConsent);
-  }, []);
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener('studycue-consent-changed', onConsent);
+    };
+  }, [skip]);
 
   function accept() {
     localStorage.setItem(AD_CONSENT_KEY, 'granted');
@@ -42,7 +46,7 @@ export default function ConsentBar() {
     setOpen(false);
   }
 
-  if (!open || !client) return null;
+  if (!mounted || !open || !client) return null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[999999] border-t border-white/10 bg-slate-950/95 px-4 py-4 text-sm text-white/85 shadow-[0_-8px_32px_rgba(0,0,0,.45)]">

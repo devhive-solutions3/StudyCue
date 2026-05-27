@@ -53,3 +53,7 @@ firebase-adminsdk*.json
 GoogleService-Info.plist
 google-services.json
 supabase-service-role*.json
+
+# QA artifacts
+StudyCue_QA_Checklist.xlsx
+~$StudyCue_QA_Checklist.xlsx
