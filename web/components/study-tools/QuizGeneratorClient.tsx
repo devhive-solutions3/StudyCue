@@ -9,8 +9,9 @@ import StudySourcePicker from '@/components/study-tools/StudySourcePicker';
 import StudyToolsUsageIndicator from '@/components/study-tools/StudyToolsUsageIndicator';
 import { useMirror } from '@/context/mirror-context';
 import { useWebAuth } from '@/lib/firebase-client';
-import { readCueGeneratedQuiz } from '@/lib/cue-study-session';
+import { patchCueStudySessionSaved } from '@/lib/cue-study-session-client';
 import { readStudySourceFromSession, saveStudySourceToSession } from '@/lib/study-source-session';
+import { useCueStudySessionLoader } from '@/hooks/use-cue-study-session-loader';
 import { studyGenerateBlockedMessage } from '@/lib/study-source-validation';
 import {
   STUDY_TOOLS_DAILY_LIMIT_MESSAGE,
@@ -42,27 +43,14 @@ export default function QuizGeneratorClient() {
   const { mirror, commitMirror } = useMirror();
   const folders = mirror.noteFolders ?? [];
 
-  const cueQuizBootstrap =
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('fromCue')
-      ? readCueGeneratedQuiz()
-      : null;
+  const sessionId = searchParams.get('sessionId');
+  const cueSession = useCueStudySessionLoader(sessionId, 'quiz');
 
-  const [source, setSource] = useState<StudySourceSelection | null>(() => {
-    if (cueQuizBootstrap) {
-      return {
-        sourceType: cueQuizBootstrap.sourceType,
-        sourceName: cueQuizBootstrap.sourceName,
-        text: '',
-      };
-    }
-    return readStudySourceFromSession();
-  });
+  const [source, setSource] = useState<StudySourceSelection | null>(() => readStudySourceFromSession());
   const [uploadPending, setUploadPending] = useState(false);
   const [numQuestions, setNumQuestions] = useState(10);
-  const storedQuestionsRef = useRef<QuizQuestion[] | null>(cueQuizBootstrap?.questions ?? null);
-  const [attemptQuestions, setAttemptQuestions] = useState<QuizQuestion[] | null>(
-    cueQuizBootstrap?.questions ?? null,
-  );
+  const storedQuestionsRef = useRef<QuizQuestion[] | null>(null);
+  const [attemptQuestions, setAttemptQuestions] = useState<QuizQuestion[] | null>(null);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [score, setScore] = useState(0);
@@ -74,12 +62,20 @@ export default function QuizGeneratorClient() {
   const [saveDefaults, setSaveDefaults] = useState({ title: '', folderId: null as number | null });
   const [allQuizzes, setAllQuizzes] = useState<SavedQuiz[]>([]);
 
-  const quiz = attemptQuestions;
-
   useEffect(() => {
     if (!user) return;
     void listSavedQuizzes(user.uid).then(setAllQuizzes);
   }, [user]);
+
+  const sessionQuiz =
+    cueSession.session?.type === 'quiz' ? cueSession.session.questions : null;
+  const sessionMeta = cueSession.session?.type === 'quiz' ? cueSession.session : null;
+  const activeCueSessionId = sessionId ?? sessionMeta?.sessionId ?? null;
+  const quiz = attemptQuestions ?? sessionQuiz;
+
+  useEffect(() => {
+    if (sessionQuiz) storedQuestionsRef.current = sessionQuiz;
+  }, [sessionQuiz]);
 
   function beginRetake(row: SavedQuiz) {
     storedQuestionsRef.current = row.questions;
@@ -244,6 +240,9 @@ export default function QuizGeneratorClient() {
         scoreLastAttempt: finalScore,
       });
       setActiveSavedId(row.quizId);
+      if (activeCueSessionId) {
+        await patchCueStudySessionSaved(activeCueSessionId, row.quizId);
+      }
       try {
         setAllQuizzes(await listSavedQuizzes(user.uid));
       } catch {
@@ -291,7 +290,21 @@ export default function QuizGeneratorClient() {
         <StudyToolsUsageIndicator className="mt-2" />
       </div>
 
-      {!quiz ? (
+      {sessionId && cueSession.loading ? (
+        <p className="text-sm text-text-secondary">Loading your Cue quiz…</p>
+      ) : null}
+
+      {sessionId && cueSession.error ? (
+        <div className="rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">Temporary quiz unavailable</p>
+          <p className="mt-1">{cueSession.error}</p>
+          <Link href="/app/chat" className="mt-3 inline-block text-sm font-semibold text-accent underline">
+            Back to Cue
+          </Link>
+        </div>
+      ) : null}
+
+      {!quiz && !(sessionId && (cueSession.loading || cueSession.error)) ? (
         <>
           <StudySourcePicker
             source={source}
@@ -366,7 +379,7 @@ export default function QuizGeneratorClient() {
             <div className="space-y-3">
               <h2 className="text-xl font-semibold text-text-primary">Quiz complete</h2>
               <p className="text-sm text-text-secondary">
-                Score: {score} / {quiz.length}
+                Score: {score} / {quiz?.length ?? 0}
               </p>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => void handleFinishSave()} className="sc-btn-primary">

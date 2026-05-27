@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 
-import { formatAdminDate } from '@/lib/admin-shared';
+import { formatAdminDate, formatStorageBytes } from '@/lib/admin-shared';
 import type { StudyToolsAdminDashboard } from '@/lib/admin-study-tools-data';
 
 type Filter =
@@ -31,6 +31,25 @@ export default function AdminStudyToolsClient({ dashboard }: { dashboard: StudyT
 
   return (
     <div className="space-y-6">
+      <p className="rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-text-secondary">
+        {dashboard.storageNote}
+      </p>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Saved quizzes (all users)', value: dashboard.summary.savedQuizzesTotal },
+          { label: 'Saved flashcard decks (all users)', value: dashboard.summary.savedFlashcardDecksTotal },
+        ].map((card) => (
+          <div
+            key={card.label}
+            className="rounded-[22px] border border-white/10 bg-white/5 px-5 py-4 backdrop-blur-xl"
+          >
+            <p className="text-xs uppercase tracking-[0.2em] text-text-muted">{card.label}</p>
+            <p className="mt-2 text-2xl font-extrabold text-text-primary">{card.value}</p>
+          </div>
+        ))}
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Quiz generations today', value: dashboard.summary.quizGenerationsToday },
@@ -80,6 +99,8 @@ export default function AdminStudyToolsClient({ dashboard }: { dashboard: StudyT
                 <th className="pb-2 pr-4">Used / limit</th>
                 <th className="pb-2 pr-4">Refresh</th>
                 <th className="pb-2 pr-4">Last</th>
+                <th className="pb-2 pr-4">Saved Q / Decks</th>
+                <th className="pb-2 pr-4">Storage</th>
                 <th className="pb-2">Page / Cue</th>
               </tr>
             </thead>
@@ -96,6 +117,13 @@ export default function AdminStudyToolsClient({ dashboard }: { dashboard: StudyT
                   </td>
                   <td className="py-2 pr-4">{user.resetLabel}</td>
                   <td className="py-2 pr-4">{formatAdminDate(user.lastGeneratedAt)}</td>
+                  <td className="py-2 pr-4">
+                    {user.savedQuizzes} / {user.savedFlashcardDecks}
+                  </td>
+                  <td className="py-2 pr-4">
+                    {formatStorageBytes(user.storageUsedBytes)} /{' '}
+                    {formatStorageBytes(user.storageLimitBytes)}
+                  </td>
                   <td className="py-2">
                     {user.fromPages} / {user.fromCue}
                   </td>
