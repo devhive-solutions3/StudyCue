@@ -12,6 +12,7 @@ import {
 import { noteFileExtractionMessage, noteFileSupportsTextExtraction } from '@/lib/note-study-text';
 import { buildStudySourceFromNoteFile } from '@/lib/study-tools-note-source';
 import { extractTextFromStudyFile } from '@/lib/study-tools-text-extraction';
+import { largeSourceUserNotice } from '@/lib/study-tools-text-limits';
 import type { StudySourceSelection, StudySourceType } from '@/lib/study-tools-types';
 import { STUDY_SOURCE_MAX_CHARS } from '@/lib/study-tools-types';
 import type { NoteFile } from '@studycue/types';
@@ -69,6 +70,10 @@ export default function StudySourcePicker({
     if (selectedFileId === '') return null;
     return (mirror.noteFiles ?? []).find((file) => file.id === selectedFileId) ?? null;
   }, [mirror.noteFiles, selectedFileId]);
+
+  const sourceSizeNotice = activeSource?.text.trim()
+    ? largeSourceUserNotice(activeSource.text.length)
+    : null;
 
   function applySelection(selection: StudySourceSelection | null) {
     if (!isControlled) {
@@ -282,6 +287,12 @@ export default function StudySourcePicker({
               {truncateNotice ? (
                 <p className="mt-2 text-xs text-amber-700 dark:text-amber-200">{truncateNotice}</p>
               ) : null}
+              {sourceSizeNotice && !truncateNotice ? (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-200">{sourceSizeNotice}</p>
+              ) : null}
+              {sourceSizeNotice && truncateNotice ? (
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">{sourceSizeNotice}</p>
+              ) : null}
               <button
                 type="button"
                 onClick={resetUploadSelection}
@@ -372,12 +383,17 @@ export default function StudySourcePicker({
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {activeSource && !(tab === 'upload' && uploadSourceReady) ? (
-        <p className="text-xs text-emerald-700 dark:text-emerald-200">
-          {activeSource.sourceType === 'upload'
-            ? `File ready: ${activeSource.sourceName}`
-            : `Ready: ${activeSource.sourceName}`}{' '}
-          ({activeSource.text.length.toLocaleString()} characters)
-        </p>
+        <div className="text-xs text-emerald-700 dark:text-emerald-200">
+          <p>
+            {activeSource.sourceType === 'upload'
+              ? `File ready: ${activeSource.sourceName}`
+              : `Ready: ${activeSource.sourceName}`}{' '}
+            ({activeSource.text.length.toLocaleString()} characters)
+          </p>
+          {sourceSizeNotice ? (
+            <p className="mt-1 text-amber-700 dark:text-amber-200">{sourceSizeNotice}</p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

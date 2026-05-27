@@ -253,3 +253,72 @@ export async function reserveStudyToolGeneration(params: {
 
   return { allowed: true, daily, userPlan: plan };
 }
+
+/** Roll back a reserved generation when AI fails (same requestId + day only). */
+export async function releaseStudyToolGeneration(params: {
+  uid: string;
+  tool: StudyToolKind;
+  sourceSurface: StudyToolSourceSurface;
+  requestId?: string | null;
+}): Promise<void> {
+  if (!readFirebaseAdminStatus().configured || !params.requestId?.trim()) return;
+
+  const createdAt = isoNow();
+  const dateKey = studyToolsDateKey(createdAt);
+  const db = getFirebaseAdminDb();
+  const usageRef = db.doc(`users/${params.uid}/usage/${dateKey}`);
+  const summaryRef = db.doc(`users/${params.uid}/usageSummary/studyTools`);
+  const requestRef = db.doc(`users/${params.uid}/usageRequests/${params.requestId.trim()}`);
+  const toolField = counterFieldForTool(params.tool);
+  const summaryField = summaryCounterForTool(params.tool, params.sourceSurface);
+
+  await db.runTransaction(async (transaction) => {
+    const [usageSnap, requestSnap] = await Promise.all([
+      transaction.get(usageRef),
+      transaction.get(requestRef),
+    ]);
+    const requestData = (requestSnap.data() ?? {}) as Record<string, unknown>;
+    if (requestData.studyToolCountedDateKey !== dateKey) return;
+
+    const usageData = (usageSnap.data() ?? {}) as Record<string, unknown>;
+    const used = typeof usageData.studyToolGenerationsUsed === 'number' ? usageData.studyToolGenerationsUsed : 0;
+    if (used <= 0) return;
+
+    transaction.set(
+      usageRef,
+      {
+        studyToolGenerationsUsed: FieldValue.increment(-1),
+        [toolField]: FieldValue.increment(-1),
+        updatedAt: createdAt,
+        serverTimestamp: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    transaction.set(
+      summaryRef,
+      {
+        [summaryField]: FieldValue.increment(-1),
+        updatedAt: createdAt,
+        serverTimestamp: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    transaction.set(
+      requestRef,
+      {
+        studyToolCountedDateKey: FieldValue.delete(),
+        updatedAt: createdAt,
+        serverTimestamp: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  });
+
+  if (IS_DEV) {
+    console.info('[study-tools-usage] released failed generation', {
+      uidExists: Boolean(params.uid),
+      tool: params.tool,
+      sourceSurface: params.sourceSurface,
+    });
+  }
+}

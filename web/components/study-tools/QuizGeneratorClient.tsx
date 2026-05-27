@@ -12,6 +12,7 @@ import { useWebAuth } from '@/lib/firebase-client';
 import { patchCueStudySessionSaved } from '@/lib/cue-study-session-client';
 import { readStudySourceFromSession, saveStudySourceToSession } from '@/lib/study-source-session';
 import { useCueStudySessionLoader } from '@/hooks/use-cue-study-session-loader';
+import { beginStudyGenerationLoadingLabel } from '@/lib/study-tools-generation-ui';
 import { studyGenerateBlockedMessage } from '@/lib/study-source-validation';
 import {
   STUDY_TOOLS_DAILY_LIMIT_MESSAGE,
@@ -56,6 +57,7 @@ export default function QuizGeneratorClient() {
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('Generate quiz');
   const [error, setError] = useState<string | null>(null);
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -141,6 +143,11 @@ export default function QuizGeneratorClient() {
     setLoading(true);
     setError(null);
     resetAttemptState();
+    const clearLoadingLabelTimer = beginStudyGenerationLoadingLabel(
+      readySource.text.length,
+      'quiz',
+      setLoadingLabel,
+    );
     try {
       const response = await fetch('/api/study-tools/generate-quiz', {
         method: 'POST',
@@ -171,6 +178,8 @@ export default function QuizGeneratorClient() {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not generate quiz.');
     } finally {
+      clearLoadingLabelTimer();
+      setLoadingLabel('Generate quiz');
       setLoading(false);
     }
   }
@@ -332,7 +341,7 @@ export default function QuizGeneratorClient() {
               onClick={() => void generateQuiz()}
               className="sc-btn-primary disabled:opacity-60"
             >
-              {loading ? 'Generating…' : 'Generate quiz'}
+              {loading ? loadingLabel : 'Generate quiz'}
             </button>
           </div>
         </>
