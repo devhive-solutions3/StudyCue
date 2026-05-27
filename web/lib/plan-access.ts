@@ -127,10 +127,15 @@ export function canUsePremiumStudyTools(profile: ProfileLike | null | undefined)
   return readBoolean(profile?.premiumAccess, false);
 }
 
-/** Study Tools AI (quiz, flashcards, file study) — Beta and Premium plans only. */
-export function canUseStudyToolsAi(profile: ProfileLike | null | undefined) {
+/** Study Tools (quiz, flashcards, file study) — Beta and Premium plans only. Plan is source of truth. */
+export function canUseStudyTools(profile: ProfileLike | null | undefined): boolean {
   const plan = getUserPlan(profile);
   return plan === 'beta' || plan === 'premium';
+}
+
+/** @alias canUseStudyTools */
+export function canUseStudyToolsAi(profile: ProfileLike | null | undefined): boolean {
+  return canUseStudyTools(profile);
 }
 
 export function canUploadFile(

@@ -32,6 +32,9 @@ function geminiProxyClientError(status: number, responseJson: GeminiErrorBody | 
     return 'Gemini model failed or is unavailable. Check GEMINI_MODEL.';
   }
   if (status === 429) {
+    if (/quota|billing|exceeded/i.test(safeApiMessage)) {
+      return 'Gemini quota exceeded. Please try again later.';
+    }
     return 'Gemini rate limit hit.';
   }
   if (safeApiMessage) {

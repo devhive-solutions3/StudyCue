@@ -15,6 +15,17 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'premium', label: 'Premium' },
 ];
 
+function formatStudyToolsUsage(user: AdminUserRow): { daily: string; quizCards: string } {
+  const plan = normalizePlan(user.plan || user.accountType);
+  if (plan === 'free') {
+    return { daily: 'Locked', quizCards: 'Locked' };
+  }
+  return {
+    daily: `${user.studyToolGenerationsUsedToday ?? 0}/${user.studyToolDailyLimit ?? '—'}`,
+    quizCards: `${user.quizGenerationsUsedToday ?? 0} / ${user.flashcardGenerationsUsedToday ?? 0}`,
+  };
+}
+
 export default function AdminUsersClient({ users }: { users: AdminUserRow[] }) {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -246,11 +257,11 @@ export default function AdminUsersClient({ users }: { users: AdminUserRow[] }) {
                           </p>
                           <p>
                             <span className="font-semibold text-text-primary">Study tools:</span>{' '}
-                            {user.studyToolGenerationsUsedToday ?? 0}/{user.studyToolDailyLimit ?? '—'}
+                            {formatStudyToolsUsage(user).daily}
                           </p>
                           <p>
                             <span className="font-semibold text-text-primary">Quiz / Cards:</span>{' '}
-                            {user.quizGenerationsUsedToday ?? 0} / {user.flashcardGenerationsUsedToday ?? 0}
+                            {formatStudyToolsUsage(user).quizCards}
                           </p>
                           <p>
                             <span className="font-semibold text-text-primary">Images:</span>{' '}

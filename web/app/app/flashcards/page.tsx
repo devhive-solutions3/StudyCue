@@ -7,10 +7,7 @@ import PremiumStudyToolGate from '@/components/study-tools/PremiumStudyToolGate'
 
 function FlashcardsPageContent() {
   return (
-    <PremiumStudyToolGate
-      title="Flashcards"
-      subtitle="Turn notes into active-recall flashcards with citations."
-    >
+    <PremiumStudyToolGate variant="flashcards">
       <FlashcardsClient />
     </PremiumStudyToolGate>
   );

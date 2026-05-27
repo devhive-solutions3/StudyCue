@@ -245,7 +245,9 @@ export async function generateQuizForUser(params: {
   });
 
   try {
-    const quiz = await generateQuizFromText(ctx.sourceText, params.numQuestions);
+    const quiz = await generateQuizFromText(ctx.sourceText, params.numQuestions, {
+      userPlan: ctx.userPlan,
+    });
     const estimates = buildStudyToolUsageEstimates({
       provider: 'groq',
       sourceLength: ctx.sourceText.length,
@@ -423,7 +425,9 @@ export async function generateFlashcardsForUser(params: {
   });
 
   try {
-    const flashcards = await generateFlashcardsFromText(ctx.sourceText, params.numCards);
+    const flashcards = await generateFlashcardsFromText(ctx.sourceText, params.numCards, {
+      userPlan: ctx.userPlan,
+    });
     const estimates = buildStudyToolUsageEstimates({
       provider: 'groq',
       sourceLength: ctx.sourceText.length,

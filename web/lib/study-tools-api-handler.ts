@@ -10,7 +10,7 @@ import {
 } from '@/lib/study-tools-server';
 import { requireFirebaseAuth } from '@/lib/firebase-server-auth';
 import { STUDY_TOOLS_PLAN_DENIED_MESSAGE } from '@/lib/study-tools-request';
-import { STUDY_AI_USER_ERRORS } from '@/lib/study-tools-ai-utils';
+import { isStudyAiDev, STUDY_AI_USER_ERRORS } from '@/lib/study-tools-ai-utils';
 import type { StudyToolEndpoint } from '@/lib/study-tools-usage-log';
 
 export type { StudyToolEndpoint };
@@ -38,6 +38,7 @@ function mapStudyToolError(error: unknown): { message: string; status: number } 
   }
   const message = error instanceof Error ? error.message : 'Generation failed.';
   if (message === STUDY_AI_USER_ERRORS.noProvider) return { message, status: 503 };
+  if (message === STUDY_AI_USER_ERRORS.providerUnavailable) return { message, status: 503 };
   if (/invalid quiz format|invalid flashcards format|invalid study format/i.test(message)) {
     return { message, status: 502 };
   }
@@ -73,6 +74,15 @@ export async function runStudyToolRequest<T>(params: {
   }
 
   const requestId = params.request.headers.get('x-studycue-request-id');
+
+  if (isStudyAiDev()) {
+    console.info('[study-tools-api]', {
+      endpoint: params.endpoint,
+      uidExists: true,
+      textLength: parsed.text.length,
+      sourceNameLength: parsed.sourceName.length,
+    });
+  }
 
   try {
     const { data, daily } = await params.run({

@@ -238,7 +238,7 @@ export default function NotesRoutePage() {
       : null;
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !premiumStudyTools) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- clear study outputs when signed out
       setSavedQuizzes([]);
       setSavedDecks([]);
@@ -256,7 +256,7 @@ export default function NotesRoutePage() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [premiumStudyTools, user]);
 
   async function refreshStudyOutputs() {
     if (!user) return;
@@ -987,27 +987,27 @@ export default function NotesRoutePage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      disabled={studyActionLoading}
+                      disabled={studyActionLoading || planLoading}
                       onClick={() => void handleStudyFile(selectedFile)}
                       className="sc-btn-secondary text-xs disabled:opacity-60"
                     >
-                      Study
+                      Study{premiumStudyTools ? '' : ' 🔒'}
                     </button>
                     <button
                       type="button"
-                      disabled={studyActionLoading}
+                      disabled={studyActionLoading || planLoading}
                       onClick={() => void handleGenerateQuizFromFile(selectedFile)}
                       className="sc-btn-secondary text-xs disabled:opacity-60"
                     >
-                      Generate quiz
+                      Generate quiz{premiumStudyTools ? '' : ' 🔒'}
                     </button>
                     <button
                       type="button"
-                      disabled={studyActionLoading}
+                      disabled={studyActionLoading || planLoading}
                       onClick={() => void handleGenerateFlashcardsFromFile(selectedFile)}
                       className="sc-btn-secondary text-xs disabled:opacity-60"
                     >
-                      Generate flashcards
+                      Generate flashcards{premiumStudyTools ? '' : ' 🔒'}
                     </button>
                     <button
                       type="button"
@@ -1021,9 +1021,13 @@ export default function NotesRoutePage() {
                     <p className="mt-2 text-xs text-amber-700 dark:text-amber-200">
                       {noteFileExtractionMessage(selectedFile)}
                     </p>
-                  ) : (
+                  ) : premiumStudyTools ? (
                     <p className="mt-2 text-xs text-text-muted">
                       Study tools use extracted text only — your note file is not changed.
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-text-muted">
+                      Study, quiz, and flashcards are available for Beta and StudyCue Plus users.
                     </p>
                   )}
                 </div>
@@ -1119,7 +1123,7 @@ export default function NotesRoutePage() {
                 )}
               </div>
 
-              {selectedFolder ? (
+              {selectedFolder && premiumStudyTools ? (
                 <NotesFolderStudyOutputs
                   folderId={selectedFolder.id}
                   quizzes={savedQuizzes}

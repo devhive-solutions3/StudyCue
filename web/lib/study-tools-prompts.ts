@@ -1,6 +1,31 @@
+const MAX_NUMBERED_LINES = 1_500;
+const SECTION_CHUNK_CHARS = 450;
+
+/** Number source for citations without exploding payload on PDFs with a line per word. */
 export function buildNumberedSourceText(text: string): string {
-  const lines = text.replace(/\r\n/g, '\n').split('\n');
-  return lines.map((line, index) => `[Line ${index + 1}] ${line}`).join('\n');
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  const lines = normalized.split('\n').filter((line) => line.trim().length > 0);
+
+  if (lines.length <= MAX_NUMBERED_LINES) {
+    return lines.map((line, index) => `[Line ${index + 1}] ${line}`).join('\n');
+  }
+
+  const sections: string[] = [];
+  let current = '';
+  for (const line of lines) {
+    const piece = line.trim();
+    if (!piece) continue;
+    const candidate = current ? `${current} ${piece}` : piece;
+    if (candidate.length > SECTION_CHUNK_CHARS && current) {
+      sections.push(current);
+      current = piece;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current.trim()) sections.push(current.trim());
+
+  return sections.map((section, index) => `[Section ${index + 1}] ${section}`).join('\n\n');
 }
 
 export function buildQuizPrompt(numQuestions: number): string {
