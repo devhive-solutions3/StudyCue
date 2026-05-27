@@ -13,6 +13,7 @@ import {
 } from 'react';
 
 import { useMirror } from '@/context/mirror-context';
+import { playFocusTimerCompleteSound, preloadFocusTimerSound } from '@/lib/focus-timer-sound';
 import { nextNumericId } from '@/lib/mirror-bootstrap';
 
 const STORAGE_KEY = 'studycue_focus_timer_state';
@@ -31,6 +32,13 @@ type PersistedTimerState = {
   completePromptTaskId: number | null;
 };
 
+export type FocusCompletionModal = {
+  open: true;
+  durationMinutes: number;
+  sessionTitle: string;
+  connectedTaskId: number | null;
+};
+
 type FocusTimerContextValue = {
   hydrated: boolean;
   status: FocusTimerStatus;
@@ -41,6 +49,7 @@ type FocusTimerContextValue = {
   sessionTitle: string;
   connectedTaskId: number | null;
   completePromptTaskId: number | null;
+  completionModal: FocusCompletionModal | null;
   startTimer: (params: {
     durationSeconds: number;
     sessionTitle: string;
@@ -51,9 +60,14 @@ type FocusTimerContextValue = {
   togglePause: () => void;
   addTime: (minutes: number) => void;
   stopTimer: () => void;
+  dismissCompletionModal: () => void;
   dismissCompletionPrompt: () => void;
   markPromptTaskDone: () => void;
 };
+
+function isTaskDone(status: string | null | undefined) {
+  return ['done', 'completed'].includes((status ?? '').toLowerCase());
+}
 
 const FocusTimerCtx = createContext<FocusTimerContextValue | null>(null);
 
@@ -100,48 +114,6 @@ function defaultState(): PersistedTimerState {
     endsAt: null,
     completePromptTaskId: null,
   };
-}
-
-function FocusTimerCompletionPrompt() {
-  const { completePromptTaskId, dismissCompletionPrompt, markPromptTaskDone } = useFocusTimer();
-  const { mirror } = useMirror();
-
-  if (completePromptTaskId == null) return null;
-
-  const task = mirror.tasks.find((row) => row.id === completePromptTaskId);
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-[380px] rounded-[24px] border border-border bg-surface p-6 shadow-[var(--shadow-md)]">
-        <p className="text-xs uppercase tracking-[0.3em] text-accent">Session complete</p>
-        <h2 className="mt-2 text-xl font-semibold text-text-primary">Mark task as done?</h2>
-        {task ? (
-          <p className="mt-2 text-sm text-text-secondary">
-            &ldquo;{task.title?.trim() || `Task ${completePromptTaskId}`}&rdquo;
-          </p>
-        ) : null}
-        <p className="mt-1 text-sm text-text-muted">
-          Great work! Do you want to mark this task as complete?
-        </p>
-        <div className="mt-5 flex gap-3">
-          <button
-            type="button"
-            onClick={markPromptTaskDone}
-            className="flex-1 rounded-full bg-accent px-4 py-2.5 text-sm font-extrabold text-white hover:bg-accent-hover"
-          >
-            Yes, mark complete
-          </button>
-          <button
-            type="button"
-            onClick={dismissCompletionPrompt}
-            className="flex-1 rounded-full border border-border bg-surface-2 px-4 py-2.5 text-sm font-extrabold text-text-primary hover:bg-surface"
-          >
-            Not yet
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function FocusTimerBubble() {
@@ -216,22 +188,38 @@ function FocusTimerBubble() {
 }
 
 export function FocusTimerProvider({ children }: { children: ReactNode }) {
-  const { commitMirror, persistNow } = useMirror();
+  const { commitMirror, persistNow, mirror } = useMirror();
   const [state, setState] = useState<PersistedTimerState>(() => defaultState());
   const [hydrated, setHydrated] = useState(false);
+  const [completionModal, setCompletionModal] = useState<FocusCompletionModal | null>(null);
   const finishingRef = useRef(false);
+  const handledSessionRef = useRef<number | null>(null);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const finalizeSession = useCallback(
-    (nextState?: Partial<PersistedTimerState>) => {
-      const latest = nextState ? { ...state, ...nextState } : state;
+    (snapshot?: PersistedTimerState) => {
+      const latest = snapshot ?? stateRef.current;
+      const startedAt = latest.startedAt;
+      if (startedAt == null) return;
+      if (handledSessionRef.current === startedAt) return;
+      handledSessionRef.current = startedAt;
+
+      const timerReachedZero = latest.remainingSeconds <= 0;
+      if (timerReachedZero) {
+        playFocusTimerCompleteSound();
+      }
+
       const elapsedMinutes = Math.max(
         1,
         Math.round((latest.durationSeconds - latest.remainingSeconds) / 60),
       );
       const nowIso = new Date().toISOString();
-      const startedAt = latest.startedAt;
 
-      if (startedAt != null && latest.durationSeconds > 0) {
+      if (latest.durationSeconds > 0) {
         commitMirror((prev) => ({
           ...prev,
           sessions: [
@@ -252,27 +240,19 @@ export function FocusTimerProvider({ children }: { children: ReactNode }) {
         void persistNow();
       }
 
-      const resetState: PersistedTimerState = {
-        ...defaultState(),
-        status: 'completed',
-        completePromptTaskId: latest.connectedTaskId,
-      };
+      setCompletionModal({
+        open: true,
+        durationMinutes: elapsedMinutes,
+        sessionTitle: latest.sessionTitle,
+        connectedTaskId: latest.connectedTaskId,
+      });
+
+      const resetState = defaultState();
       setState(resetState);
-      writeStoredState(resetState);
-      window.setTimeout(() => {
-        setState((current) => {
-          if (current.status !== 'completed') return current;
-          const next = { ...current, status: 'idle' as const };
-          if (next.completePromptTaskId == null) {
-            clearStoredState();
-          } else {
-            writeStoredState(next);
-          }
-          return next;
-        });
-      }, 50);
+      clearStoredState();
+      finishingRef.current = false;
     },
-    [commitMirror, persistNow, state],
+    [commitMirror, persistNow],
   );
 
   useEffect(() => {
@@ -313,14 +293,16 @@ export function FocusTimerProvider({ children }: { children: ReactNode }) {
     if (!hydrated || state.status !== 'running' || state.endsAt == null) return;
 
     const tick = () => {
-      const remainingSeconds = Math.max(0, Math.ceil((state.endsAt as number - Date.now()) / 1000));
+      const endsAt = stateRef.current.endsAt;
+      if (endsAt == null) return;
+      const remainingSeconds = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
       if (remainingSeconds <= 0) {
         if (finishingRef.current) return;
         finishingRef.current = true;
         finalizeSession({
+          ...stateRef.current,
           remainingSeconds: 0,
         });
-        finishingRef.current = false;
         return;
       }
       setState((current) => {
@@ -337,6 +319,8 @@ export function FocusTimerProvider({ children }: { children: ReactNode }) {
 
   const startTimer = useCallback(
     (params: { durationSeconds: number; sessionTitle: string; connectedTaskId: number | null }) => {
+      handledSessionRef.current = null;
+      finishingRef.current = false;
       const nextState: PersistedTimerState = {
         startedAt: Date.now(),
         durationSeconds: params.durationSeconds,
@@ -350,6 +334,7 @@ export function FocusTimerProvider({ children }: { children: ReactNode }) {
       };
       setState(nextState);
       writeStoredState(nextState);
+      preloadFocusTimerSound();
     },
     [],
   );
@@ -433,8 +418,34 @@ export function FocusTimerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const stopTimer = useCallback(() => {
-    finalizeSession();
+    finalizeSession(stateRef.current);
   }, [finalizeSession]);
+
+  const dismissCompletionModal = useCallback(() => {
+    const taskId = completionModal?.connectedTaskId ?? null;
+    setCompletionModal(null);
+    if (taskId == null) return;
+    const task = mirror.tasks.find((row) => row.id === taskId);
+    if (!task || isTaskDone(task.status)) return;
+    const next: PersistedTimerState = {
+      ...defaultState(),
+      completePromptTaskId: taskId,
+    };
+    setState(next);
+    writeStoredState(next);
+  }, [completionModal?.connectedTaskId, mirror.tasks]);
+
+  useEffect(() => {
+    if (!hydrated || state.status !== 'running') return;
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hydrated, state.status]);
 
   const dismissCompletionPrompt = useCallback(() => {
     setState((current) => {
@@ -481,17 +492,21 @@ export function FocusTimerProvider({ children }: { children: ReactNode }) {
         sessionTitle: state.sessionTitle,
         connectedTaskId: state.connectedTaskId,
         completePromptTaskId: state.completePromptTaskId,
+        completionModal,
         startTimer,
         pauseTimer,
         resumeTimer,
         togglePause,
         addTime,
         stopTimer,
+        dismissCompletionModal,
         dismissCompletionPrompt,
         markPromptTaskDone,
       }) satisfies FocusTimerContextValue,
     [
       addTime,
+      completionModal,
+      dismissCompletionModal,
       dismissCompletionPrompt,
       hydrated,
       markPromptTaskDone,
@@ -513,7 +528,6 @@ export function FocusTimerProvider({ children }: { children: ReactNode }) {
     <FocusTimerCtx.Provider value={value}>
       {children}
       <FocusTimerBubble />
-      <FocusTimerCompletionPrompt />
     </FocusTimerCtx.Provider>
   );
 }

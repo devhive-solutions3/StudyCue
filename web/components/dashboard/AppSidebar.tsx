@@ -26,6 +26,7 @@ const STUDY_ITEMS: Item[] = [
 ];
 
 const BOTTOM_ITEMS: Item[] = [
+  { href: '/app/report-bug', label: 'Bug reports', icon: 'bug' },
   { href: '/app/settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -71,7 +72,7 @@ function SidebarNavLink({
   collapsed: boolean;
   onNavigate: () => void;
 }) {
-  const { focusLocked, openFocusLockModal } = useDashboardUi();
+  const { focusLocked, openFocusLockModal, setPendingNavHref } = useDashboardUi();
 
   return (
     <Link
@@ -81,6 +82,7 @@ function SidebarNavLink({
       onClick={(event) => {
         if (focusLocked && item.href !== '/app/focus' && item.href !== '/app/focus-timer') {
           event.preventDefault();
+          setPendingNavHref(item.href);
           openFocusLockModal();
           return;
         }

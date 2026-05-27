@@ -19,12 +19,12 @@ export default function AdminUsageCharts({
 }: Pick<AiUsageDashboard, 'daily' | 'providerSplit'>) {
   return (
     <div className="grid gap-5 xl:grid-cols-2">
-      <section className="overflow-hidden rounded-[26px] border border-white/10 bg-white/5 shadow-[0_18px_48px_rgba(9,12,35,0.16)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6">
+      <section className="min-w-0 overflow-hidden rounded-[26px] border border-white/10 bg-white/5 shadow-[0_18px_48px_rgba(9,12,35,0.16)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6">
         <div className="border-b border-white/8 px-5 py-4">
           <h3 className="text-base font-bold text-text-primary">Daily requests last 30 days</h3>
         </div>
-        <div className="h-[320px] p-5">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-[320px] min-w-0 p-5">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={daily}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,148,184,0.18)" vertical={false} />
               <XAxis dataKey="dateKey" tick={{ fontSize: 11 }} stroke="var(--sc-text-muted)" />
@@ -43,12 +43,12 @@ export default function AdminUsageCharts({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-[26px] border border-white/10 bg-white/5 shadow-[0_18px_48px_rgba(9,12,35,0.16)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6">
+      <section className="min-w-0 overflow-hidden rounded-[26px] border border-white/10 bg-white/5 shadow-[0_18px_48px_rgba(9,12,35,0.16)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6">
         <div className="border-b border-white/8 px-5 py-4">
           <h3 className="text-base font-bold text-text-primary">Daily tokens last 30 days</h3>
         </div>
-        <div className="h-[320px] p-5">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-[320px] min-w-0 p-5">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={daily}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,148,184,0.18)" vertical={false} />
               <XAxis dataKey="dateKey" tick={{ fontSize: 11 }} stroke="var(--sc-text-muted)" />
@@ -67,12 +67,12 @@ export default function AdminUsageCharts({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-[26px] border border-white/10 bg-white/5 shadow-[0_18px_48px_rgba(9,12,35,0.16)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6 xl:col-span-2">
+      <section className="min-w-0 overflow-hidden rounded-[26px] border border-white/10 bg-white/5 shadow-[0_18px_48px_rgba(9,12,35,0.16)] backdrop-blur-xl dark:border-white/8 dark:bg-white/6 xl:col-span-2">
         <div className="border-b border-white/8 px-5 py-4">
           <h3 className="text-base font-bold text-text-primary">Provider split: Groq vs Gemini</h3>
         </div>
-        <div className="h-[320px] p-5">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-[320px] min-w-0 p-5">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={providerSplit}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,148,184,0.18)" vertical={false} />
               <XAxis dataKey="provider" tick={{ fontSize: 12 }} stroke="var(--sc-text-muted)" />

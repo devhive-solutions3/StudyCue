@@ -48,6 +48,14 @@ const ICONS = {
       <path d="M8 3.2v1.1M8 11.7v1.1M12.8 8h-1.1M4.3 8H3.2M11.4 4.6l-.8.8M5.4 10.6l-.8.8M11.4 11.4l-.8-.8M5.4 5.4l-.8-.8" />
     </>
   ),
+  bug: (
+    <>
+      <ellipse cx="8" cy="9.2" rx="3.2" ry="3.6" />
+      <path d="M5.2 7.8L3 6.2M10.8 7.8L13 6.2M5 10.8L2.8 10.8M11 10.8l2.2 0M8 5.8V4.2" />
+      <circle cx="6.6" cy="8.8" r=".45" fill="currentColor" stroke="none" />
+      <circle cx="9.4" cy="8.8" r=".45" fill="currentColor" stroke="none" />
+    </>
+  ),
   profile: (
     <>
       <circle cx="8" cy="6.2" r="2.1" />

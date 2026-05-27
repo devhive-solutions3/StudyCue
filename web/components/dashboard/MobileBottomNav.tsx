@@ -16,11 +16,12 @@ const LINKS = [
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
-  const { focusLocked, openFocusLockModal } = useDashboardUi();
+  const { focusLocked, openFocusLockModal, setPendingNavHref } = useDashboardUi();
 
   function guardNavigation(event: MouseEvent<HTMLAnchorElement>, href: string) {
     if (focusLocked && href !== '/app/focus' && href !== '/app/focus-timer') {
       event.preventDefault();
+      setPendingNavHref(href);
       openFocusLockModal();
     }
   }

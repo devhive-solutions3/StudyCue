@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useDashboardUi } from '@/context/dashboard-ui';
 
 export default function AddTaskFab() {
-  const { focusLocked, openFocusLockModal } = useDashboardUi();
+  const { focusLocked, openFocusLockModal, setPendingNavHref } = useDashboardUi();
   return (
     <Link
       href="/app/chat"
@@ -14,6 +14,7 @@ export default function AddTaskFab() {
       onClick={(event) => {
         if (focusLocked) {
           event.preventDefault();
+          setPendingNavHref('/app/chat');
           openFocusLockModal();
         }
       }}

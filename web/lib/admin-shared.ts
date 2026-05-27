@@ -20,6 +20,8 @@ export type AdminOverviewStats = {
   publishedPosts: number;
   netThisMonthPhp: number;
   securityEventsToday: number;
+  openBugReports: number;
+  bugReportsToday: number;
 };
 
 export type AdminUserRow = {
