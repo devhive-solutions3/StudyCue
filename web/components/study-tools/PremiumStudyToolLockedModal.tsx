@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { STUDY_TOOLS_PLAN_DENIED_MESSAGE } from '@/lib/study-tools-request';
 
 type Props = {
@@ -36,8 +38,23 @@ export default function PremiumStudyToolLockedModal({
         <p className="mt-2 text-xs text-text-muted">
           Your current plan: <span className="font-semibold text-text-primary">{planLabel}</span>
         </p>
-        <p className="mt-2 text-xs text-text-muted">Coming Soon for Free</p>
-        <button type="button" onClick={onClose} className="sc-btn-secondary mt-5 w-full">
+        <p className="mt-3 text-xs text-text-muted">
+          Upgrade to StudyCue Plus to unlock this study tool, or use it during Beta access.
+        </p>
+        <button
+          type="button"
+          disabled
+          className="sc-btn-secondary mt-5 w-full cursor-not-allowed opacity-70"
+          aria-disabled="true"
+        >
+          StudyCue Plus required
+        </button>
+        <p className="mt-3 text-center">
+          <Link href="/pricing" className="text-xs font-semibold text-accent hover:underline">
+            View plans
+          </Link>
+        </p>
+        <button type="button" onClick={onClose} className="sc-btn-secondary mt-4 w-full">
           Close
         </button>
       </div>

@@ -15,6 +15,7 @@ import {
   isStudyAiDev,
   logStudyAiFallback,
   logStudyAiFallbackResult,
+  logStudyAiGenerationDiagnostics,
   logStudyAiOutcome,
   logStudyAiPreCall,
   logStudyAiProviderFailure,
@@ -24,9 +25,21 @@ import {
   STUDY_AI_USER_ERRORS,
   type StudyAiEndpoint,
 } from '@/lib/study-tools-ai-utils';
+import { prepareSourceForStudyAi, type PreparedStudySource } from '@/lib/study-tools-source-pipeline';
+import { DIRECT_GENERATION_MAX_CHARS } from '@/lib/study-tools-text-limits';
 import { normalizeGeneratedFlashcards, normalizeGeneratedQuiz } from '@/lib/study-tools-storage';
 import type { FileStudyResult, FlashcardItem, QuizQuestion } from '@/lib/study-tools-types';
-import { STUDY_SOURCE_MAX_CHARS } from '@/lib/study-tools-types';
+import type { StudySourceType } from '@/lib/study-tools-types';
+
+const STRICT_JSON_SUFFIX =
+  '\n\nReturn ONLY valid JSON matching the schema. No markdown fences, no commentary.';
+
+type StudyAiGenerateOptions = {
+  userPlan?: string;
+  sourceName?: string;
+  sourceType?: StudySourceType;
+  fileType?: string;
+};
 
 type ProviderAttemptResult =
   | { ok: true; text: string; provider: 'groq' | 'gemini' }
@@ -34,8 +47,19 @@ type ProviderAttemptResult =
 
 function truncateSource(text: string): string {
   const trimmed = text.trim();
-  if (trimmed.length <= STUDY_SOURCE_MAX_CHARS) return trimmed;
-  return `${trimmed.slice(0, STUDY_SOURCE_MAX_CHARS)}\n\n[Source truncated for length.]`;
+  if (trimmed.length <= DIRECT_GENERATION_MAX_CHARS) return trimmed;
+  return `${trimmed.slice(0, DIRECT_GENERATION_MAX_CHARS)}\n\n[Source truncated for length.]`;
+}
+
+async function prepareForGeneration(
+  text: string,
+  options?: StudyAiGenerateOptions,
+): Promise<PreparedStudySource> {
+  return prepareSourceForStudyAi({
+    rawText: text,
+    sourceName: options?.sourceName,
+    fileType: options?.fileType,
+  });
 }
 
 async function readProxyJson(
@@ -161,21 +185,39 @@ async function runStudyAi(params: {
   count?: number;
   countLabel?: 'numQuestions' | 'numCards';
   userPlan?: string;
+  prepared?: PreparedStudySource;
+  originalSourceLength?: number;
+  sourceType?: string;
+  fileType?: string;
 }): Promise<string> {
   const numbered = buildNumberedSourceText(truncateSource(params.sourceText));
   const meta = {
     endpoint: params.endpoint,
-    sourceTextLength: params.sourceText.length,
+    sourceTextLength: params.originalSourceLength ?? params.sourceText.length,
     numberedSourceLength: numbered.length,
     count: params.count,
     countLabel: params.countLabel,
   };
+
+  logStudyAiGenerationDiagnostics({
+    endpoint: params.endpoint,
+    sourceType: params.sourceType,
+    fileType: params.fileType,
+    extractedCharacterCount: meta.sourceTextLength,
+    estimatedInputTokens: params.prepared?.estimatedInputTokens ?? Math.ceil(meta.sourceTextLength / 4),
+    requestedCount: params.count,
+    model: getStudyGroqModel(),
+    wasChunked: params.prepared?.wasChunked ?? false,
+    chunkCount: params.prepared?.chunkCount ?? 0,
+  });
 
   if (isStudyAiDev()) {
     console.info('[study-tools-ai] source prepared', {
       endpoint: meta.endpoint,
       sourceTextLength: meta.sourceTextLength,
       numberedSourceLength: meta.numberedSourceLength,
+      wasChunked: params.prepared?.wasChunked ?? false,
+      chunkCount: params.prepared?.chunkCount ?? 0,
       ...(meta.countLabel && meta.count != null ? { [meta.countLabel]: meta.count } : {}),
     });
   }
@@ -254,32 +296,46 @@ async function runStudyAi(params: {
 export async function generateQuizFromText(
   text: string,
   numQuestions: number,
-  options?: { userPlan?: string },
+  options?: StudyAiGenerateOptions,
 ): Promise<QuizQuestion[]> {
+  const originalLength = text.length;
   try {
-    const raw = await runStudyAi({
-      systemPrompt: buildQuizPrompt(numQuestions),
-      sourceText: text,
-      endpoint: 'generate-quiz',
-      count: numQuestions,
-      countLabel: 'numQuestions',
-      userPlan: options?.userPlan,
-    });
+    const prepared = await prepareForGeneration(text, options);
+    const runOnce = (strictJson: boolean) =>
+      runStudyAi({
+        systemPrompt: `${buildQuizPrompt(numQuestions)}${strictJson ? STRICT_JSON_SUFFIX : ''}`,
+        sourceText: prepared.text,
+        endpoint: 'generate-quiz',
+        count: numQuestions,
+        countLabel: 'numQuestions',
+        userPlan: options?.userPlan,
+        prepared,
+        originalSourceLength: originalLength,
+        sourceType: options?.sourceType,
+        fileType: options?.fileType,
+      });
+
+    let raw = await runOnce(false);
     let parsed: { quiz?: QuizQuestion[] };
     try {
       parsed = parseStudyToolsJson<{ quiz?: QuizQuestion[] }>(raw, 'quiz');
-    } catch (error) {
-      logStudyAiOutcome({
-        endpoint: 'generate-quiz',
-        userPlan: options?.userPlan,
-        sourceTextLength: text.length,
-        numQuestions,
-        fallbackAttempted: false,
-        jsonParseSuccess: false,
-        failureStage: 'json_parse_failed',
-        userMessage: error instanceof Error ? error.message : STUDY_AI_USER_ERRORS.invalidQuiz,
-      });
-      throw error;
+    } catch {
+      raw = await runOnce(true);
+      try {
+        parsed = parseStudyToolsJson<{ quiz?: QuizQuestion[] }>(raw, 'quiz');
+      } catch (error) {
+        logStudyAiOutcome({
+          endpoint: 'generate-quiz',
+          userPlan: options?.userPlan,
+          sourceTextLength: originalLength,
+          numQuestions,
+          fallbackAttempted: false,
+          jsonParseSuccess: false,
+          failureStage: 'json_parse_failed',
+          userMessage: error instanceof Error ? error.message : STUDY_AI_USER_ERRORS.invalidQuiz,
+        });
+        throw error;
+      }
     }
     if (!Array.isArray(parsed.quiz) || parsed.quiz.length === 0) {
       throw new Error(STUDY_AI_USER_ERRORS.invalidQuiz);
@@ -291,7 +347,7 @@ export async function generateQuizFromText(
     logStudyAiOutcome({
       endpoint: 'generate-quiz',
       userPlan: options?.userPlan,
-      sourceTextLength: text.length,
+      sourceTextLength: originalLength,
       numQuestions,
       fallbackAttempted: false,
       jsonParseSuccess: true,
@@ -305,7 +361,7 @@ export async function generateQuizFromText(
       logStudyAiOutcome({
         endpoint: 'generate-quiz',
         userPlan: options?.userPlan,
-        sourceTextLength: text.length,
+        sourceTextLength: originalLength,
         numQuestions,
         fallbackAttempted: false,
         jsonParseSuccess: false,
@@ -320,17 +376,33 @@ export async function generateQuizFromText(
 export async function generateFlashcardsFromText(
   text: string,
   numCards: number,
-  options?: { userPlan?: string },
+  options?: StudyAiGenerateOptions,
 ): Promise<FlashcardItem[]> {
-  const raw = await runStudyAi({
-    systemPrompt: buildFlashcardPrompt(numCards),
-    sourceText: text,
-    endpoint: 'generate-flashcards',
-    count: numCards,
-    countLabel: 'numCards',
-    userPlan: options?.userPlan,
-  });
-  const parsed = parseStudyToolsJson<{ flashcards?: FlashcardItem[] }>(raw, 'flashcards');
+  const originalLength = text.length;
+  const prepared = await prepareForGeneration(text, options);
+  const runOnce = (strictJson: boolean) =>
+    runStudyAi({
+      systemPrompt: `${buildFlashcardPrompt(numCards)}${strictJson ? STRICT_JSON_SUFFIX : ''}`,
+      sourceText: prepared.text,
+      endpoint: 'generate-flashcards',
+      count: numCards,
+      countLabel: 'numCards',
+      userPlan: options?.userPlan,
+      prepared,
+      originalSourceLength: originalLength,
+      sourceType: options?.sourceType,
+      fileType: options?.fileType,
+    });
+
+  let raw = await runOnce(false);
+  let parsed: { flashcards?: FlashcardItem[] };
+  try {
+    parsed = parseStudyToolsJson<{ flashcards?: FlashcardItem[] }>(raw, 'flashcards');
+  } catch {
+    raw = await runOnce(true);
+    parsed = parseStudyToolsJson<{ flashcards?: FlashcardItem[] }>(raw, 'flashcards');
+  }
+
   if (!Array.isArray(parsed.flashcards) || parsed.flashcards.length === 0) {
     throw new Error(STUDY_AI_USER_ERRORS.invalidFlashcards);
   }
@@ -341,11 +413,21 @@ export async function generateFlashcardsFromText(
   return normalized.slice(0, numCards);
 }
 
-export async function generateFileStudyFromText(text: string): Promise<FileStudyResult> {
+export async function generateFileStudyFromText(
+  text: string,
+  options?: StudyAiGenerateOptions,
+): Promise<FileStudyResult> {
+  const originalLength = text.length;
+  const prepared = await prepareForGeneration(text, options);
   const raw = await runStudyAi({
     systemPrompt: buildFileStudyPrompt(),
-    sourceText: text,
+    sourceText: prepared.text,
     endpoint: 'file-study',
+    userPlan: options?.userPlan,
+    prepared,
+    originalSourceLength: originalLength,
+    sourceType: options?.sourceType,
+    fileType: options?.fileType,
   });
   const parsed = parseStudyToolsJson<FileStudyResult>(raw, 'file-study');
   if (!parsed.summary?.trim()) {

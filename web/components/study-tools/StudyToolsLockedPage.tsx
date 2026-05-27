@@ -1,17 +1,19 @@
 'use client';
 
+import Link from 'next/link';
+
 import { STUDY_TOOLS_PLAN_DENIED_MESSAGE } from '@/lib/study-tools-request';
 
 const COPY = {
   quiz: {
     title: 'Quiz Generator is available for Beta and StudyCue Plus users',
     message:
-      'Turn notes into multiple-choice questions with citations. This feature is currently available to Beta testers and StudyCue Plus users.',
+      'Turn notes into multiple-choice questions with citations. Upgrade to StudyCue Plus to unlock this study tool, or use it during Beta access.',
   },
   flashcards: {
     title: 'Flashcards are available for Beta and StudyCue Plus users',
     message:
-      'Turn notes into active-recall cards with citations. This feature is currently available to Beta testers and StudyCue Plus users.',
+      'Turn notes into active-recall cards with citations. Upgrade to StudyCue Plus to unlock this study tool, or use it during Beta access.',
   },
 } as const;
 
@@ -42,8 +44,13 @@ export default function StudyToolsLockedPage({
           className="sc-btn-secondary mt-5 cursor-not-allowed opacity-70"
           aria-disabled="true"
         >
-          Coming Soon for Free
+          StudyCue Plus required
         </button>
+        <p className="mt-4">
+          <Link href="/pricing" className="text-xs font-semibold text-accent hover:underline">
+            View plans
+          </Link>
+        </p>
       </div>
     </div>
   );

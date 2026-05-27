@@ -14,6 +14,8 @@ export const STUDY_AI_USER_ERRORS = {
   invalidFileStudy: 'AI returned an invalid study format. Please try again.',
   allProvidersFailed:
     'AI generation failed. Please try again in a few minutes.',
+  timeout:
+    'AI generation timed out. Try fewer questions/cards or a shorter file.',
   emptyResponse: 'AI returned an empty response.',
 } as const;
 
@@ -59,6 +61,10 @@ export function mapProxyErrorToUserMessage(
   proxyError?: string,
 ): string {
   const err = proxyError?.trim() ?? '';
+
+  if (/timeout|timed out|ETIMEDOUT|deadline exceeded/i.test(err)) {
+    return STUDY_AI_USER_ERRORS.timeout;
+  }
 
   if (status === 500 && /Missing GROQ_API_KEY/i.test(err)) {
     return STUDY_AI_USER_ERRORS.noProvider;
@@ -217,6 +223,23 @@ export function logStudyAiFallback(): void {
 export function logStudyAiFallbackResult(params: { ok: boolean; status?: number }): void {
   if (!isStudyAiDev()) return;
   console.info('[study-tools-ai] Gemini fallback result', params);
+}
+
+export function logStudyAiGenerationDiagnostics(params: {
+  endpoint: StudyAiEndpoint;
+  sourceType?: string;
+  fileType?: string;
+  extractedCharacterCount: number;
+  estimatedInputTokens: number;
+  requestedCount?: number;
+  model: string;
+  provider?: 'groq' | 'gemini';
+  wasChunked: boolean;
+  chunkCount: number;
+  failureStage?: string;
+}): void {
+  if (!isStudyAiDev()) return;
+  console.info('[study-tools-ai] generation diagnostics', params);
 }
 
 export function logStudyAiOutcome(params: {

@@ -12,10 +12,13 @@ import { STUDY_TOOLS_PLAN_DENIED_MESSAGE } from '@/lib/study-tools-request';
 import { logStudyToolGenerationEvent } from '@/lib/study-tools-generation-tracker';
 import {
   readStudyToolsUsage,
+  releaseStudyToolGeneration,
   reserveStudyToolGeneration,
   type StudyToolKind,
   type StudyToolSourceSurface,
 } from '@/lib/study-tools-usage-limits';
+import { extensionFromFileName } from '@/lib/study-file-extract';
+import { ABSOLUTE_MAX_CHARS } from '@/lib/study-tools-text-limits';
 import {
   buildStudyToolUsageEstimates,
   logStudyToolAiUsage,
@@ -23,7 +26,7 @@ import {
   type StudyToolEndpoint,
 } from '@/lib/study-tools-usage-log';
 import type { FlashcardItem, QuizQuestion, StudySourceType } from '@/lib/study-tools-types';
-import { STUDY_SOURCE_MAX_CHARS, STUDY_SOURCE_MIN_CHARS } from '@/lib/study-tools-types';
+import { STUDY_SOURCE_MIN_CHARS } from '@/lib/study-tools-types';
 import type { AnalyticsUserPlan } from '@/lib/analytics-types';
 
 export type StudyToolsDailyUsage = {
@@ -70,9 +73,9 @@ function validateSourceText(text: string) {
       `Source text must be at least ${STUDY_SOURCE_MIN_CHARS} characters.`,
     );
   }
-  if (trimmed.length > STUDY_SOURCE_MAX_CHARS) {
+  if (trimmed.length > ABSOLUTE_MAX_CHARS) {
     throw new StudyToolsValidationError(
-      `Source text must be ${STUDY_SOURCE_MAX_CHARS.toLocaleString()} characters or fewer.`,
+      'This file is too large to process at once. Please split it into smaller notes.',
     );
   }
   return trimmed;
@@ -186,6 +189,7 @@ async function ensureStudyToolsGeneration(params: {
   }
 
   return {
+    uid: params.uid,
     sourceText,
     userPlan,
     analyticsPlan,
@@ -201,7 +205,23 @@ async function ensureStudyToolsGeneration(params: {
     sourceSurface: params.sourceSurface,
     sourceType: params.sourceType,
     itemCount: params.itemCount,
+    requestId: params.requestId ?? null,
   };
+}
+
+async function rollbackFailedGeneration(ctx: {
+  uid: string;
+  tool: StudyToolKind;
+  sourceSurface: StudyToolSourceSurface;
+  requestId: string | null;
+}) {
+  if (!ctx.requestId) return;
+  await releaseStudyToolGeneration({
+    uid: ctx.uid,
+    tool: ctx.tool,
+    sourceSurface: ctx.sourceSurface,
+    requestId: ctx.requestId,
+  }).catch(() => {});
 }
 
 export async function getStudyToolsUsageForUser(uid: string) {
@@ -247,6 +267,9 @@ export async function generateQuizForUser(params: {
   try {
     const quiz = await generateQuizFromText(ctx.sourceText, params.numQuestions, {
       userPlan: ctx.userPlan,
+      sourceName: params.sourceName,
+      sourceType: params.sourceType,
+      fileType: extensionFromFileName(params.sourceName) || undefined,
     });
     const estimates = buildStudyToolUsageEstimates({
       provider: 'groq',
@@ -279,6 +302,7 @@ export async function generateQuizForUser(params: {
 
     return { quiz, daily: ctx.daily };
   } catch (error) {
+    await rollbackFailedGeneration(ctx);
     const estimates = buildStudyToolUsageEstimates({
       provider: 'groq',
       sourceLength: ctx.sourceText.length,
@@ -334,7 +358,11 @@ export async function generateFileStudyForUser(params: {
   });
 
   try {
-    const result = await generateFileStudyFromText(ctx.sourceText);
+    const result = await generateFileStudyFromText(ctx.sourceText, {
+      userPlan: ctx.userPlan,
+      sourceName: params.sourceName,
+      fileType: extensionFromFileName(params.sourceName) || undefined,
+    });
     const estimates = buildStudyToolUsageEstimates({
       provider: 'groq',
       sourceLength: ctx.sourceText.length,
@@ -366,6 +394,7 @@ export async function generateFileStudyForUser(params: {
 
     return { result, daily: ctx.daily };
   } catch (error) {
+    await rollbackFailedGeneration(ctx);
     const estimates = buildStudyToolUsageEstimates({
       provider: 'groq',
       sourceLength: ctx.sourceText.length,
@@ -427,6 +456,9 @@ export async function generateFlashcardsForUser(params: {
   try {
     const flashcards = await generateFlashcardsFromText(ctx.sourceText, params.numCards, {
       userPlan: ctx.userPlan,
+      sourceName: params.sourceName,
+      sourceType: params.sourceType,
+      fileType: extensionFromFileName(params.sourceName) || undefined,
     });
     const estimates = buildStudyToolUsageEstimates({
       provider: 'groq',
@@ -459,6 +491,7 @@ export async function generateFlashcardsForUser(params: {
 
     return { flashcards, daily: ctx.daily };
   } catch (error) {
+    await rollbackFailedGeneration(ctx);
     const estimates = buildStudyToolUsageEstimates({
       provider: 'groq',
       sourceLength: ctx.sourceText.length,

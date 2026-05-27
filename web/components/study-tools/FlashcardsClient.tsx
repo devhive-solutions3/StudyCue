@@ -12,6 +12,7 @@ import { patchCueStudySessionSaved } from '@/lib/cue-study-session-client';
 import { readStudySourceFromSession, saveStudySourceToSession } from '@/lib/study-source-session';
 import { useCueStudySessionLoader } from '@/hooks/use-cue-study-session-loader';
 import { useSearchParams } from 'next/navigation';
+import { beginStudyGenerationLoadingLabel } from '@/lib/study-tools-generation-ui';
 import { studyGenerateBlockedMessage } from '@/lib/study-source-validation';
 import {
   STUDY_TOOLS_DAILY_LIMIT_MESSAGE,
@@ -47,6 +48,7 @@ export default function FlashcardsClient() {
   const [known, setKnown] = useState(0);
   const [review, setReview] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('Generate flashcards');
   const [error, setError] = useState<string | null>(null);
   const [deckId, setDeckId] = useState<string | null>(null);
   const [allDecks, setAllDecks] = useState<SavedFlashcardDeck[]>([]);
@@ -102,6 +104,11 @@ export default function FlashcardsClient() {
     const readySource = source;
     setLoading(true);
     setError(null);
+    const clearLoadingLabelTimer = beginStudyGenerationLoadingLabel(
+      readySource.text.length,
+      'flashcards',
+      setLoadingLabel,
+    );
     try {
       const response = await fetch('/api/study-tools/generate-flashcards', {
         method: 'POST',
@@ -136,6 +143,8 @@ export default function FlashcardsClient() {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not generate flashcards.');
     } finally {
+      clearLoadingLabelTimer();
+      setLoadingLabel('Generate flashcards');
       setLoading(false);
     }
   }
@@ -248,7 +257,7 @@ export default function FlashcardsClient() {
               onClick={() => void generateDeck()}
               className="sc-btn-primary disabled:opacity-60"
             >
-              {loading ? 'Generating…' : 'Generate flashcards'}
+              {loading ? loadingLabel : 'Generate flashcards'}
             </button>
           </div>
         </>
