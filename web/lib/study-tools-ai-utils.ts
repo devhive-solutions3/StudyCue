@@ -4,15 +4,16 @@ export type StudyAiEndpoint = 'generate-quiz' | 'generate-flashcards' | 'file-st
 export type StudyAiKind = 'quiz' | 'flashcards' | 'file-study';
 
 export const STUDY_AI_USER_ERRORS = {
-  noProvider:
-    'AI provider is not configured. Add GROQ_API_KEY or GEMINI_API_KEY.',
+  noProvider: 'AI provider is not configured.',
+  providerUnavailable:
+    'AI provider is unavailable right now. Please try again.',
   groqModel:
     'Groq model failed or is unavailable. Check the configured model.',
   invalidQuiz: 'AI returned an invalid quiz format. Please try again.',
   invalidFlashcards: 'AI returned an invalid flashcards format. Please try again.',
   invalidFileStudy: 'AI returned an invalid study format. Please try again.',
   allProvidersFailed:
-    'AI generation failed. Please check provider keys or try again.',
+    'AI generation failed. Please try again in a few minutes.',
   emptyResponse: 'AI returned an empty response.',
 } as const;
 
@@ -66,9 +67,12 @@ export function mapProxyErrorToUserMessage(
     return STUDY_AI_USER_ERRORS.noProvider;
   }
   if (status === 429) {
+    if (/quota|billing|exceeded/i.test(err)) {
+      return STUDY_AI_USER_ERRORS.providerUnavailable;
+    }
     return provider === 'groq'
       ? 'Groq rate limit hit. Please try again shortly.'
-      : 'Gemini rate limit hit. Please try again shortly.';
+      : STUDY_AI_USER_ERRORS.providerUnavailable;
   }
   if (provider === 'groq') {
     if (status === 401 || /invalid.*api key/i.test(err)) {
@@ -101,6 +105,10 @@ export function mapProxyErrorToUserMessage(
   return err || STUDY_AI_USER_ERRORS.allProvidersFailed;
 }
 
+function isProviderUnavailableMessage(message: string): boolean {
+  return /quota|billing|rate limit|exceeded|unavailable/i.test(message);
+}
+
 export function mapStudyAiAggregateFailure(failures: ProviderFailure[]): string {
   if (failures.length === 0) {
     return STUDY_AI_USER_ERRORS.allProvidersFailed;
@@ -113,17 +121,42 @@ export function mapStudyAiAggregateFailure(failures: ProviderFailure[]): string 
     return STUDY_AI_USER_ERRORS.noProvider;
   }
 
+  const mapped = failures.map((row) =>
+    mapProxyErrorToUserMessage(row.provider, row.status ?? 502, row.message),
+  );
+
+  const unavailable = mapped.filter((message) => isProviderUnavailableMessage(message));
+  if (unavailable.length > 0) {
+    return STUDY_AI_USER_ERRORS.providerUnavailable;
+  }
+
   const groqOnly = failures.length === 1 && failures[0]?.provider === 'groq';
   if (groqOnly) {
-    return mapProxyErrorToUserMessage('groq', failures[0]!.status ?? 502, failures[0]!.message);
+    return mapped[0]!;
   }
 
   const geminiOnly = failures.length === 1 && failures[0]?.provider === 'gemini';
   if (geminiOnly) {
-    return mapProxyErrorToUserMessage('gemini', failures[0]!.status ?? 502, failures[0]!.message);
+    return mapped[0]!;
   }
 
-  return STUDY_AI_USER_ERRORS.allProvidersFailed;
+  const keyErrors = mapped.filter((message) =>
+    /API key is missing or invalid|not configured/i.test(message),
+  );
+  if (keyErrors.length === failures.length) {
+    return keyErrors[0]!;
+  }
+
+  const modelErrors = mapped.filter((message) => /model failed|unavailable/i.test(message));
+  if (modelErrors.length > 0 && keyErrors.length === 0) {
+    return modelErrors[0]!;
+  }
+
+  if (keyErrors.length > 0) {
+    return keyErrors[0]!;
+  }
+
+  return mapped[mapped.length - 1] ?? STUDY_AI_USER_ERRORS.allProvidersFailed;
 }
 
 export function invalidFormatMessage(kind: StudyAiKind): string {
@@ -146,9 +179,12 @@ export function logStudyAiPreCall(params: {
   console.info('[study-tools-ai] pre-call', {
     endpoint: params.endpoint,
     uidExists: params.uidExists,
-    plan: params.plan ?? 'unknown',
+    userPlan: params.plan ?? 'unknown',
     provider: params.provider,
+    providerAttempted: params.provider,
     model: params.model,
+    groqModel: getStudyGroqModel(),
+    geminiModel: getStudyGeminiModel(),
     sourceTextLength: params.sourceTextLength,
     ...(params.countLabel && params.count != null
       ? { [params.countLabel]: params.count }
@@ -181,6 +217,35 @@ export function logStudyAiFallback(): void {
 export function logStudyAiFallbackResult(params: { ok: boolean; status?: number }): void {
   if (!isStudyAiDev()) return;
   console.info('[study-tools-ai] Gemini fallback result', params);
+}
+
+export function logStudyAiOutcome(params: {
+  endpoint: StudyAiEndpoint;
+  userPlan?: string;
+  sourceTextLength: number;
+  numQuestions?: number;
+  numCards?: number;
+  fallbackAttempted: boolean;
+  jsonParseSuccess?: boolean;
+  failureStage?: string;
+  userMessage?: string;
+}): void {
+  if (!isStudyAiDev()) return;
+  console.info('[study-tools-ai] outcome', {
+    endpoint: params.endpoint,
+    userPlan: params.userPlan ?? 'unknown',
+    sourceTextLength: params.sourceTextLength,
+    ...(params.numQuestions != null ? { numQuestions: params.numQuestions } : {}),
+    ...(params.numCards != null ? { numCards: params.numCards } : {}),
+    hasGroqKey: hasGroqApiKey(),
+    hasGeminiKey: hasGeminiApiKey(),
+    groqModel: getStudyGroqModel(),
+    geminiModel: getStudyGeminiModel(),
+    fallbackAttempted: params.fallbackAttempted,
+    jsonParseSuccess: params.jsonParseSuccess,
+    failureStage: params.failureStage,
+    userMessage: params.userMessage ? sanitizeProviderErrorMessage(params.userMessage) : undefined,
+  });
 }
 
 /** Strip markdown fences and extract the first balanced JSON object. */

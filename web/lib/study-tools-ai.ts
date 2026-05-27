@@ -12,8 +12,10 @@ import {
   getStudyGroqModel,
   hasGeminiApiKey,
   hasGroqApiKey,
+  isStudyAiDev,
   logStudyAiFallback,
   logStudyAiFallbackResult,
+  logStudyAiOutcome,
   logStudyAiPreCall,
   logStudyAiProviderFailure,
   mapProxyErrorToUserMessage,
@@ -158,20 +160,42 @@ async function runStudyAi(params: {
   endpoint: StudyAiEndpoint;
   count?: number;
   countLabel?: 'numQuestions' | 'numCards';
+  userPlan?: string;
 }): Promise<string> {
   const numbered = buildNumberedSourceText(truncateSource(params.sourceText));
   const meta = {
     endpoint: params.endpoint,
     sourceTextLength: params.sourceText.length,
+    numberedSourceLength: numbered.length,
     count: params.count,
     countLabel: params.countLabel,
   };
+
+  if (isStudyAiDev()) {
+    console.info('[study-tools-ai] source prepared', {
+      endpoint: meta.endpoint,
+      sourceTextLength: meta.sourceTextLength,
+      numberedSourceLength: meta.numberedSourceLength,
+      ...(meta.countLabel && meta.count != null ? { [meta.countLabel]: meta.count } : {}),
+    });
+  }
 
   const groqAvailable = hasGroqApiKey();
   const geminiAvailable = hasGeminiApiKey();
 
   if (!groqAvailable && !geminiAvailable) {
-    throw new Error(STUDY_AI_USER_ERRORS.noProvider);
+    const message = STUDY_AI_USER_ERRORS.noProvider;
+    logStudyAiOutcome({
+      endpoint: params.endpoint,
+      userPlan: params.userPlan,
+      sourceTextLength: params.sourceText.length,
+      numQuestions: params.countLabel === 'numQuestions' ? params.count : undefined,
+      numCards: params.countLabel === 'numCards' ? params.count : undefined,
+      fallbackAttempted: false,
+      failureStage: 'no_provider_configured',
+      userMessage: message,
+    });
+    throw new Error(message);
   }
 
   const failures: Array<{
@@ -181,6 +205,8 @@ async function runStudyAi(params: {
     errorName?: string;
   }> = [];
 
+  let fallbackAttempted = false;
+
   if (groqAvailable) {
     const groqResult = await runStudyGroq(params.systemPrompt, numbered, meta);
     if (groqResult.ok) return groqResult.text;
@@ -189,6 +215,7 @@ async function runStudyAi(params: {
 
   if (geminiAvailable) {
     if (groqAvailable && failures.length > 0) {
+      fallbackAttempted = true;
       logStudyAiFallback();
     }
     const geminiResult = await runStudyGemini(params.systemPrompt, numbered, meta);
@@ -200,34 +227,100 @@ async function runStudyAi(params: {
     failures.push(geminiResult);
   }
 
-  throw new Error(mapStudyAiAggregateFailure(failures));
+  const message = mapStudyAiAggregateFailure(failures);
+  const failureStage =
+    failures.length === 0
+      ? 'no_provider_attempted'
+      : failures.length === 1
+        ? failures[0]!.provider === 'groq'
+          ? 'groq_failed'
+          : 'gemini_failed'
+        : 'groq_and_gemini_failed';
+
+  logStudyAiOutcome({
+    endpoint: params.endpoint,
+    userPlan: params.userPlan,
+    sourceTextLength: params.sourceText.length,
+    numQuestions: params.countLabel === 'numQuestions' ? params.count : undefined,
+    numCards: params.countLabel === 'numCards' ? params.count : undefined,
+    fallbackAttempted,
+    failureStage,
+    userMessage: message,
+  });
+
+  throw new Error(message);
 }
 
 export async function generateQuizFromText(
   text: string,
   numQuestions: number,
+  options?: { userPlan?: string },
 ): Promise<QuizQuestion[]> {
-  const raw = await runStudyAi({
-    systemPrompt: buildQuizPrompt(numQuestions),
-    sourceText: text,
-    endpoint: 'generate-quiz',
-    count: numQuestions,
-    countLabel: 'numQuestions',
-  });
-  const parsed = parseStudyToolsJson<{ quiz?: QuizQuestion[] }>(raw, 'quiz');
-  if (!Array.isArray(parsed.quiz) || parsed.quiz.length === 0) {
-    throw new Error(STUDY_AI_USER_ERRORS.invalidQuiz);
+  try {
+    const raw = await runStudyAi({
+      systemPrompt: buildQuizPrompt(numQuestions),
+      sourceText: text,
+      endpoint: 'generate-quiz',
+      count: numQuestions,
+      countLabel: 'numQuestions',
+      userPlan: options?.userPlan,
+    });
+    let parsed: { quiz?: QuizQuestion[] };
+    try {
+      parsed = parseStudyToolsJson<{ quiz?: QuizQuestion[] }>(raw, 'quiz');
+    } catch (error) {
+      logStudyAiOutcome({
+        endpoint: 'generate-quiz',
+        userPlan: options?.userPlan,
+        sourceTextLength: text.length,
+        numQuestions,
+        fallbackAttempted: false,
+        jsonParseSuccess: false,
+        failureStage: 'json_parse_failed',
+        userMessage: error instanceof Error ? error.message : STUDY_AI_USER_ERRORS.invalidQuiz,
+      });
+      throw error;
+    }
+    if (!Array.isArray(parsed.quiz) || parsed.quiz.length === 0) {
+      throw new Error(STUDY_AI_USER_ERRORS.invalidQuiz);
+    }
+    const normalized = normalizeGeneratedQuiz(parsed.quiz);
+    if (normalized.length === 0) {
+      throw new Error(STUDY_AI_USER_ERRORS.invalidQuiz);
+    }
+    logStudyAiOutcome({
+      endpoint: 'generate-quiz',
+      userPlan: options?.userPlan,
+      sourceTextLength: text.length,
+      numQuestions,
+      fallbackAttempted: false,
+      jsonParseSuccess: true,
+    });
+    return normalized.slice(0, numQuestions);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === STUDY_AI_USER_ERRORS.invalidQuiz
+    ) {
+      logStudyAiOutcome({
+        endpoint: 'generate-quiz',
+        userPlan: options?.userPlan,
+        sourceTextLength: text.length,
+        numQuestions,
+        fallbackAttempted: false,
+        jsonParseSuccess: false,
+        failureStage: 'schema_validation_failed',
+        userMessage: error.message,
+      });
+    }
+    throw error;
   }
-  const normalized = normalizeGeneratedQuiz(parsed.quiz);
-  if (normalized.length === 0) {
-    throw new Error(STUDY_AI_USER_ERRORS.invalidQuiz);
-  }
-  return normalized.slice(0, numQuestions);
 }
 
 export async function generateFlashcardsFromText(
   text: string,
   numCards: number,
+  options?: { userPlan?: string },
 ): Promise<FlashcardItem[]> {
   const raw = await runStudyAi({
     systemPrompt: buildFlashcardPrompt(numCards),
@@ -235,6 +328,7 @@ export async function generateFlashcardsFromText(
     endpoint: 'generate-flashcards',
     count: numCards,
     countLabel: 'numCards',
+    userPlan: options?.userPlan,
   });
   const parsed = parseStudyToolsJson<{ flashcards?: FlashcardItem[] }>(raw, 'flashcards');
   if (!Array.isArray(parsed.flashcards) || parsed.flashcards.length === 0) {

@@ -6,6 +6,7 @@ import {
   type CueStudyCommandType,
 } from '@/lib/cue-study-command';
 import { requireFirebaseAuth } from '@/lib/firebase-server-auth';
+import { assertPremiumStudyToolsAccess } from '@/lib/study-tools-access';
 import { CUE_STUDY_PLAN_DENIED_MESSAGE } from '@/lib/cue-study-command';
 import { studyToolsRateLimitMessage } from '@/lib/study-tools-time';
 import {
@@ -25,6 +26,14 @@ export async function POST(request: Request) {
   const viewer = await requireFirebaseAuth(request);
   if (!viewer) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+
+  const access = await assertPremiumStudyToolsAccess(viewer.uid);
+  if (!access.allowed) {
+    return NextResponse.json(
+      { error: CUE_STUDY_PLAN_DENIED_MESSAGE, code: 'plan_denied' },
+      { status: 403 },
+    );
   }
 
   let body: Record<string, unknown>;

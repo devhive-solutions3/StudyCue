@@ -303,14 +303,21 @@ export default function SettingsRoutePage() {
             </p>
             <p className="mt-1 text-sm text-text-secondary">{planBadgeSubtitle}</p>
             {planConfig ? (
-              <p className="mt-2 text-xs text-text-muted">
-                Storage: {formatUploadLimit(storageUsedBytes)} /{' '}
-                {effectiveStorageLimitBytes ? formatUploadLimit(effectiveStorageLimitBytes) : '—'}
-                {' · '}
-                Cue daily limit: {planConfig.cueDailyLimit}
-                {' · '}
-                Ads: {planConfig.adsEnabled ? 'On' : 'Off'}
-              </p>
+              <div className="mt-2 space-y-1 text-xs text-text-muted">
+                <p>Core planner access</p>
+                <p>Cue daily limit: {planConfig.cueDailyLimit}</p>
+                <p>
+                  Study tools:{' '}
+                  {currentPlan === 'free'
+                    ? 'Locked'
+                    : `${planConfig.studyToolDailyLimit} generations/day`}
+                </p>
+                <p>
+                  Storage: {formatUploadLimit(storageUsedBytes)} /{' '}
+                  {effectiveStorageLimitBytes ? formatUploadLimit(effectiveStorageLimitBytes) : '—'}
+                </p>
+                <p>Ads: {planConfig.adsEnabled ? 'On' : 'Off'}</p>
+              </div>
             ) : null}
           </div>
         ) : null}

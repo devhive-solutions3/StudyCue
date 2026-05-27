@@ -7,10 +7,7 @@ import QuizGeneratorClient from '@/components/study-tools/QuizGeneratorClient';
 
 function QuizPageContent() {
   return (
-    <PremiumStudyToolGate
-      title="Quiz Generator"
-      subtitle="Generate multiple-choice quizzes from your notes with citations."
-    >
+    <PremiumStudyToolGate variant="quiz">
       <QuizGeneratorClient />
     </PremiumStudyToolGate>
   );

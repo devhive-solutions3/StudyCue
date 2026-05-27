@@ -1,52 +1,26 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import type { ReactNode } from 'react';
 
-import { getFirebaseDb, useWebAuth } from '@/lib/firebase-client';
-import { canUseStudyToolsAi, getUserPlan } from '@/lib/plan-access';
-import { STUDY_TOOLS_PLAN_DENIED_MESSAGE } from '@/lib/study-tools-request';
+import StudyToolsLockedPage from '@/components/study-tools/StudyToolsLockedPage';
+import { usePremiumStudyTools } from '@/hooks/use-premium-study-tools';
 
 export default function PremiumStudyToolGate({
-  title,
-  subtitle,
+  variant,
   children,
 }: {
-  title: string;
-  subtitle: string;
+  variant: 'quiz' | 'flashcards';
   children: ReactNode;
 }) {
-  const { user, ready } = useWebAuth();
-  const [allowed, setAllowed] = useState(false);
-  const [planLabel, setPlanLabel] = useState('Free');
-  const [profileUid, setProfileUid] = useState<string | null>(null);
+  const { user, ready, loading, allowed, planLabel } = usePremiumStudyTools();
 
-  useEffect(() => {
-    if (!user) return;
-    const db = getFirebaseDb();
-    return onSnapshot(
-      doc(db, 'users', user.uid),
-      (snapshot) => {
-        const profile = snapshot.exists() ? (snapshot.data() as Record<string, unknown>) : null;
-        setProfileUid(user.uid);
-        setAllowed(canUseStudyToolsAi(profile));
-        const plan = getUserPlan(profile);
-        setPlanLabel(plan === 'beta' ? 'Beta' : plan === 'premium' ? 'StudyCue Plus' : 'Free');
-      },
-      () => {
-        setProfileUid(user.uid);
-        setAllowed(false);
-      },
-    );
-  }, [user]);
-
-  const profileResolved = Boolean(user && profileUid === user.uid);
-
-  if (!ready || (user && !profileResolved)) {
+  if (!ready || loading) {
     return <div className="py-10 text-sm text-text-secondary">Loading…</div>;
   }
 
   if (!user) {
+    const title =
+      variant === 'quiz' ? 'Quiz Generator' : 'Flashcards';
     return (
       <div className="rounded-[16px] border border-border bg-surface-2 p-6">
         <h1 className="text-xl font-semibold text-text-primary">{title}</h1>
@@ -56,23 +30,7 @@ export default function PremiumStudyToolGate({
   }
 
   if (!allowed) {
-    return (
-      <div className="mx-auto max-w-xl space-y-4">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">Study tools</p>
-          <h1 className="mt-1 text-3xl font-semibold text-text-primary">{title}</h1>
-          <p className="mt-2 text-sm text-text-secondary">{subtitle}</p>
-        </div>
-        <div className="rounded-[16px] border border-dashed border-border bg-surface-2 px-6 py-10 text-center">
-          <p className="text-sm font-semibold text-text-primary">Available in Beta / StudyCue Plus</p>
-          <p className="mt-2 text-sm text-text-secondary">{STUDY_TOOLS_PLAN_DENIED_MESSAGE}</p>
-          <p className="mt-2 text-xs text-text-muted">
-            Your current plan: <span className="font-semibold text-text-primary">{planLabel}</span>
-          </p>
-          <p className="mt-3 text-xs text-text-muted">Coming Soon for Free</p>
-        </div>
-      </div>
-    );
+    return <StudyToolsLockedPage variant={variant} planLabel={planLabel} />;
   }
 
   return <>{children}</>;

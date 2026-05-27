@@ -1,5 +1,7 @@
 'use client';
 
+import { STUDY_TOOLS_PLAN_DENIED_MESSAGE } from '@/lib/study-tools-request';
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -30,9 +32,9 @@ export default function PremiumStudyToolLockedModal({
         <h2 id="study-tool-locked-title" className="text-lg font-semibold text-text-primary">
           {featureLabel}
         </h2>
-        <p className="mt-3 text-sm text-text-secondary">
-          Available for Beta and StudyCue Plus users. Your current plan:{' '}
-          <span className="font-semibold text-text-primary">{planLabel}</span>.
+        <p className="mt-3 text-sm text-text-secondary">{STUDY_TOOLS_PLAN_DENIED_MESSAGE}</p>
+        <p className="mt-2 text-xs text-text-muted">
+          Your current plan: <span className="font-semibold text-text-primary">{planLabel}</span>
         </p>
         <p className="mt-2 text-xs text-text-muted">Coming Soon for Free</p>
         <button type="button" onClick={onClose} className="sc-btn-secondary mt-5 w-full">

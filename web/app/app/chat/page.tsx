@@ -13,10 +13,12 @@ import { parseCueCommandFromResponse, type CueCommand } from '@/lib/cue-chat-res
 import {
   CUE_STUDY_BOTH_MESSAGE,
   CUE_STUDY_NO_SOURCE_MESSAGE,
+  CUE_STUDY_PLAN_DENIED_MESSAGE,
   detectCueStudyCommand,
   messageHasPastedStudySource,
 } from '@/lib/cue-study-command';
 import { useMirror } from '@/context/mirror-context';
+import { usePremiumStudyTools } from '@/hooks/use-premium-study-tools';
 import { applyCueCommandToMirror } from '@/lib/cue-command-apply';
 import { useWebAuth } from '@/lib/firebase-client';
 import {
@@ -36,6 +38,7 @@ const IMAGE_ONLY_PROMPT =
 export default function ChatRoutePage() {
   const auth = useWebAuth();
   const { mirror, commitMirror } = useMirror();
+  const { allowed: studyToolsAllowed, loading: studyToolsPlanLoading } = usePremiumStudyTools();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const studyFileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -180,6 +183,11 @@ export default function ChatRoutePage() {
     }
 
     if (studyCommand.type === 'quiz' || studyCommand.type === 'flashcards') {
+      if (!studyToolsPlanLoading && !studyToolsAllowed) {
+        setMsgs((m) => [...m, { role: 'cue', text: CUE_STUDY_PLAN_DENIED_MESSAGE }]);
+        setBusy(false);
+        return;
+      }
       const sourceText = studySnapshot?.text ?? (messageHasPastedStudySource(userLine, STUDY_SOURCE_MIN_CHARS) ? userLine : '');
       const sourceName = studySnapshot?.fileName ?? 'Pasted notes';
       if (!sourceText.trim()) {

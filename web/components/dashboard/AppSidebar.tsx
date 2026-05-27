@@ -9,9 +9,10 @@ import { useDashboardUi } from '@/context/dashboard-ui';
 import AnimatedStudyCueLogo from '@/components/AnimatedStudyCueLogo';
 import { IconGlyph, type IconName } from '@/lib/icon-map';
 import { getLocalProfilePhoto } from '@/lib/local-file-store';
+import { usePremiumStudyTools } from '@/hooks/use-premium-study-tools';
 import { useWebAuth } from '@/lib/firebase-client';
 
-type Item = { href: string; label: string; icon: IconName };
+type Item = { href: string; label: string; icon: IconName; locked?: boolean };
 
 const MAIN_ITEMS: Item[] = [
   { href: '/app', label: 'Dashboard', icon: 'dashboard' },
@@ -119,7 +120,21 @@ function SidebarNavLink({
       }}
     >
       <IconGlyph name={item.icon} />
-      {collapsed ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
+      {collapsed ? (
+        <span className="sr-only">
+          {item.label}
+          {item.locked ? ' (locked)' : ''}
+        </span>
+      ) : (
+        <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+          <span className="truncate">{item.label}</span>
+          {item.locked ? (
+            <span className="shrink-0 text-[10px] font-extrabold uppercase tracking-wide text-text-muted">
+              🔒
+            </span>
+          ) : null}
+        </span>
+      )}
     </Link>
   );
 }
@@ -179,6 +194,16 @@ export default function AppSidebar({
 }) {
   const pathname = usePathname();
   const { user } = useWebAuth();
+  const { allowed: studyToolsAllowed, loading: studyToolsPlanLoading } = usePremiumStudyTools();
+
+  const studyItems = useMemo(() => {
+    const lockStudyTools = Boolean(user) && !studyToolsPlanLoading && !studyToolsAllowed;
+    return STUDY_ITEMS.map((item) => ({
+      ...item,
+      locked:
+        lockStudyTools && (item.href === '/app/quiz' || item.href === '/app/flashcards'),
+    }));
+  }, [studyToolsAllowed, studyToolsPlanLoading, user]);
   const [, bumpSidebarAvatar] = useReducer((x: number) => x + 1, 0);
   const [failedAvatarSrc, setFailedAvatarSrc] = useState<string | null>(null);
 
@@ -336,7 +361,7 @@ export default function AppSidebar({
 
         <nav className={`flex-1 overflow-y-auto py-[18px] ${collapsed ? 'px-3' : 'px-3'}`}>
           <NavSection title="Main" items={MAIN_ITEMS} onNavigate={onClose} collapsed={collapsed} />
-          <NavSection title="Study" items={STUDY_ITEMS} onNavigate={onClose} collapsed={collapsed} />
+          <NavSection title="Study" items={studyItems} onNavigate={onClose} collapsed={collapsed} />
         </nav>
 
         <div className="p-3" style={{ borderTop: '1px solid var(--sc-border)' }}>
