@@ -45,6 +45,27 @@ service cloud.firestore {
       match /analytics/{dateKey} {
         allow read, write: if false;
       }
+      match /usage/{dateKey} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /usageSummary/{docId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /usageRequests/{requestId} {
+        allow read, write: if false;
+      }
+      match /seenAnnouncements/{announcementId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    match /announcements/{announcementId} {
+      allow read, write: if false;
+    }
+    match /studyToolEvents/{eventId} {
+      allow read, write: if false;
     }
 
     // Bug reports are written by the server (Admin SDK). Lock down direct client access.

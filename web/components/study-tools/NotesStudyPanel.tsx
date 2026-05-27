@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 
+import {
+  STUDY_TOOLS_DAILY_LIMIT_MESSAGE,
+  studyToolsFetchHeaders,
+} from '@/lib/study-tools-request';
 import type { FileStudyResult } from '@/lib/study-tools-types';
 
 type Props = {
@@ -21,7 +25,7 @@ export default function NotesStudyPanel({ sourceName, text, onClose }: Props) {
     try {
       const response = await fetch('/api/study-tools/file-study', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: studyToolsFetchHeaders(),
         credentials: 'same-origin',
         body: JSON.stringify({
           text,
@@ -32,7 +36,13 @@ export default function NotesStudyPanel({ sourceName, text, onClose }: Props) {
       const payload = (await response.json().catch(() => null)) as FileStudyResult & {
         error?: string;
       };
-      if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+      if (!response.ok) {
+        const message =
+          response.status === 429
+            ? payload?.error ?? STUDY_TOOLS_DAILY_LIMIT_MESSAGE
+            : payload?.error || `HTTP ${response.status}`;
+        throw new Error(message);
+      }
       setResult(payload);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not generate study summary.');

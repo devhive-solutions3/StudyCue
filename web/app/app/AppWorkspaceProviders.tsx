@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
 import AppAnalyticsTracker from '@/components/analytics/AppAnalyticsTracker';
+import InAppAnnouncementModal from '@/components/announcements/InAppAnnouncementModal';
 import GlowBackground from '@/components/layout/GlowBackground';
 import { TransitionCard } from '@/components/layout/AppTransitionOverlay';
 import DashboardShell from '@/components/dashboard/DashboardShell';
@@ -84,6 +85,7 @@ export default function AppWorkspaceProviders({ children }: Readonly<{ children:
         <DashboardUiProvider>
           <DashboardShell>
             <AppAnalyticsTracker />
+            <InAppAnnouncementModal />
             <MirrorGate>{children}</MirrorGate>
           </DashboardShell>
         </DashboardUiProvider>

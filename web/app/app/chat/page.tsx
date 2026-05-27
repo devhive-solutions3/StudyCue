@@ -7,7 +7,14 @@ import * as React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import CueStudyResultCard from '@/components/cue/CueStudyResultCard';
 import { parseCueCommandFromResponse, type CueCommand } from '@/lib/cue-chat-response';
+import {
+  CUE_STUDY_BOTH_MESSAGE,
+  CUE_STUDY_NO_SOURCE_MESSAGE,
+  detectCueStudyCommand,
+  messageHasPastedStudySource,
+} from '@/lib/cue-study-command';
 import { useMirror } from '@/context/mirror-context';
 import { applyCueCommandToMirror } from '@/lib/cue-command-apply';
 import { useWebAuth } from '@/lib/firebase-client';
@@ -17,7 +24,10 @@ import {
   revokeCueScheduleImagePreview,
   type CueScheduleImage,
 } from '@/lib/cue-image';
-import { fetchCueResponseWeb, snapshotToPlanningPrompt, type CueMsg } from '@/lib/cue-web';
+import { STUDY_UPLOAD_ACCEPT } from '@/lib/study-file-extract';
+import { extractTextFromStudyFile } from '@/lib/study-tools-text-extraction';
+import { STUDY_SOURCE_MIN_CHARS } from '@/lib/study-tools-types';
+import { fetchCueResponseWeb, fetchCueStudyGenerate, snapshotToPlanningPrompt, type CueMsg } from '@/lib/cue-web';
 
 const IMAGE_ONLY_PROMPT =
   'Extract the weekly class schedule from this image and add it to my calendar. Use eventType "class" unless clearly a quiz or exam.';
@@ -26,14 +36,23 @@ export default function ChatRoutePage() {
   const auth = useWebAuth();
   const { mirror, commitMirror } = useMirror();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const studyFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [msgs, setMsgs] = React.useState<CueMsg[]>([{ role: 'cue', text: 'Hi! I can help you plan your week, tasks, and study schedule.' }]);
   const [input, setInput] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [includePlanning, setIncludePlanning] = React.useState(true);
   const [pendingImage, setPendingImage] = React.useState<CueScheduleImage | null>(null);
+  const [pendingStudyFile, setPendingStudyFile] = React.useState<{
+    fileName: string;
+    sizeBytes: number;
+    text: string;
+    truncated: boolean;
+  } | null>(null);
+  const [studyFileLoading, setStudyFileLoading] = React.useState(false);
   const [dragOver, setDragOver] = React.useState(false);
   const [imageErr, setImageErr] = React.useState<string | null>(null);
+  const [studyFileErr, setStudyFileErr] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -63,6 +82,31 @@ export default function ChatRoutePage() {
       return null;
     });
     setImageErr(null);
+  }
+
+  function clearPendingStudyFile() {
+    setPendingStudyFile(null);
+    setStudyFileErr(null);
+  }
+
+  async function setPendingStudyFromFile(file: File) {
+    setStudyFileErr(null);
+    setStudyFileLoading(true);
+    clearPendingImage();
+    try {
+      const extracted = await extractTextFromStudyFile(file);
+      setPendingStudyFile({
+        fileName: extracted.sourceName,
+        sizeBytes: extracted.sizeBytes,
+        text: extracted.text,
+        truncated: extracted.truncated,
+      });
+    } catch (e) {
+      setPendingStudyFile(null);
+      setStudyFileErr(e instanceof Error ? e.message : 'Could not read that file.');
+    } finally {
+      setStudyFileLoading(false);
+    }
   }
 
   async function executeCueCommand(command: CueCommand): Promise<string> {
@@ -98,9 +142,15 @@ export default function ChatRoutePage() {
   async function submit() {
     const userLine = input.trim();
     const imageForSend = pendingImage;
-    if (!userLine && !imageForSend) return;
+    const studyFileForSend = pendingStudyFile;
+    if (!userLine && !imageForSend && !studyFileForSend) return;
 
-    const displayText = userLine || (imageForSend ? 'Schedule image attached' : '');
+    const studyCommand = userLine ? detectCueStudyCommand(userLine) : { type: 'none' as const };
+
+    const displayText =
+      userLine ||
+      (studyFileForSend ? `${studyFileForSend.fileName} attached` : '') ||
+      (imageForSend ? 'Schedule image attached' : '');
     const apiText = userLine || (imageForSend ? IMAGE_ONLY_PROMPT : '');
 
     const nextHistory: CueMsg[] = [
@@ -109,14 +159,62 @@ export default function ChatRoutePage() {
         role: 'user',
         text: displayText,
         imagePreviewUrl: imageForSend?.dataUrl,
+        studyFileName: studyFileForSend?.fileName,
       },
     ];
     setMsgs(nextHistory);
     setInput('');
     clearPendingImage();
+    const studySnapshot = studyFileForSend;
+    clearPendingStudyFile();
     setBusy(true);
     setErr(null);
     setImageErr(null);
+    setStudyFileErr(null);
+
+    if (studyCommand.type === 'both') {
+      setMsgs((m) => [...m, { role: 'cue', text: CUE_STUDY_BOTH_MESSAGE }]);
+      setBusy(false);
+      return;
+    }
+
+    if (studyCommand.type === 'quiz' || studyCommand.type === 'flashcards') {
+      const sourceText = studySnapshot?.text ?? (messageHasPastedStudySource(userLine, STUDY_SOURCE_MIN_CHARS) ? userLine : '');
+      const sourceName = studySnapshot?.fileName ?? 'Pasted notes';
+      if (!sourceText.trim()) {
+        setMsgs((m) => [...m, { role: 'cue', text: CUE_STUDY_NO_SOURCE_MESSAGE }]);
+        setBusy(false);
+        return;
+      }
+      try {
+        const { message, studyResult } = await fetchCueStudyGenerate({
+          commandType: studyCommand.type,
+          text: sourceText,
+          sourceName,
+          sourceType: studySnapshot ? 'upload' : 'paste',
+          count: studyCommand.count ?? (studyCommand.type === 'quiz' ? 10 : 20),
+          requestedFolderName: studyCommand.requestedFolderName,
+          getIdToken: async () => (await auth.getIdToken()) ?? '',
+        });
+        const truncateNote = studySnapshot?.truncated
+          ? ' Large file detected — I used the first portion that fits the study limit.'
+          : '';
+        setMsgs((m) => [
+          ...m,
+          {
+            role: 'cue',
+            text: `${message}${truncateNote}`,
+            studyResult,
+          },
+        ]);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Could not generate study materials.';
+        setMsgs((m) => [...m, { role: 'cue', text: msg }]);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
 
     const planning = includePlanning ? snapshotToPlanningPrompt(mirror) : undefined;
     const intentMessage = userLine || (imageForSend ? IMAGE_ONLY_PROMPT : '');
@@ -170,7 +268,7 @@ export default function ChatRoutePage() {
     }
   }
 
-  const canSend = Boolean(input.trim() || pendingImage) && !busy;
+  const canSend = Boolean(input.trim() || pendingImage || pendingStudyFile) && !busy && !studyFileLoading;
 
   return (
     <div className="mx-auto grid w-full min-w-0 max-w-full gap-6 xl:max-w-[1080px] xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,360px)]">
@@ -260,6 +358,7 @@ export default function ChatRoutePage() {
                   }}
                 >
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
+                  {m.studyResult ? <CueStudyResultCard result={m.studyResult} /> : null}
                 </div>
               </div>
             ) : (
@@ -281,6 +380,9 @@ export default function ChatRoutePage() {
                       alt="Attached schedule"
                       className="mb-2 max-h-48 w-full rounded-xl object-contain"
                     />
+                  ) : null}
+                  {m.studyFileName ? (
+                    <p className="mb-2 text-xs font-semibold opacity-90">📎 {m.studyFileName}</p>
                   ) : null}
                   {m.text ? <p className="whitespace-pre-wrap">{m.text}</p> : null}
                 </div>
@@ -314,18 +416,48 @@ export default function ChatRoutePage() {
           onDrop={(e) => {
             e.preventDefault();
             setDragOver(false);
-            const file = Array.from(e.dataTransfer.files).find(isCueImageFile);
-            if (file) void setPendingFromFile(file);
+            const files = Array.from(e.dataTransfer.files);
+            const studyFile = files.find((f) => !isCueImageFile(f));
+            const imageFile = files.find(isCueImageFile);
+            if (studyFile) void setPendingStudyFromFile(studyFile);
+            else if (imageFile) void setPendingFromFile(imageFile);
           }}
         >
           {err ? <p className="mb-3 text-[11px] text-rose-500">{err}</p> : null}
           {imageErr ? <p className="mb-3 text-[11px] text-rose-500">{imageErr}</p> : null}
+          {studyFileErr ? <p className="mb-3 text-[11px] text-rose-500">{studyFileErr}</p> : null}
           <div
             className={clsx(
               'overflow-hidden rounded-[20px] border bg-surface shadow-[var(--sc-shadow-sm)] transition',
               dragOver ? 'border-accent ring-2 ring-accent/25' : 'border-border',
             )}
           >
+            {pendingStudyFile || studyFileLoading ? (
+              <div className="flex items-center justify-between gap-2 border-b border-border bg-surface-soft px-4 py-3 text-xs">
+                <div className="min-w-0">
+                  <p className="font-semibold text-text-primary truncate">
+                    {studyFileLoading ? 'Reading file…' : pendingStudyFile?.fileName}
+                  </p>
+                  {pendingStudyFile ? (
+                    <p className="text-text-muted">
+                      {pendingStudyFile.truncated
+                        ? 'File ready (truncated for length)'
+                        : `File ready · ${pendingStudyFile.text.length.toLocaleString()} characters`}
+                    </p>
+                  ) : null}
+                </div>
+                {!studyFileLoading ? (
+                  <button
+                    type="button"
+                    onClick={clearPendingStudyFile}
+                    className="shrink-0 rounded-full px-2 py-1 text-text-muted hover:bg-surface"
+                    aria-label="Remove attached file"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {pendingImage ? (
               <div className="relative border-b border-border bg-surface-soft p-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -373,6 +505,14 @@ export default function ChatRoutePage() {
                   </svg>
                   Attach schedule
                 </button>
+                <button
+                  type="button"
+                  onClick={() => studyFileInputRef.current?.click()}
+                  disabled={busy || studyFileLoading}
+                  className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-surface-soft px-2.5 py-1.5 text-xs font-extrabold text-text-secondary transition hover:border-accent hover:text-accent disabled:opacity-50"
+                >
+                  Attach file
+                </button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -382,6 +522,17 @@ export default function ChatRoutePage() {
                     const file = e.target.files?.[0];
                     e.target.value = '';
                     if (file) void setPendingFromFile(file);
+                  }}
+                />
+                <input
+                  ref={studyFileInputRef}
+                  type="file"
+                  accept={STUDY_UPLOAD_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (file) void setPendingStudyFromFile(file);
                   }}
                 />
               </div>
@@ -430,6 +581,9 @@ export default function ChatRoutePage() {
           </li>
           <li>
             Attach a schedule screenshot or drag it onto the composer — Cue reads it with vision and can add classes to your calendar.
+          </li>
+          <li>
+            Attach a PDF, DOCX, PPTX, or notes file and ask for a quiz or flashcards — e.g. “Make me a 10-question quiz.”
           </li>
           <li>
             <Link href="/app/calendar" className="text-accent hover:text-accent-hover">

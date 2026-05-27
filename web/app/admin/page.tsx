@@ -22,6 +22,10 @@ const overviewCards = [
   { key: 'signupsToday', label: 'Signups today', tone: 'bg-purple-100 text-purple-600', href: '/admin/analytics' },
   { key: 'd1RetentionRate', label: 'D1 retention', tone: 'bg-amber-100 text-amber-600', href: '/admin/analytics' },
   { key: 'd7RetentionRate', label: 'D7 retention', tone: 'bg-amber-100 text-amber-600', href: '/admin/analytics' },
+  { key: 'activeAnnouncements', label: 'Active announcements', tone: 'bg-teal-100 text-teal-600', href: '/admin/announcements' },
+  { key: 'studyToolGenerationsToday', label: 'Study tool gens today', tone: 'bg-blue-100 text-blue-600', href: '/admin/study-tools' },
+  { key: 'quizGenerationsToday', label: 'Quiz gens today', tone: 'bg-purple-100 text-purple-600', href: '/admin/study-tools' },
+  { key: 'flashcardGenerationsToday', label: 'Flashcard gens today', tone: 'bg-teal-100 text-teal-600', href: '/admin/study-tools' },
 ] as const;
 
 export default async function AdminDashboardPage() {

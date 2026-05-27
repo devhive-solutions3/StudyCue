@@ -5,10 +5,16 @@ import { useEffect, useState } from 'react';
 
 import SaveStudyItemModal from '@/components/study-tools/SaveStudyItemModal';
 import StudySourcePicker from '@/components/study-tools/StudySourcePicker';
+import StudyToolsUsageIndicator from '@/components/study-tools/StudyToolsUsageIndicator';
 import { useMirror } from '@/context/mirror-context';
 import { useWebAuth } from '@/lib/firebase-client';
+import { readCueGeneratedDeck } from '@/lib/cue-study-session';
 import { readStudySourceFromSession, saveStudySourceToSession } from '@/lib/study-source-session';
 import { studyGenerateBlockedMessage } from '@/lib/study-source-validation';
+import {
+  STUDY_TOOLS_DAILY_LIMIT_MESSAGE,
+  studyToolsFetchHeaders,
+} from '@/lib/study-tools-request';
 import {
   listFlashcardDecks,
   saveFlashcardDeck,
@@ -27,14 +33,28 @@ export default function FlashcardsClient() {
   const { mirror, commitMirror } = useMirror();
   const folders = mirror.noteFolders ?? [];
 
-  const [source, setSource] = useState<StudySourceSelection | null>(() => readStudySourceFromSession());
+  const cueDeckBootstrap =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('fromCue')
+      ? readCueGeneratedDeck()
+      : null;
+
+  const [source, setSource] = useState<StudySourceSelection | null>(() => {
+    if (cueDeckBootstrap) {
+      return {
+        sourceType: cueDeckBootstrap.sourceType,
+        sourceName: cueDeckBootstrap.sourceName,
+        text: '',
+      };
+    }
+    return readStudySourceFromSession();
+  });
   const [uploadPending, setUploadPending] = useState(false);
   const [numCards, setNumCards] = useState(10);
-  const [cards, setCards] = useState<FlashcardItem[] | null>(null);
+  const [cards, setCards] = useState<FlashcardItem[] | null>(() => cueDeckBootstrap?.cards ?? null);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [known, setKnown] = useState(0);
-  const [review, setReview] = useState(0);
+  const [review, setReview] = useState(() => cueDeckBootstrap?.cards.length ?? 0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deckId, setDeckId] = useState<string | null>(null);
@@ -68,7 +88,7 @@ export default function FlashcardsClient() {
     try {
       const response = await fetch('/api/study-tools/generate-flashcards', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: studyToolsFetchHeaders(),
         credentials: 'same-origin',
         body: JSON.stringify({
           text: readySource.text,
@@ -81,7 +101,13 @@ export default function FlashcardsClient() {
         error?: string;
         flashcards?: FlashcardItem[];
       } | null;
-      if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+      if (!response.ok) {
+        const message =
+          response.status === 429
+            ? payload?.error ?? STUDY_TOOLS_DAILY_LIMIT_MESSAGE
+            : payload?.error || `HTTP ${response.status}`;
+        throw new Error(message);
+      }
       const next = payload?.flashcards ?? [];
       setCards(next);
       setIndex(0);
@@ -154,6 +180,7 @@ export default function FlashcardsClient() {
       <div>
         <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">Study tools</p>
         <h1 className="mt-1 text-3xl font-semibold text-text-primary">Flashcards</h1>
+        <StudyToolsUsageIndicator className="mt-2" />
         <p className="mt-2 text-sm text-text-secondary">
           Turn notes into active-recall cards. Saved decks appear in your Notes folders.
         </p>

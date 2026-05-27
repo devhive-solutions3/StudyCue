@@ -5,7 +5,32 @@ import { publicEnv } from '@/lib/public-env';
 const GROQ_TEXT = 'llama-3.3-70b-versatile';
 const GROQ_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
-export type CueMsg = { role: 'user' | 'cue'; text: string; imagePreviewUrl?: string };
+import type { CueStudyCommandType } from '@/lib/cue-study-command';
+import type { FlashcardItem, QuizQuestion } from '@/lib/study-tools-types';
+
+export type CueStudyResultPayload =
+  | {
+      kind: 'quiz';
+      sourceName: string;
+      count: number;
+      requestedFolderName?: string | null;
+      questions: QuizQuestion[];
+    }
+  | {
+      kind: 'flashcards';
+      sourceName: string;
+      count: number;
+      requestedFolderName?: string | null;
+      cards: FlashcardItem[];
+    };
+
+export type CueMsg = {
+  role: 'user' | 'cue';
+  text: string;
+  imagePreviewUrl?: string;
+  studyFileName?: string;
+  studyResult?: CueStudyResultPayload;
+};
 
 export type CueWebAttachment = { dataUrl: string; mimeType: string };
 
@@ -299,4 +324,105 @@ export function snapshotToPlanningPrompt(m: CloudMirrorV1): string {
   );
 
   return lines.join('\n');
+}
+
+export type CueStudyGenerateResponse =
+  | {
+      ok: true;
+      kind: 'quiz';
+      message: string;
+      sourceName: string;
+      count: number;
+      requestedFolderName?: string | null;
+      quiz: QuizQuestion[];
+    }
+  | {
+      ok: true;
+      kind: 'flashcards';
+      message: string;
+      sourceName: string;
+      count: number;
+      requestedFolderName?: string | null;
+      flashcards: FlashcardItem[];
+    };
+
+export async function fetchCueStudyGenerate(params: {
+  commandType: Exclude<CueStudyCommandType, 'none' | 'both'>;
+  text: string;
+  sourceName: string;
+  sourceType: 'paste' | 'upload';
+  count: number;
+  requestedFolderName?: string | null;
+  getIdToken?: () => Promise<string>;
+}): Promise<{ message: string; studyResult: CueStudyResultPayload }> {
+  const requestId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `cue-study-${Date.now()}`;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-StudyCue-Request-Id': requestId,
+  };
+  try {
+    const token = params.getIdToken && (await params.getIdToken());
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    /* optional */
+  }
+
+  const res = await fetch('/api/cue/study-generate', {
+    method: 'POST',
+    headers,
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      commandType: params.commandType,
+      text: params.text,
+      sourceName: params.sourceName,
+      sourceType: params.sourceType,
+      count: params.count,
+      requestedFolderName: params.requestedFolderName,
+    }),
+  });
+
+  const payload = (await res.json().catch(() => null)) as
+    | (CueStudyGenerateResponse & { error?: string })
+    | { error?: string }
+    | null;
+
+  if (!res.ok) {
+    throw new Error(
+      payload && typeof payload === 'object' && 'error' in payload && payload.error
+        ? String(payload.error)
+        : `HTTP ${res.status}`,
+    );
+  }
+
+  if (!payload || !('kind' in payload) || payload.kind === undefined) {
+    throw new Error('Invalid study generation response.');
+  }
+
+  if (payload.kind === 'quiz') {
+    return {
+      message: payload.message,
+      studyResult: {
+        kind: 'quiz',
+        sourceName: payload.sourceName,
+        count: payload.count,
+        requestedFolderName: payload.requestedFolderName ?? null,
+        questions: payload.quiz,
+      },
+    };
+  }
+
+  return {
+    message: payload.message,
+    studyResult: {
+      kind: 'flashcards',
+      sourceName: payload.sourceName,
+      count: payload.count,
+      requestedFolderName: payload.requestedFolderName ?? null,
+      cards: payload.flashcards,
+    },
+  };
 }

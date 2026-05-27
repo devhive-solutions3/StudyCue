@@ -3,7 +3,8 @@ import 'server-only';
 import { FieldValue } from 'firebase-admin/firestore';
 
 import { dateKeyFromIso, isoNow, writeSecurityLog } from '@/lib/admin-log';
-import { planFromProfile, recordCueMessageAnalytics } from '@/lib/analytics-tracker';
+import type { AnalyticsFeature, AnalyticsUserPlan } from '@/lib/analytics-types';
+import { planFromProfile, recordAiRequestAnalytics } from '@/lib/analytics-tracker';
 import { getFirebaseAdminDb, readFirebaseAdminStatus } from '@/lib/firebase-admin';
 
 const PROVIDER_PRICING_USD_PER_MILLION: Record<string, { input: number; output: number }> = {
@@ -21,13 +22,15 @@ export type CueUsageLogParams = {
   authenticated?: boolean;
   provider: 'groq' | 'gemini';
   model: string;
-  status: 'success' | 'error' | 'rate_limited';
+  status: 'success' | 'error' | 'rate_limited' | 'denied';
   inputTokensEstimate: number;
   outputTokensEstimate: number;
   totalTokensEstimate: number;
   estimatedCostUsd: number;
   estimatedCostPhp: number;
   errorCode?: string | null;
+  feature?: AnalyticsFeature;
+  userPlan?: AnalyticsUserPlan;
   endpoint:
     | '/api/cue'
     | '/api/groq'
@@ -42,10 +45,12 @@ export type CueUsagePayloadParams = {
   authenticated?: boolean;
   provider: 'groq' | 'gemini';
   model: string;
-  status: 'success' | 'error' | 'rate_limited';
+  status: 'success' | 'error' | 'rate_limited' | 'denied';
   requestPayload: unknown;
   responseText?: string;
   errorCode?: string | null;
+  feature?: AnalyticsFeature;
+  userPlan?: AnalyticsUserPlan;
   endpoint:
     | '/api/cue'
     | '/api/groq'
@@ -195,9 +200,11 @@ export async function logCueUsage(params: CueUsageLogParams) {
     uid,
     email: params.email ?? null,
     authenticated: params.authenticated ?? uid !== 'anonymous',
+    userPlan: params.userPlan ?? null,
     provider: params.provider,
     model: params.model,
     status: params.status,
+    feature: params.feature ?? null,
     inputTokensEstimate: params.inputTokensEstimate,
     outputTokensEstimate: params.outputTokensEstimate,
     totalTokensEstimate: params.totalTokensEstimate,
@@ -250,13 +257,14 @@ export async function logCueUsage(params: CueUsageLogParams) {
   if (uid !== 'anonymous' && uid !== 'unknown') {
     const profileSnap = await db.doc(`users/${uid}`).get().catch(() => null);
     const profile = profileSnap?.exists ? (profileSnap.data() as Record<string, unknown>) : null;
-    void recordCueMessageAnalytics({
+    void recordAiRequestAnalytics({
       uid,
-      userPlan: planFromProfile(profile),
+      userPlan: params.userPlan ?? planFromProfile(profile),
       provider: params.provider,
       model: params.model,
       status: params.status,
       endpoint: params.endpoint,
+      feature: params.feature ?? 'cue_ai',
       inputTokensEstimate: params.inputTokensEstimate,
       outputTokensEstimate: params.outputTokensEstimate,
       totalTokensEstimate: params.totalTokensEstimate,
@@ -273,7 +281,7 @@ export async function logCueUsage(params: CueUsageLogParams) {
     console.info('[ai-usage-log] daily aggregate update success', { dateKey });
   }
 
-  if (params.status !== 'success') {
+  if (params.status !== 'success' && params.status !== 'denied') {
     await writeSecurityLog({
       severity: params.status === 'rate_limited' ? 'warning' : 'error',
       actorUid: uid,

@@ -28,6 +28,10 @@ export type AdminOverviewStats = {
   d1RetentionRate?: number;
   d7RetentionRate?: number;
   mostUsedFeature?: string | null;
+  activeAnnouncements?: number;
+  studyToolGenerationsToday?: number;
+  quizGenerationsToday?: number;
+  flashcardGenerationsToday?: number;
 };
 
 export type AdminUserRow = {
@@ -50,6 +54,10 @@ export type AdminUserRow = {
   storageLimitBytes: number | null;
   cueRequestsUsedToday: number | null;
   cueDailyLimit: number | null;
+  studyToolGenerationsUsedToday: number | null;
+  studyToolDailyLimit: number | null;
+  quizGenerationsUsedToday: number | null;
+  flashcardGenerationsUsedToday: number | null;
   scheduleImageImportsUsedThisMonth: number | null;
   scheduleImageImportsMonthly: number | null;
   adsEnabled: boolean;
