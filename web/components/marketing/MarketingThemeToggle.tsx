@@ -17,7 +17,7 @@ export default function MarketingThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label="Toggle theme"
-      className="sc-focus-ring inline-flex h-10 w-10 items-center justify-center rounded-[12px] border transition hover:bg-[var(--sc-surface-soft)]"
+      className="sc-focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border transition hover:bg-[var(--sc-surface-soft)]"
       style={{
         borderColor: 'var(--sc-border)',
         color: 'var(--sc-text-secondary)',
