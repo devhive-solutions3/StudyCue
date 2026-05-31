@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
 
-import GoogleAdSenseAd from '@/components/ads/GoogleAdSenseAd';
-
 import { canonical } from '@/lib/site-config';
 
 export const metadata: Metadata = {
@@ -66,7 +64,6 @@ export default function FeaturesPage() {
           without leaving the same workspace.
         </p>
       </section>
-      <GoogleAdSenseAd className="mt-10" />
     </div>
   );
 }

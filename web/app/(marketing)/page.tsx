@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import GoogleAdSenseAd from '@/components/ads/GoogleAdSenseAd';
 import JsonLd from '@/components/seo/JsonLd';
 import {
   openGraphDescription,
@@ -99,8 +98,6 @@ export default function LandingPage() {
         <FeatureCard title="Tasks, notes, and Cue AI" detail="Capture tasks, write notes, and use Cue AI to sort the next best step in your study plan." />
         <FeatureCard title="Focus timer" detail="Run focused study sessions with a calm timer flow that fits into the rest of your workspace." />
       </section>
-
-      <GoogleAdSenseAd className="mt-12" />
 
       <section className="mt-20 rounded-3xl border border-border bg-surface p-8 shadow-[var(--sc-shadow-card)]">
         <h2 className="text-2xl font-semibold text-text-primary">Built for calmer study planning</h2>

@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import GoogleAdSenseAd from '@/components/ads/GoogleAdSenseAd';
-
 import { getPublishedBlogPosts } from '@/lib/blog-store';
 import { canonical } from '@/lib/site-config';
 
@@ -89,7 +87,6 @@ export default async function BlogIndexPage() {
         </section>
       ) : null}
 
-      <GoogleAdSenseAd className="mt-8" />
     </div>
   );
 }
