@@ -265,13 +265,11 @@ export default function AppSidebar({
           ].join(' ')}
           style={{ borderBottom: '1px solid var(--sc-border)' }}
         >
-          <Link
-            href="/"
+          <div
             className={[
               'flex items-center overflow-visible',
               collapsed ? 'justify-center' : 'min-w-0 flex-1 gap-3',
             ].join(' ')}
-            title="StudyCue home"
           >
             <span
               className="relative inline-flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-[18px]"
@@ -295,7 +293,7 @@ export default function AppSidebar({
                 Study<span style={{ color: 'var(--sc-accent)' }}>Cue</span>
               </span>
             ) : null}
-          </Link>
+          </div>
           <button
             type="button"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}

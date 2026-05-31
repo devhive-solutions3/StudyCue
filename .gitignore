@@ -57,3 +57,12 @@ supabase-service-role*.json
 # QA artifacts
 StudyCue_QA_Checklist.xlsx
 ~$StudyCue_QA_Checklist.xlsx
+
+# marketing / promo scratch assets
+studycue_*.png
+promo_*.png
+promo_*.mp4
+promo_*.mov
+promo_*.webm
+promo_*.m4v
+promo_*.gif
