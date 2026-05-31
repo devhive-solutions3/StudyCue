@@ -35,7 +35,7 @@ const THEMES: { value: AppTheme; label: string; emoji: string }[] = [
 ];
 
 export default function SettingsRoutePage() {
-  const { logout, user } = useWebAuth();
+  const { logout, profile, updateUserProfile, user } = useWebAuth();
   const { commitMirror } = useMirror();
   const { theme, setTheme } = useTheme();
 
@@ -43,6 +43,8 @@ export default function SettingsRoutePage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [profileNameDraft, setProfileNameDraft] = useState('');
+  const [profileNameDirty, setProfileNameDirty] = useState(false);
 
   const [cpCurrent, setCpCurrent] = useState('');
   const [cpNew, setCpNew] = useState('');
@@ -66,10 +68,17 @@ export default function SettingsRoutePage() {
   const ids = getProviderIds(user);
   const googleLinked = googleLinkedNow || hasGoogleProvider(user);
   const emailLinked = passwordLinkedNow || hasPasswordProvider(user);
-  const visibleAvatar = avatarPreview ?? getLocalProfilePhoto(user?.uid) ?? user?.photoURL ?? null;
+  const currentDisplayName = profile?.displayName ?? user?.displayName ?? '';
+  const currentEmail = profile?.email ?? user?.email ?? null;
+  const visibleAvatar =
+    avatarPreview ?? profile?.photoURL ?? getLocalProfilePhoto(user?.uid) ?? user?.photoURL ?? null;
+  const profileName = profileNameDirty ? profileNameDraft : currentDisplayName;
+  const normalizedProfileName = profileName.trim().replace(/\s+/g, ' ');
+  const profileNameChanged = normalizedProfileName !== currentDisplayName;
 
   const hasUnsavedChanges =
     pendingAvatarFile != null ||
+    profileNameChanged ||
     cpCurrent.trim() !== '' ||
     cpNew.trim() !== '' ||
     cpNew2.trim() !== '';
@@ -91,15 +100,37 @@ export default function SettingsRoutePage() {
     setBusy(true);
     setMsg(null);
     const errors: string[] = [];
+    const profileUpdates: { displayName?: string | null; photoURL?: string | null } = {};
 
     // 1. Profile pic upload
     if (pendingAvatarFile) {
       try {
         const photoUrl = await uploadProfilePic(pendingAvatarFile);
-        setAvatarPreview(photoUrl);
-        setPendingAvatarFile(null);
+        profileUpdates.photoURL = photoUrl;
       } catch (e) {
         errors.push(`Profile pic: ${e instanceof Error ? e.message : 'upload failed'}`);
+      }
+    }
+
+    if (profileNameChanged) {
+      if (normalizedProfileName.length > 80) {
+        errors.push('Profile name must be 80 characters or less.');
+      } else {
+        profileUpdates.displayName = normalizedProfileName || null;
+      }
+    }
+
+    if (Object.keys(profileUpdates).length > 0 && errors.length === 0) {
+      try {
+        const nextProfile = await updateUserProfile(profileUpdates);
+        setProfileNameDraft(nextProfile.displayName ?? '');
+        setProfileNameDirty(false);
+        if (profileUpdates.photoURL !== undefined) {
+          setAvatarPreview(nextProfile.photoURL);
+          setPendingAvatarFile(null);
+        }
+      } catch (e) {
+        errors.push(`Profile: ${e instanceof Error ? e.message : 'update failed'}`);
       }
     }
 
@@ -226,7 +257,7 @@ export default function SettingsRoutePage() {
     flash('Settings reset to defaults.');
   }
 
-  const initials = (user?.displayName ?? user?.email ?? 'SC')
+  const initials = (currentDisplayName || currentEmail || 'SC')
     .split(/\s+/)
     .map((x: string) => x[0])
     .filter(Boolean)
@@ -350,7 +381,7 @@ export default function SettingsRoutePage() {
             title="Change profile picture"
           >
             {visibleAvatar ? (
-              <Image src={visibleAvatar} alt="Avatar" fill className="object-cover" />
+              <Image src={visibleAvatar} alt="Avatar" fill sizes="64px" className="object-cover" />
             ) : (
               <div
                 className="flex h-full w-full items-center justify-center text-lg font-semibold text-white"
@@ -372,13 +403,30 @@ export default function SettingsRoutePage() {
           />
           <p className="text-xs text-text-muted">{PROFILE_LIMIT_HINT}</p>
           <div className="min-w-0">
-            <p className="font-medium text-text-primary">{user?.displayName ?? 'Student'}</p>
-            <p className="text-sm text-text-secondary">{user?.email ?? '—'}</p>
+            <p className="font-medium text-text-primary">{currentDisplayName || 'Student'}</p>
+            <p className="text-sm text-text-secondary">{currentEmail ?? '—'}</p>
             <p className="mt-0.5 text-[11px] uppercase tracking-[0.2em] text-text-muted">
               {ids.length ? ids.join(' · ') : 'unknown provider'}
             </p>
           </div>
         </div>
+        <label className="block space-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+            Display name
+          </span>
+          <input
+            type="text"
+            value={profileName}
+            onChange={(event) => {
+              setProfileNameDraft(event.target.value);
+              setProfileNameDirty(true);
+            }}
+            maxLength={80}
+            placeholder={user?.displayName ?? user?.email ?? 'Student'}
+            autoComplete="name"
+            className="w-full rounded-[10px] border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
+          />
+        </label>
         {pendingAvatarFile && (
           <p className="text-xs text-accent">New photo selected — click Save changes to apply.</p>
         )}

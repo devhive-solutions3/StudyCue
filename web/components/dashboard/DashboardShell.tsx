@@ -17,7 +17,7 @@ const SIDEBAR_COLLAPSED_KEY = 'studycue_sidebar_collapsed';
 
 export default function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { user } = useWebAuth();
+  const { profile, user } = useWebAuth();
   const mirror = useMirror();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -36,7 +36,10 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
   }, [sidebarCollapsed]);
 
-  const brand = useMemo(() => user?.displayName ?? user?.email ?? 'Signed in', [user]);
+  const brand = useMemo(
+    () => profile?.displayName ?? user?.displayName ?? profile?.email ?? user?.email ?? 'Signed in',
+    [profile?.displayName, profile?.email, user?.displayName, user?.email],
+  );
   const syncState: 'synced' | 'unsynced' | 'syncing' = mirror.saving
     ? 'syncing'
     : mirror.error

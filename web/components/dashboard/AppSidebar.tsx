@@ -38,6 +38,7 @@ const ALLOWED_REMOTE_AVATAR_HOSTS = new Set([
   'lh4.googleusercontent.com',
   'lh5.googleusercontent.com',
   'lh6.googleusercontent.com',
+  'firebasestorage.googleapis.com',
 ]);
 
 function sanitizeAvatarSrc(value: string | null | undefined): string | null {
@@ -193,7 +194,7 @@ export default function AppSidebar({
   onToggleCollapsed: () => void;
 }) {
   const pathname = usePathname();
-  const { user } = useWebAuth();
+  const { profile, user } = useWebAuth();
   const { allowed: studyToolsAllowed, loading: studyToolsPlanLoading } = usePremiumStudyTools();
 
   const studyItems = useMemo(() => {
@@ -229,11 +230,11 @@ export default function AppSidebar({
       .join('')
       .toUpperCase() || 'SC';
 
-  const visibleAvatar = useMemo(
-    () => sanitizeAvatarSrc(getLocalProfilePhoto(user?.uid) ?? user?.photoURL ?? null),
-    [user?.photoURL, user?.uid],
+  const visibleAvatar = sanitizeAvatarSrc(
+    profile?.photoURL ?? getLocalProfilePhoto(user?.uid) ?? user?.photoURL ?? null,
   );
   const showAvatar = !!visibleAvatar && failedAvatarSrc !== visibleAvatar;
+  const sidebarSubtitle = profile?.email ?? user?.email ?? 'Good luck today';
 
   return (
     <>
@@ -352,8 +353,8 @@ export default function AppSidebar({
               <p className="truncate text-xs font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
                 {brand}
               </p>
-              <p className="text-[11px]" style={{ color: 'var(--sc-text-muted)' }}>
-                Good luck today
+              <p className="truncate text-[11px]" style={{ color: 'var(--sc-text-muted)' }}>
+                {sidebarSubtitle}
               </p>
             </div>
           ) : <span className="sr-only">{brand}</span>}

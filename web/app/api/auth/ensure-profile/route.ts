@@ -63,9 +63,13 @@ export async function POST(request: Request) {
         uid: viewer.uid,
         email: viewer.email ?? (typeof current.email === 'string' ? current.email : null),
         displayName:
-          viewer.name ?? (typeof current.displayName === 'string' ? current.displayName : null),
+          typeof current.displayName === 'string' && current.displayName.trim()
+            ? current.displayName
+            : viewer.name ?? null,
         photoURL:
-          viewer.picture ?? (typeof current.photoURL === 'string' ? current.photoURL : null),
+          typeof current.photoURL === 'string' && current.photoURL.trim()
+            ? current.photoURL
+            : viewer.picture ?? null,
         lastLoginAt: nowIso,
         updatedAt: nowIso,
         serverTimestamp: FieldValue.serverTimestamp(),

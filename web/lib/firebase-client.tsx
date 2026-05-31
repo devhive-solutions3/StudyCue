@@ -15,7 +15,16 @@ import {
   setPersistence,
   signOut,
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  getFirestore,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+  type DocumentData,
+  type Unsubscribe,
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import {
   createContext,
@@ -109,6 +118,16 @@ export type FirebaseUserLite = {
   providerIds: string[];
 };
 
+export type WebUserProfile = FirebaseUserLite & {
+  authDisplayName: string | null;
+  authPhotoURL: string | null;
+};
+
+export type UserProfileUpdates = {
+  displayName?: string | null;
+  photoURL?: string | null;
+};
+
 export function getProviderIds(user: Pick<FirebaseUserLite, 'providerIds'> | FirebaseUser | null | undefined): string[] {
   if (!user) return [];
   if ('providerIds' in user) return Array.isArray(user.providerIds) ? user.providerIds : [];
@@ -127,10 +146,13 @@ type AuthCtx = {
   ready: boolean;
   authLoading: boolean;
   user: FirebaseUserLite | null;
+  profile: WebUserProfile | null;
   logout: () => Promise<void>;
   /** Post-login cookie for middleware */
   syncSessionCookie: (userOverride?: SessionUser) => Promise<void>;
   getIdToken: () => Promise<string | null>;
+  refreshUserProfile: () => Promise<WebUserProfile | null>;
+  updateUserProfile: (updates: UserProfileUpdates) => Promise<WebUserProfile>;
 };
 
 type SessionUser = Pick<FirebaseUser, 'uid' | 'getIdToken'>;
@@ -202,9 +224,48 @@ async function ensureUserProfileDocument(user: FirebaseUser) {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
+function normalizeOptionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function toUserLite(user: FirebaseUser): FirebaseUserLite {
+  return {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+    photoURL: user.photoURL,
+    providerIds: user.providerData.map((p) => p.providerId),
+  };
+}
+
+function mergeProfile(authUser: FirebaseUserLite, data?: DocumentData | null): WebUserProfile {
+  const profileEmail = normalizeOptionalString(data?.email);
+  const profileDisplayName = normalizeOptionalString(data?.displayName);
+  const profilePhotoURL = normalizeOptionalString(data?.photoURL);
+
+  return {
+    uid: authUser.uid,
+    email: profileEmail ?? authUser.email,
+    displayName: profileDisplayName ?? authUser.displayName,
+    photoURL: profilePhotoURL ?? authUser.photoURL,
+    authDisplayName: authUser.displayName,
+    authPhotoURL: authUser.photoURL,
+    providerIds: authUser.providerIds,
+  };
+}
+
 export function WebAuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<FirebaseUserLite | null>(null);
+  const [profile, setProfile] = useState<WebUserProfile | null>(null);
+  const profileUnsubRef = useRef<Unsubscribe | null>(null);
+
+  const clearProfileSubscription = useCallback(() => {
+    if (profileUnsubRef.current) {
+      profileUnsubRef.current();
+      profileUnsubRef.current = null;
+    }
+  }, []);
 
   const getIdToken = useCallback(async () => {
     const { auth } = getFirebase();
@@ -239,11 +300,73 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     const { auth } = getFirebase();
+    clearProfileSubscription();
     await fetch('/api/session', { method: 'DELETE', credentials: 'same-origin' });
     await signOut(auth);
     clearSignedInAt();
     setUser(null);
+    setProfile(null);
+  }, [clearProfileSubscription]);
+
+  const refreshUserProfile = useCallback(async () => {
+    const { auth } = getFirebase();
+    const current = auth.currentUser;
+    if (!current) {
+      setProfile(null);
+      return null;
+    }
+
+    const authUser = toUserLite(current);
+    const snapshot = await getDoc(doc(getFirebaseDb(), 'users', current.uid));
+    const nextProfile = mergeProfile(authUser, snapshot.exists() ? snapshot.data() : null);
+    setUser(authUser);
+    setProfile(nextProfile);
+    return nextProfile;
   }, []);
+
+  const updateUserProfile = useCallback(async (updates: UserProfileUpdates) => {
+    const { auth } = getFirebase();
+    const current = auth.currentUser;
+    if (!current) throw new Error('Not signed in');
+
+    const hasDisplayNameUpdate = updates.displayName !== undefined;
+    const hasPhotoURLUpdate = updates.photoURL !== undefined;
+    const cleanDisplayName = hasDisplayNameUpdate
+      ? normalizeOptionalString(updates.displayName)
+      : undefined;
+    const cleanPhotoURL = hasPhotoURLUpdate ? normalizeOptionalString(updates.photoURL) : undefined;
+    const updatePayload: Record<string, unknown> = {
+      uid: current.uid,
+      email: current.email ?? null,
+      updatedAt: new Date().toISOString(),
+      serverTimestamp: serverTimestamp(),
+    };
+
+    if (hasDisplayNameUpdate) updatePayload.displayName = cleanDisplayName;
+    if (hasPhotoURLUpdate) updatePayload.photoURL = cleanPhotoURL;
+
+    await setDoc(doc(getFirebaseDb(), 'users', current.uid), updatePayload, { merge: true });
+
+    if (hasDisplayNameUpdate || (hasPhotoURLUpdate && cleanPhotoURL && !cleanPhotoURL.startsWith('data:image/'))) {
+      const { updateProfile } = await import('firebase/auth');
+      await updateProfile(current, {
+        ...(hasDisplayNameUpdate ? { displayName: cleanDisplayName } : {}),
+        ...(hasPhotoURLUpdate && cleanPhotoURL && !cleanPhotoURL.startsWith('data:image/')
+          ? { photoURL: cleanPhotoURL }
+          : {}),
+      });
+    }
+
+    const authUser = toUserLite(current);
+    const nextProfile = mergeProfile(authUser, {
+      displayName: hasDisplayNameUpdate ? cleanDisplayName : profile?.displayName,
+      photoURL: hasPhotoURLUpdate ? cleanPhotoURL : profile?.photoURL,
+      email: current.email ?? profile?.email ?? null,
+    });
+    setUser(authUser);
+    setProfile(nextProfile);
+    return nextProfile;
+  }, [profile?.displayName, profile?.email, profile?.photoURL]);
 
   const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -258,6 +381,7 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
     };
 
     const forceLogout = async () => {
+      clearProfileSubscription();
       try {
         await fetch('/api/session', { method: 'DELETE', credentials: 'same-origin' });
       } catch {
@@ -270,10 +394,12 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
       }
       clearSignedInAt();
       setUser(null);
+      setProfile(null);
     };
 
     const unsub = auth.onAuthStateChanged(async (u) => {
       clearExpiryTimer();
+      clearProfileSubscription();
       if (u) {
         const existingStart = readSignedInAt();
         const startedAt = existingStart ?? Date.now();
@@ -286,13 +412,9 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setUser({
-          uid: u.uid,
-          email: u.email,
-          displayName: u.displayName,
-          photoURL: u.photoURL,
-          providerIds: u.providerData.map((p) => p.providerId),
-        });
+        const authUser = toUserLite(u);
+        setUser(authUser);
+        setProfile(mergeProfile(authUser));
 
         try {
           await ensureUserProfileDocument(u);
@@ -311,22 +433,54 @@ export function WebAuthProvider({ children }: { children: ReactNode }) {
         expiryTimerRef.current = setTimeout(() => {
           void forceLogout();
         }, remaining);
+
+        profileUnsubRef.current = onSnapshot(
+          doc(getFirebaseDb(), 'users', u.uid),
+          (snapshot) => {
+            setProfile(mergeProfile(authUser, snapshot.exists() ? snapshot.data() : null));
+          },
+          (error) => {
+            if (IS_DEV) console.warn('User profile listener failed', { uid: u.uid, error });
+            setProfile(mergeProfile(authUser));
+          },
+        );
       } else {
         clearSignedInAt();
         setUser(null);
+        setProfile(null);
       }
       setReady(true);
     });
 
     return () => {
       clearExpiryTimer();
+      clearProfileSubscription();
       unsub();
     };
-  }, [postSessionCookie]);
+  }, [clearProfileSubscription, postSessionCookie]);
 
   const value = useMemo(
-    () => ({ ready, authLoading: !ready, user, logout, syncSessionCookie, getIdToken }),
-    [ready, user, logout, syncSessionCookie, getIdToken],
+    () => ({
+      ready,
+      authLoading: !ready,
+      user,
+      profile,
+      logout,
+      syncSessionCookie,
+      getIdToken,
+      refreshUserProfile,
+      updateUserProfile,
+    }),
+    [
+      ready,
+      user,
+      profile,
+      logout,
+      syncSessionCookie,
+      getIdToken,
+      refreshUserProfile,
+      updateUserProfile,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
