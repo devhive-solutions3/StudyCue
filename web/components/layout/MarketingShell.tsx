@@ -25,7 +25,7 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
           WebkitBackdropFilter: 'blur(18px) saturate(140%)',
         }}
       >
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-6 px-4 py-5">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-6 px-4 py-5 md:flex-nowrap">
           <Link href="/" className="flex items-center gap-3">
             <span
               className="inline-flex h-14 w-14 items-center justify-center overflow-visible rounded-[18px]"
@@ -44,12 +44,12 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
               Study<span style={{ color: 'var(--sc-accent)' }}>Cue</span> Planner
             </span>
           </Link>
-          <nav className="flex flex-wrap gap-1 text-sm md:gap-2">
+          <nav className="flex items-center flex-wrap gap-1 text-sm md:gap-2">
             {NAV.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
-                className="rounded-[12px] px-3 py-2 transition"
+                className="inline-flex h-10 items-center rounded-[12px] px-3 transition"
                 style={{ color: 'var(--sc-text-secondary)' }}
               >
                 {n.label}
@@ -60,14 +60,14 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
             <MarketingThemeToggle />
             <Link
               href="/login"
-              className="rounded-[12px] px-3 py-2 transition sm:px-4"
+              className="inline-flex h-10 items-center rounded-[12px] px-3 transition sm:px-4"
               style={{ color: 'var(--sc-text-secondary)' }}
             >
               Log in
             </Link>
             <Link
               href="/register"
-              className="rounded-[14px] px-4 py-2 font-semibold text-white sm:px-5"
+              className="inline-flex h-10 items-center rounded-[14px] px-4 font-semibold text-white sm:px-5"
               style={{
                 background: 'var(--sc-accent)',
                 boxShadow: 'var(--sc-shadow-accent)',
