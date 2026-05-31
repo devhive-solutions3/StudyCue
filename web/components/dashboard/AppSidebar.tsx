@@ -260,7 +260,7 @@ export default function AppSidebar({
       >
         <div
           className={[
-            'flex min-h-[86px] items-center overflow-visible py-[18px]',
+            'flex min-h-[98px] items-center overflow-visible py-[20px]',
             collapsed ? 'justify-center px-3' : 'justify-between gap-3 px-5',
           ].join(' ')}
           style={{ borderBottom: '1px solid var(--sc-border)' }}
@@ -274,18 +274,18 @@ export default function AppSidebar({
             title="StudyCue home"
           >
             <span
-              className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-[16px]"
+              className="relative inline-flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-[18px]"
               style={{ background: 'var(--sc-accent-soft)', boxShadow: 'var(--sc-shadow-accent)' }}
             >
               <AnimatedStudyCueLogo
-                size={44}
+                size={56}
                 ariaLabel="StudyCue mascot"
-                className="h-11 w-11 rounded-[12px]"
+                className="h-14 w-14 rounded-[16px]"
               />
             </span>
             {!collapsed ? (
               <span
-                className="truncate whitespace-nowrap pr-1 text-[22px] leading-none"
+                className="truncate whitespace-nowrap pr-1 text-[25px] leading-none"
                 style={{
                   color: 'var(--sc-text-primary)',
                   fontFamily: 'var(--font-serif)',

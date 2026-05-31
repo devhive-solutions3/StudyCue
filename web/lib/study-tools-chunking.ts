@@ -1,7 +1,6 @@
 import 'server-only';
 
-import { handleCueGeminiProxy, handleGroqProxy } from '@/lib/ai-proxy-server';
-import { getStudyGroqModel, hasGeminiApiKey, hasGroqApiKey } from '@/lib/study-tools-ai-utils';
+import { generateTextWithStudyToolProviders } from '@/lib/study-tools-provider-fallback';
 import { STUDY_CHUNK_TARGET_CHARS, STUDY_MAX_CONDENSE_CHUNKS } from '@/lib/study-tools-text-limits';
 
 export type StudyChunkCondense = {
@@ -103,45 +102,17 @@ function mergeCondensedChunks(results: StudyChunkCondense[]): string {
   return lines.join('\n');
 }
 
-async function readProxyText(response: Response): Promise<string> {
-  const json = (await response.json().catch(() => null)) as { text?: string; error?: string } | null;
-  if (!response.ok) {
-    throw new Error(json?.error ?? `AI request failed (${response.status}).`);
-  }
-  const text = json?.text?.trim();
-  if (!text) throw new Error('AI returned an empty response.');
-  return text;
-}
-
 async function callInternalLlm(systemPrompt: string, userContent: string): Promise<string> {
-  if (hasGroqApiKey()) {
-    try {
-      const response = await handleGroqProxy({
-        model: getStudyGroqModel(),
-        temperature: 0.1,
-        max_tokens: 2048,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent },
-        ],
-      });
-      return await readProxyText(response);
-    } catch {
-      /* try gemini */
-    }
-  }
-
-  if (!hasGeminiApiKey()) {
-    throw new Error('AI provider is not configured.');
-  }
-
-  const response = await handleCueGeminiProxy({
-    systemInstruction: systemPrompt,
-    history: [],
-    latestUserMessage: { role: 'user', parts: [{ text: userContent }] },
+  const { text } = await generateTextWithStudyToolProviders({
+    systemPrompt,
+    userContent,
+    endpoint: 'file-study',
+    toolType: 'file_study',
     maxOutputTokens: 2048,
+    sourceTextLength: userContent.length,
+    wasChunked: true,
   });
-  return await readProxyText(response);
+  return text;
 }
 
 function parseCondenseJson(raw: string, sectionIndex: number): StudyChunkCondense {

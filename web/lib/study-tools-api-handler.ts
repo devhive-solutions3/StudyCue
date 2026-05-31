@@ -11,6 +11,7 @@ import {
 import { requireFirebaseAuth } from '@/lib/firebase-server-auth';
 import { STUDY_TOOLS_PLAN_DENIED_MESSAGE } from '@/lib/study-tools-request';
 import { isStudyAiDev, STUDY_AI_USER_ERRORS } from '@/lib/study-tools-ai-utils';
+import { STUDY_PROVIDER_USER_ERRORS } from '@/lib/study-tools-provider-fallback';
 import type { StudyToolEndpoint } from '@/lib/study-tools-usage-log';
 
 export type { StudyToolEndpoint };
@@ -39,6 +40,9 @@ function mapStudyToolError(error: unknown): { message: string; status: number } 
   const message = error instanceof Error ? error.message : 'Generation failed.';
   if (message === STUDY_AI_USER_ERRORS.noProvider) return { message, status: 503 };
   if (message === STUDY_AI_USER_ERRORS.providerUnavailable) return { message, status: 503 };
+  if (message === STUDY_PROVIDER_USER_ERRORS.allRateLimited) return { message, status: 503 };
+  if (message === STUDY_PROVIDER_USER_ERRORS.providerQuotaUnknown) return { message, status: 503 };
+  if (message.startsWith('AI quota reached.')) return { message, status: 503 };
   if (/invalid quiz format|invalid flashcards format|invalid study format/i.test(message)) {
     return { message, status: 502 };
   }
@@ -101,8 +105,10 @@ export async function runStudyToolRequest<T>(params: {
           limit: error.daily.limit,
           used: error.daily.used,
           resetAt: error.daily.resetAt,
+          resetLabel: error.daily.resetLabel,
+          secondsUntilReset: error.daily.secondsUntilReset,
         },
-        { status: 429 },
+        { status: 429, headers: dailyHeaders(error.daily) },
       );
     }
     return NextResponse.json(
