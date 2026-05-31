@@ -25,8 +25,8 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
           WebkitBackdropFilter: 'blur(18px) saturate(140%)',
         }}
       >
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-6 px-4 py-5 md:flex-nowrap">
-          <Link href="/" className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-5 lg:flex-nowrap lg:gap-6">
+          <Link href="/" className="flex shrink-0 items-center gap-3">
             <span
               className="inline-flex h-14 w-14 items-center justify-center overflow-visible rounded-[18px]"
               style={{ background: 'var(--sc-accent-soft)', boxShadow: 'var(--sc-shadow-accent)' }}
@@ -38,36 +38,36 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
               />
             </span>
             <span
-              className="font-serif text-[26px] leading-none tracking-tight sm:text-[28px]"
+              className="whitespace-nowrap font-serif text-[26px] leading-none tracking-tight sm:text-[28px]"
               style={{ color: 'var(--sc-text-primary)' }}
             >
               Study<span style={{ color: 'var(--sc-accent)' }}>Cue</span> Planner
             </span>
           </Link>
-          <nav className="flex items-center flex-wrap gap-1 text-sm md:gap-2">
+          <nav className="flex flex-wrap items-center gap-1 text-sm md:gap-2 lg:flex-nowrap lg:gap-3">
             {NAV.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
-                className="inline-flex h-10 items-center rounded-[12px] px-3 transition"
+                className="inline-flex h-10 items-center whitespace-nowrap rounded-[12px] px-3 transition"
                 style={{ color: 'var(--sc-text-secondary)' }}
               >
                 {n.label}
               </Link>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-2 text-sm sm:gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-2 text-sm sm:gap-3 lg:gap-4">
             <MarketingThemeToggle />
             <Link
               href="/login"
-              className="inline-flex h-10 items-center rounded-[12px] px-3 transition sm:px-4"
+              className="inline-flex h-10 items-center whitespace-nowrap rounded-[12px] px-3 transition sm:px-4"
               style={{ color: 'var(--sc-text-secondary)' }}
             >
               Log in
             </Link>
             <Link
               href="/register"
-              className="inline-flex h-10 items-center rounded-[14px] px-4 font-semibold text-white sm:px-5"
+              className="inline-flex h-10 items-center whitespace-nowrap rounded-[14px] px-4 font-semibold text-white sm:px-5"
               style={{
                 background: 'var(--sc-accent)',
                 boxShadow: 'var(--sc-shadow-accent)',
