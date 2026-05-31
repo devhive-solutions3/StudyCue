@@ -573,6 +573,75 @@ html.dark .sc-focus-ring:focus-visible {
   letter-spacing: -0.05em;
 }
 
+/* Dashboard home hero — dark mode surface treatment */
+html.dark .dashboard-hero {
+  background:
+    radial-gradient(circle at 8% 45%, rgba(156, 140, 255, 0.18), transparent 32%),
+    linear-gradient(135deg, #18152A 0%, #141124 100%);
+  border-color: rgba(220, 210, 255, 0.12);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+html.dark .dashboard-hero-glow {
+  background: radial-gradient(circle, rgba(156, 140, 255, 0.14), transparent 65%);
+}
+
+html.dark .dashboard-hero-inner {
+  background: linear-gradient(135deg, rgba(29, 25, 48, 0.96), rgba(24, 21, 42, 0.96));
+  border-color: rgba(220, 210, 255, 0.12);
+  color: #EFE9E0;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+}
+
+html.dark .dashboard-hero-kicker,
+html.dark .dashboard-hero-focus-label {
+  color: rgba(220, 210, 255, 0.72);
+}
+
+html.dark .dashboard-hero-title,
+html.dark .dashboard-hero-focus-title {
+  color: #EFE9E0;
+}
+
+html.dark .dashboard-hero-body,
+html.dark .dashboard-hero-focus-body {
+  color: rgba(239, 233, 224, 0.68);
+}
+
+html.dark .dashboard-hero-focus-panel {
+  border-color: rgba(220, 210, 255, 0.12);
+}
+
+html.dark .dashboard-hero-pill-purple {
+  background: rgba(156, 140, 255, 0.16);
+  color: #B9AEFF;
+}
+
+html.dark .dashboard-hero-pill-blue {
+  background: rgba(80, 180, 255, 0.14);
+  color: #9BD7FF;
+}
+
+html.dark .dashboard-hero-pill-green {
+  background: rgba(92, 255, 178, 0.14);
+  color: #5CFFB2;
+}
+
+html.dark .dashboard-hero-cue-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -8% -15%;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle at 50% 55%, rgba(156, 140, 255, 0.28), transparent 62%);
+}
+
+html.dark .dashboard-hero-cue {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 18px 24px rgba(156, 140, 255, 0.28));
+}
+
 .sc-panel {
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid var(--sc-border);
