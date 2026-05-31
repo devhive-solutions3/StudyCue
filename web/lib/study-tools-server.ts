@@ -34,6 +34,7 @@ export type StudyToolsDailyUsage = {
   used: number;
   resetAt: string;
   resetLabel?: string;
+  secondsUntilReset?: number;
 };
 
 export class StudyToolsPlanDeniedError extends Error {
@@ -200,6 +201,7 @@ async function ensureStudyToolsGeneration(params: {
       used: usage.daily.used,
       resetAt: usage.daily.resetAt,
       resetLabel: usage.daily.resetLabel,
+      secondsUntilReset: usage.daily.secondsUntilReset,
     },
     tool: params.tool,
     sourceSurface: params.sourceSurface,
@@ -231,6 +233,7 @@ export async function getStudyToolsUsageForUser(uid: string) {
     used: snapshot.used,
     resetAt: snapshot.resetAt,
     resetLabel: snapshot.resetLabel,
+    secondsUntilReset: snapshot.secondsUntilReset,
     quizGenerationsUsed: snapshot.quizGenerationsUsed,
     flashcardGenerationsUsed: snapshot.flashcardGenerationsUsed,
     fileStudyGenerationsUsed: snapshot.fileStudyGenerationsUsed,

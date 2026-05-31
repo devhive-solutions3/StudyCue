@@ -10,6 +10,7 @@ import { getUserPlanByUid } from '@/lib/server-user-plan';
 import {
   formatStudyToolsResetLabel,
   nextStudyToolsResetAtIso,
+  secondsUntilStudyToolsReset,
   studyToolsDateKey,
   studyToolsRateLimitMessage,
 } from '@/lib/study-tools-time';
@@ -31,6 +32,7 @@ export type StudyToolsUsageSnapshot = {
   fileStudyGenerationsUsed: number;
   resetAt: string;
   resetLabel: string;
+  secondsUntilReset: number;
   dateKey: string;
 };
 
@@ -66,6 +68,7 @@ export async function readStudyToolsUsage(uid: string): Promise<StudyToolsUsageS
       fileStudyGenerationsUsed: 0,
       resetAt,
       resetLabel: formatStudyToolsResetLabel(resetAt),
+      secondsUntilReset: secondsUntilStudyToolsReset(resetAt),
       dateKey,
     };
   }
@@ -84,6 +87,9 @@ export async function readStudyToolsUsage(uid: string): Promise<StudyToolsUsageS
       typeof data.fileStudyGenerationsUsed === 'number' ? data.fileStudyGenerationsUsed : 0,
     resetAt: typeof data.studyToolsResetAt === 'string' ? data.studyToolsResetAt : resetAt,
     resetLabel: formatStudyToolsResetLabel(
+      typeof data.studyToolsResetAt === 'string' ? data.studyToolsResetAt : resetAt,
+    ),
+    secondsUntilReset: secondsUntilStudyToolsReset(
       typeof data.studyToolsResetAt === 'string' ? data.studyToolsResetAt : resetAt,
     ),
     dateKey,
@@ -114,6 +120,7 @@ export async function reserveStudyToolGeneration(params: {
       fileStudyGenerationsUsed: 0,
       resetAt,
       resetLabel: formatStudyToolsResetLabel(resetAt),
+      secondsUntilReset: secondsUntilStudyToolsReset(resetAt),
       dateKey,
     };
     return { allowed: false, daily, message: 'Study tools are not available on your plan.' };
@@ -129,6 +136,7 @@ export async function reserveStudyToolGeneration(params: {
       fileStudyGenerationsUsed: 0,
       resetAt,
       resetLabel: formatStudyToolsResetLabel(resetAt),
+      secondsUntilReset: secondsUntilStudyToolsReset(resetAt),
       dateKey,
     };
     return { allowed: true, daily, userPlan: plan };
@@ -234,6 +242,7 @@ export async function reserveStudyToolGeneration(params: {
     fileStudyGenerationsUsed: result.fileStudyGenerationsUsed,
     resetAt,
     resetLabel: formatStudyToolsResetLabel(resetAt),
+    secondsUntilReset: secondsUntilStudyToolsReset(resetAt),
     dateKey,
   };
 

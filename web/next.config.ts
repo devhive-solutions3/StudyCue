@@ -27,6 +27,11 @@ const nextConfig: NextConfig = {
         hostname: 'lh6.googleusercontent.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+        pathname: '/v0/b/**',
+      },
     ],
   },
   async redirects() {

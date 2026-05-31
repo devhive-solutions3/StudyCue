@@ -8,7 +8,6 @@ import {
 import { requireFirebaseAuth } from '@/lib/firebase-server-auth';
 import { assertPremiumStudyToolsAccess } from '@/lib/study-tools-access';
 import { CUE_STUDY_PLAN_DENIED_MESSAGE } from '@/lib/cue-study-command';
-import { studyToolsRateLimitMessage } from '@/lib/study-tools-time';
 import {
   generateFlashcardsForUser,
   generateQuizForUser,
@@ -179,10 +178,12 @@ export async function POST(request: Request) {
     if (error instanceof StudyToolsRateLimitError) {
       return NextResponse.json(
         {
-          error: studyToolsRateLimitMessage(error.daily.resetAt),
+          error: error.message,
           limit: error.daily.limit,
           used: error.daily.used,
           resetAt: error.daily.resetAt,
+          resetLabel: error.daily.resetLabel,
+          secondsUntilReset: error.daily.secondsUntilReset,
         },
         { status: 429 },
       );

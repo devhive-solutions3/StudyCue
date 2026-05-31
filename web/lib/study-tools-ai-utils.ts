@@ -13,7 +13,7 @@ export const STUDY_AI_USER_ERRORS = {
   invalidFlashcards: 'AI returned an invalid flashcards format. Please try again.',
   invalidFileStudy: 'AI returned an invalid study format. Please try again.',
   allProvidersFailed:
-    'AI generation failed. Please try again in a few minutes.',
+    'All AI providers are currently rate-limited. Please try again later.',
   timeout:
     'AI generation timed out. Try fewer questions/cards or a shorter file.',
   emptyResponse: 'AI returned an empty response.',

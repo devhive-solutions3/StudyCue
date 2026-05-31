@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 
+import AnimatedStudyCueLogo from '@/components/AnimatedStudyCueLogo';
 import MiniCalendar from '@/components/dashboard/MiniCalendar';
 import NextTaskCard from '@/components/dashboard/NextTaskCard';
 import QuickActions from '@/components/dashboard/QuickActions';
@@ -16,35 +17,64 @@ export default function AppHomePage() {
 
   return (
     <div className="w-full min-w-0 max-w-full space-y-[18px]">
-      <section className="relative grid min-h-[300px] w-full min-w-0 max-w-full overflow-hidden rounded-[32px] border border-border bg-surface p-6 shadow-[var(--sc-shadow-md)] lg:p-[30px] xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
+      <section className="relative w-full min-w-0 max-w-full overflow-hidden rounded-[28px] border border-border bg-surface p-3 shadow-[var(--sc-shadow-md)] sm:p-4">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(107,99,212,0.16), transparent 65%)' }}
+          className="pointer-events-none absolute -right-12 -top-20 h-56 w-56 rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(107,99,212,0.12), transparent 65%)' }}
         />
-        <div className="relative z-10 flex flex-col justify-between gap-8">
-          <div>
-            <p className="text-[12px] font-extrabold uppercase tracking-[0.2em] text-text-muted">Study dashboard</p>
-            <h2 className="sc-hero-title mt-4 max-w-[680px] text-text-primary">
-              Plan calmly. Study clearly.
-            </h2>
-            <p className="mt-5 max-w-2xl text-base text-text-secondary">
-              Keep your tasks, schedule, focus sessions, and Cue assistant in one soft workspace built for study flow.
-            </p>
+        <div className="relative z-10 rounded-[24px] border border-violet-200/90 bg-white p-4 text-[#1E1B33] shadow-[0_18px_40px_rgba(67,56,120,0.11)] sm:p-5">
+          <div className="grid grid-cols-[58px_minmax(0,1fr)] gap-2.5 xl:grid-cols-[96px_minmax(0,1fr)_minmax(220px,270px)] xl:items-center">
+            <div className="flex justify-center pt-1 xl:justify-start xl:pt-0">
+              <AnimatedStudyCueLogo size={64} ariaLabel="Cue assistant" className="h-16 w-16 xl:h-24 xl:w-24" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#8A84A3]">
+                Study dashboard
+              </p>
+              <h2
+                className="mt-2 max-w-[620px] text-[28px] leading-[1] text-[#1E1B33] sm:text-[32px] xl:text-[42px]"
+                style={{ fontFamily: 'var(--font-serif)' }}
+              >
+                Plan calmly. Study clearly.
+              </h2>
+              <p className="mt-2 max-w-2xl text-[13px] leading-5 text-[#5F5A78] xl:text-[14px] xl:leading-6">
+                Keep your tasks, schedule, focus sessions, and Cue assistant in one soft workspace built for study flow.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full bg-purple-50 px-3 py-1 text-[12px] font-extrabold text-purple-600">
+                  {openTasks} open tasks
+                </span>
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-[12px] font-extrabold text-blue-600">
+                  {mirror.classes.length} classes
+                </span>
+                <span className="rounded-full bg-teal-50 px-3 py-1 text-[12px] font-extrabold text-teal-600">
+                  {mirror.sessions.length} focus sessions
+                </span>
+              </div>
+            </div>
+            <div className="col-span-2 min-w-0 border-t border-violet-100 pt-3 xl:col-span-1 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end xl:block">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-accent">
+                    Focus cue
+                  </p>
+                  <h3 className="mt-2 text-[20px] font-extrabold leading-[1.08] text-[#1E1B33] xl:text-[22px]">
+                    Ready for your next session?
+                  </h3>
+                  <p className="mt-2 text-[13px] leading-5 text-[#5F5A78] xl:text-sm xl:leading-6">
+                    Use Cue to turn the next task into a study plan, then start your timer.
+                  </p>
+                </div>
+                <Link
+                  href="/app/focus"
+                  className="inline-flex min-h-[36px] items-center rounded-[14px] bg-accent px-4 text-sm font-extrabold text-white shadow-[var(--sc-shadow-accent)] transition hover:opacity-90 xl:mt-3"
+                >
+                  Start focus
+                </Link>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <span className="sc-badge">{openTasks} open tasks</span>
-            <span className="sc-badge bg-blue-50 text-blue-600">{mirror.classes.length} classes</span>
-            <span className="sc-badge bg-teal-50 text-teal-600">{mirror.sessions.length} focus sessions</span>
-          </div>
-        </div>
-        <div className="relative z-10 mt-8 min-w-0 rounded-[24px] p-6 text-white shadow-[var(--sc-shadow-accent)] xl:mt-0 xl:min-h-[210px]" style={{ background: 'linear-gradient(135deg, var(--sc-accent), #988FFF)' }}>
-          <p className="text-[12px] font-extrabold uppercase tracking-[0.18em] text-white/70">Focus cue</p>
-          <h3 className="mt-4 text-3xl font-extrabold tracking-[-0.04em]">Ready for your next session?</h3>
-          <p className="mt-3 text-sm text-white/78">Use Cue to turn the next task into a study plan, then start your timer.</p>
-          <Link href="/app/focus" className="mt-6 inline-flex min-h-[42px] items-center rounded-[14px] bg-white/20 px-5 text-sm font-extrabold text-white ring-1 ring-white/30 transition hover:bg-white/28">
-            Start focus
-          </Link>
         </div>
       </section>
 

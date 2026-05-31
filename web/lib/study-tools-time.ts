@@ -62,7 +62,22 @@ export function studyToolsLimitMessage(used: number, limit: number, resetAtIso: 
   return `You've used ${used}/${limit} Study Tools generations today. Refreshes at ${timeLabel} (Philippines).`;
 }
 
+export function secondsUntilStudyToolsReset(resetAtIso: string, nowMs = Date.now()): number {
+  const target = new Date(resetAtIso).getTime();
+  if (!Number.isFinite(target)) return 0;
+  return Math.max(0, Math.floor((target - nowMs) / 1000));
+}
+
+export function formatCountdownDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return 'less than 1m';
+}
+
 export function studyToolsRateLimitMessage(resetAtIso: string): string {
   const timeLabel = formatStudyToolsResetLabel(resetAtIso);
-  return `You've reached your daily Study Tools generation limit. It refreshes at ${timeLabel} (Philippines).`;
+  const countdown = formatCountdownDuration(secondsUntilStudyToolsReset(resetAtIso));
+  return `You've reached your daily Study Tools generation limit. Refreshes at ${timeLabel} (PH), in ${countdown}.`;
 }

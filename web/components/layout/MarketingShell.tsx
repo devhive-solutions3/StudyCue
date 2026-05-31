@@ -25,20 +25,20 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
           WebkitBackdropFilter: 'blur(18px) saturate(140%)',
         }}
       >
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-6 px-4 py-4">
-          <Link href="/" className="flex items-center gap-2.5">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-6 px-4 py-5">
+          <Link href="/" className="flex items-center gap-3">
             <span
-              className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[12px]"
-              style={{ background: 'var(--sc-accent-soft)' }}
+              className="inline-flex h-14 w-14 items-center justify-center overflow-visible rounded-[18px]"
+              style={{ background: 'var(--sc-accent-soft)', boxShadow: 'var(--sc-shadow-accent)' }}
             >
               <AnimatedStudyCueLogo
-                size={36}
+                size={54}
                 ariaLabel="StudyCue mascot"
-                className="h-9 w-9 rounded-[10px]"
+                className="h-14 w-14 rounded-[16px]"
               />
             </span>
             <span
-              className="font-serif text-[22px] leading-none tracking-tight"
+              className="font-serif text-[26px] leading-none tracking-tight sm:text-[28px]"
               style={{ color: 'var(--sc-text-primary)' }}
             >
               Study<span style={{ color: 'var(--sc-accent)' }}>Cue</span> Planner
