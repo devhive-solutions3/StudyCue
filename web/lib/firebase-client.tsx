@@ -39,6 +39,7 @@ import {
 
 import { getFirebasePublicConfig, publicFileStorageMode } from '@/lib/public-env';
 import { saveLocalProfilePhoto } from '@/lib/local-file-store';
+import type { LegalAcceptancePayload } from '@/lib/legal-consent';
 
 export const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SIGNED_IN_AT_KEY = 'studycue.web.signedInAt';
@@ -119,8 +120,17 @@ export type FirebaseUserLite = {
 };
 
 export type WebUserProfile = FirebaseUserLite & {
+  profileLoaded: boolean;
   authDisplayName: string | null;
   authPhotoURL: string | null;
+  termsAccepted?: boolean;
+  termsAcceptedAt?: unknown;
+  termsVersion?: string | null;
+  privacyAccepted?: boolean;
+  privacyAcceptedAt?: unknown;
+  privacyVersion?: string | null;
+  cookiesVersion?: string | null;
+  adsDisclosureAccepted?: boolean;
 };
 
 export type UserProfileUpdates = {
@@ -206,7 +216,7 @@ export function getFirebaseStorage() {
   return getStorage(app);
 }
 
-async function ensureUserProfileDocument(user: FirebaseUser) {
+async function ensureUserProfileDocument(user: FirebaseUser, acceptance?: LegalAcceptancePayload) {
   const idToken = await user.getIdToken(true);
   const res = await fetch('/api/auth/ensure-profile', {
     method: 'POST',
@@ -214,6 +224,7 @@ async function ensureUserProfileDocument(user: FirebaseUser) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${idToken}`,
     },
+    body: JSON.stringify(acceptance ? { legalAcceptance: acceptance } : {}),
     credentials: 'same-origin',
   });
   if (!res.ok) {
@@ -250,7 +261,16 @@ function mergeProfile(authUser: FirebaseUserLite, data?: DocumentData | null): W
     photoURL: profilePhotoURL ?? authUser.photoURL,
     authDisplayName: authUser.displayName,
     authPhotoURL: authUser.photoURL,
+    profileLoaded: data !== undefined,
     providerIds: authUser.providerIds,
+    termsAccepted: data === undefined ? undefined : data?.termsAccepted === true,
+    termsAcceptedAt: data?.termsAcceptedAt ?? null,
+    termsVersion: normalizeOptionalString(data?.termsVersion),
+    privacyAccepted: data === undefined ? undefined : data?.privacyAccepted === true,
+    privacyAcceptedAt: data?.privacyAcceptedAt ?? null,
+    privacyVersion: normalizeOptionalString(data?.privacyVersion),
+    cookiesVersion: normalizeOptionalString(data?.cookiesVersion),
+    adsDisclosureAccepted: data === undefined ? undefined : data?.adsDisclosureAccepted === true,
   };
 }
 
@@ -564,14 +584,25 @@ export async function lookupSignInMethods(email: string): Promise<string[]> {
   return fetchSignInMethodsForEmail(auth, email.trim());
 }
 
-export async function registerEmail(email: string, password: string, displayName: string) {
+export async function acceptCurrentLegalTerms(acceptance: LegalAcceptancePayload) {
+  const { auth } = getFirebase();
+  if (!auth.currentUser) throw new Error('Not signed in');
+  await ensureUserProfileDocument(auth.currentUser, acceptance);
+}
+
+export async function registerEmail(
+  email: string,
+  password: string,
+  displayName: string,
+  acceptance: LegalAcceptancePayload,
+) {
   const { auth } = getFirebase();
   const { createUserWithEmailAndPassword, updateProfile } = await import(
     'firebase/auth',
   );
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(cred.user, { displayName });
-  await ensureUserProfileDocument(cred.user).catch(() => {});
+  await ensureUserProfileDocument(cred.user, acceptance);
   if (IS_DEV) console.info('Firebase email registration succeeded', { uid: cred.user.uid });
   return cred.user;
 }

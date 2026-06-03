@@ -11,7 +11,16 @@ import {
   YAxis,
 } from 'recharts';
 
-import { adminMoney, formatTokens, type AiUsageDashboard } from '@/lib/admin-shared';
+import {
+  adminMoney,
+  formatAdminDateKey,
+  formatTokens,
+  type AiUsageDashboard,
+} from '@/lib/admin-shared';
+
+function formatChartDateLabel(value: unknown) {
+  return formatAdminDateKey(typeof value === 'string' ? value : null);
+}
 
 export default function AdminUsageCharts({
   daily,
@@ -27,10 +36,16 @@ export default function AdminUsageCharts({
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={daily}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,148,184,0.18)" vertical={false} />
-              <XAxis dataKey="dateKey" tick={{ fontSize: 11 }} stroke="var(--sc-text-muted)" />
+              <XAxis
+                dataKey="dateKey"
+                tick={{ fontSize: 11 }}
+                tickFormatter={formatChartDateLabel}
+                stroke="var(--sc-text-muted)"
+              />
               <YAxis tick={{ fontSize: 12 }} stroke="var(--sc-text-muted)" />
               <Tooltip
                 formatter={(value) => [formatTokens(Number(value) || 0), 'Requests']}
+                labelFormatter={formatChartDateLabel}
                 contentStyle={{
                   background: 'var(--sc-surface-elevated)',
                   border: '1px solid var(--sc-border)',
@@ -51,10 +66,16 @@ export default function AdminUsageCharts({
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={daily}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(154,148,184,0.18)" vertical={false} />
-              <XAxis dataKey="dateKey" tick={{ fontSize: 11 }} stroke="var(--sc-text-muted)" />
+              <XAxis
+                dataKey="dateKey"
+                tick={{ fontSize: 11 }}
+                tickFormatter={formatChartDateLabel}
+                stroke="var(--sc-text-muted)"
+              />
               <YAxis tick={{ fontSize: 12 }} stroke="var(--sc-text-muted)" />
               <Tooltip
                 formatter={(value) => [formatTokens(Number(value) || 0), 'Tokens']}
+                labelFormatter={formatChartDateLabel}
                 contentStyle={{
                   background: 'var(--sc-surface-elevated)',
                   border: '1px solid var(--sc-border)',

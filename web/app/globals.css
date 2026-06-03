@@ -825,13 +825,17 @@ html.dark .sc-floating-cue {
 .calendar-event-block {
   position: absolute;
   z-index: 2;
+  display: block;
+  min-width: 64px;
+  max-width: calc(100% - 16px);
   border-radius: 12px;
-  padding: 8px 10px;
+  padding: 7px 9px;
   overflow: hidden;
   text-align: left;
   box-shadow: var(--sc-shadow-sm);
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
+  white-space: normal;
 }
 
 .calendar-event-block:hover {
@@ -839,15 +843,65 @@ html.dark .sc-floating-cue {
   box-shadow: var(--sc-shadow-md);
 }
 
+.calendar-event-block[data-layout="stack"] {
+  padding-block: 7px;
+}
+
+.calendar-event-block[data-grouped="true"] {
+  min-height: 48px;
+}
+
+.calendar-event-main-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
 .calendar-event-title {
+  min-width: 0;
   font-size: 12px;
   font-weight: 800;
   line-height: 1.15;
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.calendar-event-count-pill {
+  flex-shrink: 0;
+  max-width: 54px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 12%, white);
+  padding: 2px 5px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .calendar-event-time {
   margin-top: 3px;
   font-size: 11px;
   font-weight: 700;
+  line-height: 1.1;
   opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-event-block[data-layout="stack"] .calendar-event-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-event-block[data-layout="stack"] .calendar-event-time {
+  margin-top: 1px;
 }

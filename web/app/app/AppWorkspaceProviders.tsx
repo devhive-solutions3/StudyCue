@@ -1,17 +1,19 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import AppAnalyticsTracker from '@/components/analytics/AppAnalyticsTracker';
 import InAppAnnouncementModal from '@/components/announcements/InAppAnnouncementModal';
+import TermsPrivacyAgreementModal from '@/components/legal/TermsPrivacyAgreementModal';
 import GlowBackground from '@/components/layout/GlowBackground';
 import { TransitionCard } from '@/components/layout/AppTransitionOverlay';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import { DashboardUiProvider } from '@/context/dashboard-ui';
 import { FocusTimerProvider } from '@/context/focus-timer';
 import { MirrorProvider, useMirror } from '@/context/mirror-context';
-import { useWebAuth } from '@/lib/firebase-client';
+import { acceptCurrentLegalTerms, useWebAuth } from '@/lib/firebase-client';
+import { buildLegalAcceptancePayload, hasCurrentLegalAcceptance } from '@/lib/legal-consent';
 
 function MirrorGate({ children }: { children: React.ReactNode }) {
   const m = useMirror();
@@ -52,8 +54,10 @@ function MirrorGate({ children }: { children: React.ReactNode }) {
 export default function AppWorkspaceProviders({ children }: Readonly<{ children: React.ReactNode }>) {
   const router = useRouter();
   const pathname = usePathname();
-  const { ready, authLoading, user } = useWebAuth();
+  const { ready, authLoading, user, profile, refreshUserProfile } = useWebAuth();
   const redirectingRef = useRef(false);
+  const [consentBusy, setConsentBusy] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ready || authLoading || user || redirectingRef.current) return;
@@ -79,6 +83,8 @@ export default function AppWorkspaceProviders({ children }: Readonly<{ children:
     );
   }
 
+  const needsLegalConsent = profile?.profileLoaded === true && !hasCurrentLegalAcceptance(profile);
+
   return (
     <MirrorProvider uid={user.uid}>
       <FocusTimerProvider>
@@ -86,6 +92,36 @@ export default function AppWorkspaceProviders({ children }: Readonly<{ children:
           <DashboardShell>
             <AppAnalyticsTracker />
             <InAppAnnouncementModal />
+            {needsLegalConsent ? (
+              <TermsPrivacyAgreementModal
+                open
+                busy={consentBusy}
+                title="Updated Terms and Privacy Agreement"
+                agreeLabel="I agree and continue"
+                onClose={() => setConsentError('Please accept the current Terms of Use and Privacy Policy to continue.')}
+                onAgree={async () => {
+                  setConsentBusy(true);
+                  setConsentError(null);
+                  try {
+                    await acceptCurrentLegalTerms(buildLegalAcceptancePayload());
+                    await refreshUserProfile();
+                  } catch (error) {
+                    setConsentError(
+                      error instanceof Error
+                        ? error.message
+                        : 'Could not save your acceptance. Please try again.',
+                    );
+                  } finally {
+                    setConsentBusy(false);
+                  }
+                }}
+              />
+            ) : null}
+            {consentError ? (
+              <div className="fixed inset-x-4 bottom-4 z-[95] mx-auto max-w-xl rounded-[16px] border border-rose-300/40 bg-rose-500 px-4 py-3 text-sm font-medium text-white shadow-lg">
+                {consentError}
+              </div>
+            ) : null}
             <MirrorGate>{children}</MirrorGate>
           </DashboardShell>
         </DashboardUiProvider>

@@ -184,11 +184,35 @@ export type SecurityEventRow = {
   details: string;
 };
 
+const ADMIN_ANALYTICS_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-PH', {
+  timeZone: 'Asia/Manila',
+  year: 'numeric',
+  month: 'short',
+  day: '2-digit',
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+const ADMIN_ANALYTICS_DATE_FORMATTER = new Intl.DateTimeFormat('en-PH', {
+  timeZone: 'Asia/Manila',
+  year: 'numeric',
+  month: 'short',
+  day: '2-digit',
+});
+
 export function formatAdminDate(value: string | null): string {
   if (!value) return '—';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
+  return ADMIN_ANALYTICS_DATE_TIME_FORMATTER.format(parsed);
+}
+
+export function formatAdminDateKey(value: string | null): string {
+  if (!value) return '—';
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return ADMIN_ANALYTICS_DATE_FORMATTER.format(parsed);
 }
 
 export function formatCompactNumber(value: number): string {

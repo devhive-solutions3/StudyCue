@@ -1,6 +1,6 @@
 import { requireAdminUser } from '@/lib/admin-auth';
 import { readAdminDataSourceStatus } from '@/lib/admin-data';
-import { formatCompactNumber, formatStorageBytes } from '@/lib/admin-shared';
+import { formatAdminDate, formatCompactNumber, formatStorageBytes } from '@/lib/admin-shared';
 import { readProductAnalyticsDashboard } from '@/lib/analytics-admin-data';
 
 function percent(value: number) {
@@ -177,7 +177,7 @@ export default async function AdminAnalyticsPage() {
                 dashboard.recentEvents.map((row) => (
                   <tr key={row.id} className="border-b border-white/5">
                     <td className="px-3 py-2 text-text-secondary">
-                      {new Date(row.createdAt).toLocaleString()}
+                      {formatAdminDate(row.createdAt)}
                     </td>
                     <td className="px-3 py-2 text-text-secondary">{row.eventType}</td>
                     <td className="px-3 py-2 text-text-secondary">{row.feature}</td>

@@ -5,6 +5,8 @@ import { useMemo, useState } from 'react';
 
 import type { CloudMirrorV1 } from '@studycue/types';
 
+import { createLocalMonthCells, localDateKey, timestampToLocalDateKey } from '@/lib/local-date';
+
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -16,35 +18,20 @@ export default function MiniCalendar({ mirror }: { mirror: CloudMirrorV1 }) {
   const eventDays = useMemo(() => {
     const keys = new Set<string>();
     mirror.tasks.forEach((t) => {
-      if (t.dueAt) keys.add(t.dueAt.slice(0, 10));
+      if (t.dueAt) keys.add(timestampToLocalDateKey(t.dueAt));
     });
     mirror.sessions.forEach((s) => {
       const raw = s.startedAt ?? s.createdAt;
-      if (raw) keys.add(raw.slice(0, 10));
+      if (raw) keys.add(timestampToLocalDateKey(raw));
     });
     return keys;
   }, [mirror.sessions, mirror.tasks]);
 
   const cells = useMemo(() => {
-    const first = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const prevDays = new Date(year, month, 0).getDate();
-    const out: Array<{ day: number; otherMonth: boolean; iso: string }> = [];
-    for (let i = 0; i < first; i += 1) {
-      const d = prevDays - first + 1 + i;
-      out.push({ day: d, otherMonth: true, iso: new Date(year, month - 1, d).toISOString().slice(0, 10) });
-    }
-    for (let d = 1; d <= daysInMonth; d += 1) {
-      out.push({ day: d, otherMonth: false, iso: new Date(year, month, d).toISOString().slice(0, 10) });
-    }
-    while (out.length % 7 !== 0) {
-      const d = out.length - (first + daysInMonth) + 1;
-      out.push({ day: d, otherMonth: true, iso: new Date(year, month + 1, d).toISOString().slice(0, 10) });
-    }
-    return out;
+    return createLocalMonthCells(year, month);
   }, [month, year]);
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localDateKey();
 
   function move(delta: number) {
     const next = new Date(year, month + delta, 1);
