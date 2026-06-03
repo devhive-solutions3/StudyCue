@@ -7,6 +7,13 @@ import { createPortal } from 'react-dom';
 import type { ClassItem } from '@studycue/types';
 
 import { useMirror } from '@/context/mirror-context';
+import {
+  addLocalDays,
+  createLocalMonthCells,
+  localDateFromKey,
+  localDateKey,
+  type LocalCalendarCell,
+} from '@/lib/local-date';
 import { nextNumericId } from '@/lib/mirror-bootstrap';
 import { withSyncedClasses } from '@/lib/study-task-sync';
 
@@ -16,13 +23,15 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const HOUR_HEIGHT = 76;
 const MIN_EVENT_HEIGHT = 32;
+const WEEK_EVENT_MIN_HEIGHT = 48;
+const STACKED_EVENT_GAP = 4;
 const EVENT_TYPES = ['class', 'study', 'quiz', 'exam', 'deadline'] as const;
 const RECURRENCES = ['once', 'weekly', 'monthly', 'yearly'] as const;
 
 type CalendarView = 'day' | 'week' | 'month';
 type EventType = (typeof EVENT_TYPES)[number];
 type Recurrence = (typeof RECURRENCES)[number];
-type Cell = { day: number; otherMonth: boolean; iso: string };
+type Cell = LocalCalendarCell;
 type EventDraft = {
   id?: number;
   title: string;
@@ -43,11 +52,20 @@ type CalendarEvent = EventDraft & {
   createdAt?: string | null;
   updatedAt?: string | null;
 };
+type TimedEventLayout = {
+  event: CalendarEvent;
+  events: CalendarEvent[];
+  key: string;
+  column: number;
+  columnCount: number;
+  stackIndex: number;
+  layout: 'columns' | 'stack';
+};
 
 const EMPTY_DRAFT: EventDraft = {
   title: '',
   type: 'class',
-  date: localIso(new Date()),
+  date: localDateKey(),
   startTime: '09:00',
   endTime: '10:00',
   location: '',
@@ -56,28 +74,14 @@ const EMPTY_DRAFT: EventDraft = {
   notes: '',
 };
 
-function localIso(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function dateFromIso(iso: string) {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1);
-}
-
 function addDays(iso: string, days: number) {
-  const d = dateFromIso(iso);
-  d.setDate(d.getDate() + days);
-  return localIso(d);
+  return addLocalDays(iso, days);
 }
 
 function startOfWeek(iso: string) {
-  const d = dateFromIso(iso);
+  const d = localDateFromKey(iso);
   d.setDate(d.getDate() - d.getDay() + 1);
-  return localIso(d);
+  return localDateKey(d);
 }
 
 function endOfWeek(iso: string) {
@@ -95,22 +99,7 @@ function rangeDays(startIso: string, endIso: string) {
 }
 
 function createCells(year: number, month: number): Cell[] {
-  const first = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const prevDays = new Date(year, month, 0).getDate();
-  const out: Cell[] = [];
-  for (let i = 0; i < first; i += 1) {
-    const d = prevDays - first + 1 + i;
-    out.push({ day: d, otherMonth: true, iso: localIso(new Date(year, month - 1, d)) });
-  }
-  for (let d = 1; d <= daysInMonth; d += 1) {
-    out.push({ day: d, otherMonth: false, iso: localIso(new Date(year, month, d)) });
-  }
-  while (out.length % 7 !== 0) {
-    const d = out.length - (first + daysInMonth) + 1;
-    out.push({ day: d, otherMonth: true, iso: localIso(new Date(year, month + 1, d)) });
-  }
-  return out;
+  return createLocalMonthCells(year, month);
 }
 
 function normalizeType(raw: string | null | undefined): EventType {
@@ -134,9 +123,9 @@ function eventDate(row: ClassItem) {
     const diff = weekdayIndex - today.getDay();
     const d = new Date(today);
     d.setDate(today.getDate() + diff);
-    return localIso(d);
+    return localDateKey(d);
   }
-  return localIso(new Date());
+  return localDateKey();
 }
 
 function normalizeEvent(row: ClassItem, occurrenceIso?: string): CalendarEvent | null {
@@ -150,7 +139,7 @@ function normalizeEvent(row: ClassItem, occurrenceIso?: string): CalendarEvent |
     title: row.title.trim(),
     type: normalizeType(row.eventType),
     date,
-    weekday: row.weekday ?? WEEKDAY_NAMES[dateFromIso(date).getDay()],
+    weekday: row.weekday ?? WEEKDAY_NAMES[localDateFromKey(date).getDay()],
     startTime: row.startTime,
     endTime: row.endTime,
     location: row.location ?? '',
@@ -164,8 +153,8 @@ function normalizeEvent(row: ClassItem, occurrenceIso?: string): CalendarEvent |
 }
 
 function eventOccursOnDate(event: CalendarEvent, iso: string) {
-  const base = dateFromIso(event.date);
-  const target = dateFromIso(iso);
+  const base = localDateFromKey(event.date);
+  const target = localDateFromKey(iso);
   if (iso < event.date) return false;
   if (event.recurrence === 'once') return iso === event.date;
   if (event.recurrence === 'weekly') return base.getDay() === target.getDay();
@@ -187,9 +176,51 @@ function getEventHeight(startTime: string, endTime: string) {
   return Math.max((durationMinutes / 60) * HOUR_HEIGHT, MIN_EVENT_HEIGHT);
 }
 
-function mergeOverlapClusters(events: CalendarEvent[]): CalendarEvent[][] {
-  const clusters: CalendarEvent[][] = [];
-  for (const event of events) {
+type TimedEventRenderGroup = {
+  key: string;
+  event: CalendarEvent;
+  events: CalendarEvent[];
+  startTime: string;
+  endTime: string;
+};
+
+function renderGroupKey(event: CalendarEvent) {
+  return `${event.occurrenceIso || event.date}-${event.startTime}-${event.endTime}`;
+}
+
+function groupExactTimeEvents(events: CalendarEvent[], summarizeExactMatches: boolean) {
+  if (!summarizeExactMatches) {
+    return dedupeEvents(events).map((event) => ({
+      key: renderEventKey(event),
+      event,
+      events: [event],
+      startTime: event.startTime,
+      endTime: event.endTime,
+    }));
+  }
+
+  const byTime = new Map<string, CalendarEvent[]>();
+  for (const event of dedupeEvents(events)) {
+    const key = renderGroupKey(event);
+    byTime.set(key, [...(byTime.get(key) ?? []), event]);
+  }
+
+  return [...byTime.entries()].map(([key, groupedEvents]) => {
+    const sortedEvents = sortEvents(groupedEvents);
+    const event = sortedEvents[0];
+    return {
+      key,
+      event,
+      events: sortedEvents,
+      startTime: event.startTime,
+      endTime: event.endTime,
+    };
+  });
+}
+
+function mergeOverlapClusters(groups: TimedEventRenderGroup[]): TimedEventRenderGroup[][] {
+  const clusters: TimedEventRenderGroup[][] = [];
+  for (const event of groups) {
     const matchIndices = clusters
       .map((cluster, index) => (cluster.some((existing) => overlaps(existing, event)) ? index : -1))
       .filter((index) => index >= 0);
@@ -204,18 +235,28 @@ function mergeOverlapClusters(events: CalendarEvent[]): CalendarEvent[][] {
       clusters[primary].push(...clusters[idx]);
       clusters.splice(idx, 1);
     }
-    clusters[primary] = [...new Map(clusters[primary].map((row) => [row.id, row])).values()];
+    clusters[primary] = [...new Map(clusters[primary].map((row) => [row.key, row])).values()];
   }
   return clusters;
 }
 
-function layoutTimedEventsForDay(events: CalendarEvent[]) {
+function layoutTimedEventsForDay(
+  events: CalendarEvent[],
+  options: { stackOverlaps?: boolean; summarizeExactMatches?: boolean } = {},
+) {
   if (!events.length) return [];
-  const layouts: Array<{ event: CalendarEvent; column: number; columnCount: number }> = [];
-  for (const cluster of mergeOverlapClusters(events)) {
-    const sorted = [...cluster].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime) || a.id - b.id);
+  const layouts: TimedEventLayout[] = [];
+  const renderGroups = groupExactTimeEvents(events, Boolean(options.summarizeExactMatches));
+  for (const cluster of mergeOverlapClusters(renderGroups)) {
+    const sorted = [...cluster].sort(
+      (a, b) =>
+        toMinutes(a.startTime) - toMinutes(b.startTime) ||
+        toMinutes(a.endTime) - toMinutes(b.endTime) ||
+        a.event.title.localeCompare(b.event.title) ||
+        a.event.id - b.event.id,
+    );
     const columnEnds: number[] = [];
-    const assigned: Array<{ event: CalendarEvent; column: number }> = [];
+    const assigned: Array<{ group: TimedEventRenderGroup; column: number }> = [];
     for (const event of sorted) {
       const start = toMinutes(event.startTime);
       const end = toMinutes(event.endTime);
@@ -226,14 +267,44 @@ function layoutTimedEventsForDay(events: CalendarEvent[]) {
       } else {
         columnEnds[column] = end;
       }
-      assigned.push({ event, column });
+      assigned.push({ group: event, column });
     }
     const columnCount = Math.max(columnEnds.length, 1);
+    if ((options.stackOverlaps && columnCount > 1) || columnCount > 4) {
+      sorted.forEach((group, stackIndex) => {
+        layouts.push({
+          event: group.event,
+          events: group.events,
+          key: group.key,
+          column: 0,
+          columnCount: 1,
+          stackIndex,
+          layout: 'stack',
+        });
+      });
+      continue;
+    }
     for (const row of assigned) {
-      layouts.push({ event: row.event, column: row.column, columnCount });
+      layouts.push({
+        event: row.group.event,
+        events: row.group.events,
+        key: row.group.key,
+        column: row.column,
+        columnCount,
+        stackIndex: 0,
+        layout: 'columns',
+      });
     }
   }
-  return layouts;
+  return layouts.sort(
+    (a, b) =>
+      toMinutes(a.event.startTime) - toMinutes(b.event.startTime) ||
+      toMinutes(a.event.endTime) - toMinutes(b.event.endTime) ||
+      a.stackIndex - b.stackIndex ||
+      a.column - b.column ||
+      a.event.title.localeCompare(b.event.title) ||
+      a.event.id - b.event.id,
+  );
 }
 
 function timeLabel(time: string) {
@@ -245,6 +316,104 @@ function timeLabel(time: string) {
 
 function timeRange(event: Pick<CalendarEvent, 'startTime' | 'endTime'>) {
   return `${timeLabel(event.startTime)}–${timeLabel(event.endTime)}`;
+}
+
+function renderEventKey(event: CalendarEvent) {
+  return `${event.occurrenceIso || event.date}-${event.id}`;
+}
+
+function eventFreshness(event: CalendarEvent) {
+  return event.updatedAt ?? event.createdAt ?? '';
+}
+
+function dedupeEvents(events: CalendarEvent[]) {
+  const byIdentity = new Map<string, CalendarEvent>();
+
+  for (const event of events) {
+    const key = renderEventKey(event);
+    const existing = byIdentity.get(key);
+    if (!existing || eventFreshness(event) > eventFreshness(existing)) {
+      byIdentity.set(key, event);
+    }
+  }
+
+  return [...byIdentity.values()];
+}
+
+function replacementParentIdsForDate(events: CalendarEvent[], occurrences: CalendarEvent[]) {
+  const parentById = new Map(events.map((event) => [event.id, event]));
+  const replacements = new Set<number>();
+
+  for (const occurrence of occurrences) {
+    const parentId = Number(occurrence.parentEventId);
+    if (!Number.isFinite(parentId) || parentId === occurrence.id) continue;
+    const parent = parentById.get(parentId);
+    if (!parent || parent.recurrence === 'once') continue;
+    if (parent.type === occurrence.type) {
+      replacements.add(parentId);
+    }
+  }
+
+  return replacements;
+}
+
+function sortEvents(events: CalendarEvent[]) {
+  return [...events].sort(
+    (a, b) =>
+      toMinutes(a.startTime) - toMinutes(b.startTime) ||
+      toMinutes(a.endTime) - toMinutes(b.endTime) ||
+      a.title.localeCompare(b.title) ||
+      a.id - b.id,
+  );
+}
+
+function buildEventsForDate(events: CalendarEvent[], iso: string) {
+  const occurrences = events
+    .filter((event) => eventOccursOnDate(event, iso))
+    .map((event) => ({ ...event, occurrenceIso: iso }));
+  const replacementParentIds = replacementParentIdsForDate(events, occurrences);
+  const normalizedOccurrences = occurrences.filter(
+    (event) => !(event.recurrence !== 'once' && replacementParentIds.has(event.id)),
+  );
+
+  return sortEvents(dedupeEvents(normalizedOccurrences));
+}
+
+function buildEventsByDate(events: CalendarEvent[], dayIsos: string[]) {
+  const byDate = new Map<string, CalendarEvent[]>();
+  for (const iso of dayIsos) {
+    byDate.set(iso, buildEventsForDate(events, iso));
+  }
+  return byDate;
+}
+
+function getEventsFromSource(eventsByDate: Map<string, CalendarEvent[]>, iso: string) {
+  return eventsByDate.get(iso) ?? [];
+}
+
+function countEventsInSource(eventsByDate: Map<string, CalendarEvent[]>) {
+  let count = 0;
+  for (const events of eventsByDate.values()) {
+    count += events.length;
+  }
+  return count;
+}
+
+function normalizeEvents(rows: ClassItem[]) {
+  const byId = new Map<number, CalendarEvent>();
+
+  for (const row of rows) {
+    const event = normalizeEvent(row);
+    if (!event) {
+      continue;
+    }
+    const existing = byId.get(event.id);
+    if (!existing || eventFreshness(event) > eventFreshness(existing)) {
+      byId.set(event.id, event);
+    }
+  }
+
+  return [...byId.values()];
 }
 
 function typeStyle(type: EventType) {
@@ -267,29 +436,22 @@ function recurrenceLabel(recurrence: Recurrence) {
 }
 
 function getEventsForDate(events: CalendarEvent[], iso: string) {
-  return events
-    .filter((event) => eventOccursOnDate(event, iso))
-    .map((event) => ({ ...event, occurrenceIso: iso }))
-    .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+  return buildEventsForDate(events, iso);
 }
 
-function getEventsForRange(events: CalendarEvent[], startIso: string, endIso: string) {
-  return rangeDays(startIso, endIso).flatMap((iso) => getEventsForDate(events, iso));
-}
-
-function overlaps(a: Pick<CalendarEvent | EventDraft, 'startTime' | 'endTime'>, b: Pick<CalendarEvent | EventDraft, 'startTime' | 'endTime'>) {
+function overlaps(a: Pick<EventDraft, 'startTime' | 'endTime'>, b: Pick<EventDraft, 'startTime' | 'endTime'>) {
   return toMinutes(a.startTime) < toMinutes(b.endTime) && toMinutes(a.endTime) > toMinutes(b.startTime);
 }
 
 function TimedCalendarGrid({
   dayIsos,
-  events,
+  eventsByDate,
   selectedIso,
   onSelectDay,
   onOpenEvent,
 }: {
   dayIsos: string[];
-  events: CalendarEvent[];
+  eventsByDate: Map<string, CalendarEvent[]>;
   selectedIso: string;
   onSelectDay: (iso: string) => void;
   onOpenEvent: (event: CalendarEvent) => void;
@@ -309,7 +471,7 @@ function TimedCalendarGrid({
               onClick={() => onSelectDay(iso)}
               className={`min-w-0 border-b border-border px-1 py-3 text-center text-[11px] font-extrabold sm:px-3 sm:text-xs ${iso === selectedIso ? 'text-accent' : 'text-text-muted'}`}
             >
-              {DAY_LABELS[dateFromIso(iso).getDay()]} {dateFromIso(iso).getDate()}
+              {DAY_LABELS[localDateFromKey(iso).getDay()]} {localDateFromKey(iso).getDate()}
             </button>
           ))}
         </div>
@@ -323,7 +485,10 @@ function TimedCalendarGrid({
           </div>
           <div className={isWeek ? 'grid min-w-0 flex-1 grid-cols-7' : 'min-w-0 flex-1'}>
             {dayIsos.map((iso) => {
-              const dayLayouts = layoutTimedEventsForDay(getEventsForDate(events, iso));
+              const dayLayouts = layoutTimedEventsForDay(getEventsFromSource(eventsByDate, iso), {
+                stackOverlaps: isWeek,
+                summarizeExactMatches: isWeek,
+              });
               return (
                 <div
                   key={iso}
@@ -331,28 +496,47 @@ function TimedCalendarGrid({
                   style={{ height: gridHeight }}
                   onClick={() => onSelectDay(iso)}
                 >
-                  {dayLayouts.map(({ event, column, columnCount }) => {
+                  {dayLayouts.map(({ event, events, key, column, columnCount, stackIndex, layout }) => {
                     const colors = typeStyle(event.type);
+                    const stacked = layout === 'stack';
+                    const groupedCount = events.length;
+                    const eventHeight = isWeek
+                      ? Math.max(getEventHeight(event.startTime, event.endTime), WEEK_EVENT_MIN_HEIGHT)
+                      : getEventHeight(event.startTime, event.endTime);
                     const widthExpr = `((100% - 16px) / ${columnCount})`;
                     return (
                       <button
-                        key={`${iso}-${event.id}`}
+                        key={key}
                         type="button"
                         className="calendar-event-block"
+                        data-layout={layout}
+                        data-grouped={groupedCount > 1 ? 'true' : 'false'}
                         style={{
-                          top: getEventTop(event.startTime),
-                          height: getEventHeight(event.startTime, event.endTime),
-                          left: `calc(8px + ${column} * ${widthExpr})`,
-                          width: `calc(${widthExpr})`,
+                          top: stacked
+                            ? getEventTop(event.startTime) + stackIndex * (WEEK_EVENT_MIN_HEIGHT + STACKED_EVENT_GAP)
+                            : getEventTop(event.startTime),
+                          height: stacked ? WEEK_EVENT_MIN_HEIGHT : eventHeight,
+                          left: stacked ? 8 : `calc(8px + ${column} * ${widthExpr})`,
+                          width: stacked ? 'calc(100% - 16px)' : `calc(${widthExpr})`,
                           background: colors.background,
                           color: colors.color,
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onOpenEvent(event);
+                          onSelectDay(event.occurrenceIso || event.date);
+                          if (groupedCount === 1) {
+                            onOpenEvent(event);
+                          }
                         }}
                       >
-                        <p className="calendar-event-title truncate">{event.title}</p>
+                        <span className="calendar-event-main-row">
+                          <span className="calendar-event-title truncate">{event.title}</span>
+                          {groupedCount > 1 ? (
+                            <span className="calendar-event-count-pill">
+                              +{groupedCount - 1} more
+                            </span>
+                          ) : null}
+                        </span>
                         <p className="calendar-event-time">{timeRange(event)}</p>
                       </button>
                     );
@@ -384,37 +568,43 @@ function resolveMasterEventId(event: Pick<CalendarEvent, 'id' | 'parentEventId' 
 
 export default function MonthCalendarBoard() {
   const { mirror, commitMirror, persistNow } = useMirror();
-  const todayIso = localIso(new Date());
+  const todayIso = localDateKey();
   const [selectedIso, setSelectedIso] = useState(todayIso);
   const [calendarView, setCalendarView] = useState<CalendarView>('week');
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<EventDraft>({ ...EMPTY_DRAFT, date: todayIso });
   const [conflicts, setConflicts] = useState<CalendarEvent[] | null>(null);
 
-  const selectedDate = dateFromIso(selectedIso);
+  const selectedDate = localDateFromKey(selectedIso);
   const month = selectedDate.getMonth();
   const year = selectedDate.getFullYear();
   const cells = createCells(year, month);
-  const normalizedEvents = useMemo(
-    () => mirror.classes.map((row) => normalizeEvent(row)).filter((row): row is CalendarEvent => row != null),
-    [mirror.classes],
-  );
-  const selectedEvents = useMemo(() => getEventsForDate(normalizedEvents, selectedIso), [normalizedEvents, selectedIso]);
+  const normalizedEvents = useMemo(() => normalizeEvents(mirror.classes), [mirror.classes]);
   const weekStart = startOfWeek(selectedIso);
   const weekEnd = endOfWeek(selectedIso);
   const weekDays = useMemo(() => rangeDays(weekStart, weekEnd), [weekStart, weekEnd]);
+  const selectedDayEventsByDate = useMemo(
+    () => buildEventsByDate(normalizedEvents, [selectedIso]),
+    [normalizedEvents, selectedIso],
+  );
+  const weekEventsByDate = useMemo(
+    () => buildEventsByDate(normalizedEvents, weekDays),
+    [normalizedEvents, weekDays],
+  );
+  const monthEventsByDate = buildEventsByDate(normalizedEvents, cells.map((cell) => cell.iso));
+  const selectedEvents = getEventsFromSource(selectedDayEventsByDate, selectedIso);
   const visibleEventCount =
     calendarView === 'day'
-      ? getEventsForDate(normalizedEvents, selectedIso).length
+      ? countEventsInSource(selectedDayEventsByDate)
       : calendarView === 'week'
-        ? getEventsForRange(normalizedEvents, weekStart, weekEnd).length
-        : getEventsForRange(normalizedEvents, cells[0]?.iso ?? selectedIso, cells[cells.length - 1]?.iso ?? selectedIso).length;
+        ? countEventsInSource(weekEventsByDate)
+        : countEventsInSource(monthEventsByDate);
   function move(delta: number) {
     if (calendarView === 'day') setSelectedIso(addDays(selectedIso, delta));
     if (calendarView === 'week') setSelectedIso(addDays(selectedIso, delta * 7));
     if (calendarView === 'month') {
       const next = new Date(year, month + delta, selectedDate.getDate());
-      setSelectedIso(localIso(next));
+      setSelectedIso(localDateKey(next));
     }
   }
 
@@ -477,7 +667,7 @@ export default function MonthCalendarBoard() {
       const row: ClassItem = {
         id: cleaned.id ?? nextNumericId(prev.classes),
         title: cleaned.title,
-        weekday: WEEKDAY_NAMES[dateFromIso(cleaned.date).getDay()],
+        weekday: WEEKDAY_NAMES[localDateFromKey(cleaned.date).getDay()],
         startTime: cleaned.startTime,
         endTime: cleaned.endTime,
         location: cleaned.location || null,
@@ -549,7 +739,7 @@ export default function MonthCalendarBoard() {
     calendarView === 'day'
       ? selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
       : calendarView === 'week'
-        ? `Week of ${dateFromIso(weekStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}–${dateFromIso(weekEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+        ? `Week of ${localDateFromKey(weekStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}–${localDateFromKey(weekEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
         : `${MONTHS[month]} ${year}`;
 
   return (
@@ -605,7 +795,7 @@ export default function MonthCalendarBoard() {
                   <span key={d} className="py-1 text-xs font-medium text-text-muted">{d}</span>
                 ))}
                 {cells.map((cell) => {
-                  const events = getEventsForDate(normalizedEvents, cell.iso);
+                  const events = getEventsFromSource(monthEventsByDate, cell.iso);
                   return (
                     <div
                       key={cell.iso}
@@ -625,7 +815,7 @@ export default function MonthCalendarBoard() {
                         {events.slice(0, 2).map((event) => (
                           <button
                             type="button"
-                            key={`${cell.iso}-${event.id}`}
+                            key={renderEventKey(event)}
                             onClick={(e) => {
                               e.stopPropagation();
                               openEdit(event);
@@ -645,7 +835,7 @@ export default function MonthCalendarBoard() {
             ) : (
               <TimedCalendarGrid
                 dayIsos={calendarView === 'week' ? weekDays : [selectedIso]}
-                events={normalizedEvents}
+                eventsByDate={calendarView === 'week' ? weekEventsByDate : selectedDayEventsByDate}
                 selectedIso={selectedIso}
                 onSelectDay={setSelectedIso}
                 onOpenEvent={openEdit}
@@ -665,7 +855,7 @@ export default function MonthCalendarBoard() {
                 <p className="text-xs text-text-muted">No events for this date.</p>
               ) : (
                 selectedEvents.map((event) => (
-                  <div key={event.id} className="rounded-[16px] border border-border bg-surface-2 p-4">
+                  <div key={renderEventKey(event)} className="rounded-[16px] border border-border bg-surface-2 p-4">
                     <span className="rounded-full px-2 py-1 text-[10px] font-extrabold" style={typeStyle(event.type)}>{typeLabel(event.type)}</span>
                     <p className="mt-3 font-extrabold text-text-primary">{event.title}</p>
                     <p className="mt-1 text-xs text-text-muted">{timeRange(event)} · {recurrenceLabel(event.recurrence)}</p>
@@ -794,7 +984,7 @@ export default function MonthCalendarBoard() {
             </div>
             <div className="mt-3 space-y-2">
               {conflicts.map((event) => (
-                <div key={event.id} className="rounded-[14px] border border-border px-3 py-2 text-sm text-text-secondary">
+                <div key={renderEventKey(event)} className="rounded-[14px] border border-border px-3 py-2 text-sm text-text-secondary">
                   {event.title} · {timeRange(event)}
                 </div>
               ))}

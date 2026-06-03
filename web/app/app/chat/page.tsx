@@ -41,6 +41,7 @@ export default function ChatRoutePage() {
   const { allowed: studyToolsAllowed, loading: studyToolsPlanLoading } = usePremiumStudyTools();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const studyFileInputRef = React.useRef<HTMLInputElement>(null);
+  const messagesRef = React.useRef<HTMLDivElement>(null);
 
   const [msgs, setMsgs] = React.useState<CueMsg[]>([{ role: 'cue', text: 'Hi! I can help you plan your week, tasks, and study schedule.' }]);
   const [input, setInput] = React.useState('');
@@ -62,6 +63,12 @@ export default function ChatRoutePage() {
   React.useEffect(() => {
     document.getElementById('cue-input')?.focus();
   }, []);
+
+  React.useEffect(() => {
+    const node = messagesRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' });
+  }, [msgs, busy]);
 
   React.useEffect(() => {
     return () => revokeCueScheduleImagePreview(pendingImage);
@@ -282,7 +289,7 @@ export default function ChatRoutePage() {
   return (
     <div className="mx-auto grid w-full min-w-0 max-w-full gap-6 xl:max-w-[1080px] xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,360px)]">
       <section
-        className="flex min-h-[640px] min-w-0 flex-col overflow-hidden"
+        className="flex h-[min(720px,calc(100dvh-120px))] min-h-0 min-w-0 flex-col overflow-hidden"
         style={{
           background: 'color-mix(in srgb, var(--sc-surface) 88%, transparent)',
           border: '1px solid var(--sc-border)',
@@ -291,7 +298,7 @@ export default function ChatRoutePage() {
         }}
       >
         <div
-          className="flex items-center justify-between gap-5 px-6 pb-[18px] pt-6"
+          className="flex shrink-0 items-center justify-between gap-5 px-6 pb-[18px] pt-6"
           style={{ borderBottom: '1px solid var(--sc-border)' }}
         >
           <div className="flex items-center gap-3">
@@ -334,7 +341,10 @@ export default function ChatRoutePage() {
             Include my schedule details
           </label>
         </div>
-        <div className="flex min-h-[320px] flex-1 flex-col gap-3.5 overflow-y-auto px-6 py-5 text-[14.5px] leading-[1.55] text-text-primary">
+        <div
+          ref={messagesRef}
+          className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-6 py-5 text-[14.5px] leading-[1.55] text-text-primary"
+        >
           <CueRecentStudyTools />
           {msgs.map((m, idx) =>
             m.role === 'cue' ? (
@@ -402,7 +412,7 @@ export default function ChatRoutePage() {
         </div>
 
         <form
-          className="mt-auto px-6 pb-6 pt-[18px]"
+          className="sticky bottom-0 mt-auto shrink-0 bg-surface/95 px-6 pb-6 pt-[18px] backdrop-blur"
           style={{ borderTop: '1px solid var(--sc-border)' }}
           onSubmit={(evt) => {
             evt.preventDefault();
@@ -566,7 +576,7 @@ export default function ChatRoutePage() {
       </section>
 
       <aside
-        className="min-h-[640px] p-6 text-xs text-text-secondary max-xl:hidden"
+        className="h-[min(720px,calc(100dvh-120px))] min-h-0 overflow-y-auto p-6 text-xs text-text-secondary max-xl:hidden"
         style={{
           background: 'var(--sc-surface)',
           border: '1px solid var(--sc-border)',

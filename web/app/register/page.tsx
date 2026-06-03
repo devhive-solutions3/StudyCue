@@ -6,17 +6,21 @@ import * as React from 'react';
 import { Suspense } from 'react';
 
 import PasswordField from '@/components/forms/PasswordField';
+import TermsPrivacyAgreementModal from '@/components/legal/TermsPrivacyAgreementModal';
 import { authErrorMessage } from '@/lib/auth-error-message';
 import { authRateLimitMessage, consumeAuthAttempt } from '@/lib/client-auth-rate-limit';
 import {
+  acceptCurrentLegalTerms,
   completeGoogleRedirectSignIn,
   registerEmail,
   signInGoogleWeb,
   useWebAuth,
 } from '@/lib/firebase-client';
+import { buildLegalAcceptancePayload, type LegalAcceptancePayload } from '@/lib/legal-consent';
 
 const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const IS_DEV = process.env.NODE_ENV !== 'production';
+const PENDING_LEGAL_ACCEPTANCE_KEY = 'studycue.pendingLegalAcceptance';
 
 export default function RegisterPage() {
   return (
@@ -43,6 +47,10 @@ function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [busyGoogle, setBusyGoogle] = React.useState(false);
   const [busyEmail, setBusyEmail] = React.useState(false);
+  const [busyLegal, setBusyLegal] = React.useState(false);
+  const [legalAccepted, setLegalAccepted] = React.useState(false);
+  const [legalModalOpen, setLegalModalOpen] = React.useState(false);
+  const [legalErr, setLegalErr] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -52,6 +60,14 @@ function RegisterForm() {
         const signedIn = await completeGoogleRedirectSignIn();
         if (cancelled || !signedIn) return;
         if (IS_DEV) console.info('Firebase Google redirect registration succeeded');
+        const pendingAcceptance = readPendingLegalAcceptance();
+        if (!pendingAcceptance) {
+          setLegalErr('Please read and accept the Terms of Use and Privacy Policy to continue.');
+          setLegalModalOpen(true);
+          return;
+        }
+        await acceptCurrentLegalTerms(pendingAcceptance);
+        clearPendingLegalAcceptance();
         await syncSessionCookie();
         if (IS_DEV) console.info('/api/session sync completed after Google redirect registration');
         router.replace(next);
@@ -74,6 +90,16 @@ function RegisterForm() {
     redirectingRef.current = true;
     void (async () => {
       try {
+        const pendingAcceptance = readPendingLegalAcceptance();
+        if (pendingAcceptance) {
+          await acceptCurrentLegalTerms(pendingAcceptance);
+          clearPendingLegalAcceptance();
+        } else if (!legalAccepted) {
+          redirectingRef.current = false;
+          setLegalErr('Please read and accept the Terms of Use and Privacy Policy to continue.');
+          setLegalModalOpen(true);
+          return;
+        }
         if (IS_DEV) console.info('Firebase auth state ready; syncing secure session');
         await syncSessionCookie();
         if (IS_DEV) console.info('/api/session sync completed after auth state change');
@@ -84,24 +110,34 @@ function RegisterForm() {
         setErr('Could not start your secure session. Please try again.');
       }
     })();
-  }, [ready, authLoading, user, next, router, syncSessionCookie]);
+  }, [ready, authLoading, user, legalAccepted, next, router, syncSessionCookie]);
 
   async function onGoogle() {
+    if (!legalAccepted) {
+      setLegalErr('Please read and accept the Terms of Use and Privacy Policy to continue.');
+      return;
+    }
     setBusyGoogle(true);
     setErr(null);
+    setLegalErr(null);
     try {
       const rate = consumeAuthAttempt('register');
       if (!rate.allowed) {
         setErr(authRateLimitMessage(rate.retryAfterMs));
         return;
       }
+      const acceptance = buildLegalAcceptancePayload();
+      writePendingLegalAcceptance(acceptance);
       const result = await signInGoogleWeb();
       if (result.mode === 'redirect-started') return;
       if (IS_DEV) console.info('Firebase Google popup registration succeeded', { uid: result.user.uid });
+      await acceptCurrentLegalTerms(acceptance);
+      clearPendingLegalAcceptance();
       await syncSessionCookie(result.user);
       if (IS_DEV) console.info('/api/session sync completed after Google popup registration');
       router.replace(next);
     } catch (e) {
+      clearPendingLegalAcceptance();
       if (IS_DEV) console.warn('/api/session sync failed after Google popup registration', e);
       setErr(authErrorMessage(e, 'google'));
     } finally {
@@ -112,6 +148,11 @@ function RegisterForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    setLegalErr(null);
+    if (!legalAccepted) {
+      setLegalErr('Please read and accept the Terms of Use and Privacy Policy to continue.');
+      return;
+    }
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !SIMPLE_EMAIL_RE.test(trimmedEmail) || trimmedEmail.length > 254) {
       setErr('Enter a valid email address.');
@@ -140,6 +181,7 @@ function RegisterForm() {
         trimmedEmail,
         password,
         name.trim() || (trimmedEmail.split('@')[0] ?? 'Planner'),
+        buildLegalAcceptancePayload(),
       );
       if (IS_DEV) console.info('Firebase email registration succeeded', { uid: createdUser.uid });
       await syncSessionCookie(createdUser);
@@ -186,6 +228,19 @@ function RegisterForm() {
             {err}
           </p>
         ) : null}
+        {legalErr ? (
+          <p
+            className="mt-4 px-3 py-2 text-xs"
+            style={{
+              background: 'var(--sc-danger-soft)',
+              color: 'var(--sc-danger)',
+              border: '1px solid var(--sc-border)',
+              borderRadius: 'var(--sc-radius-sm)',
+            }}
+          >
+            {legalErr}
+          </p>
+        ) : null}
 
         <button
           type="button"
@@ -224,6 +279,43 @@ function RegisterForm() {
             minLength={6}
             inputClassName="sc-input pr-12"
           />
+          <div className="rounded-[16px] border border-border bg-surface-2 px-3 py-3">
+            <label className="flex items-start gap-3 text-xs leading-6 text-text-secondary">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={legalAccepted}
+                disabled={!legalAccepted}
+                required
+                onChange={(event) => {
+                  setLegalAccepted(event.target.checked);
+                  if (event.target.checked) setLegalErr(null);
+                }}
+              />
+              <span>
+                I have read and agree to the{' '}
+                <Link href="/terms" className="font-semibold text-accent underline underline-offset-4">
+                  Terms of Use
+                </Link>{' '}
+                and{' '}
+                <Link href="/privacy" className="font-semibold text-accent underline underline-offset-4">
+                  Privacy Policy
+                </Link>
+                .{' '}
+                <Link href="/cookies" className="font-semibold text-accent underline underline-offset-4">
+                  Cookies Policy
+                </Link>
+                .
+              </span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setLegalModalOpen(true)}
+              className="sc-focus-ring mt-3 rounded-[12px] border border-border px-3 py-2 text-xs font-semibold text-text-primary hover:bg-surface"
+            >
+              Read Conditions
+            </button>
+          </div>
           <button
             disabled={busyEmail}
             type="submit"
@@ -240,8 +332,59 @@ function RegisterForm() {
           </Link>
         </p>
       </div>
+      <TermsPrivacyAgreementModal
+        open={legalModalOpen}
+        busy={busyLegal}
+        onClose={() => setLegalModalOpen(false)}
+        onAgree={async () => {
+          setBusyLegal(true);
+          try {
+            if (user) {
+              await acceptCurrentLegalTerms(buildLegalAcceptancePayload());
+            }
+            setLegalAccepted(true);
+            setLegalErr(null);
+            setLegalModalOpen(false);
+          } catch (error) {
+            setLegalErr(
+              error instanceof Error ? error.message : 'Could not save your acceptance. Please try again.',
+            );
+          } finally {
+            setBusyLegal(false);
+          }
+        }}
+      />
     </div>
   );
+}
+
+function writePendingLegalAcceptance(acceptance: LegalAcceptancePayload) {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.setItem(PENDING_LEGAL_ACCEPTANCE_KEY, JSON.stringify(acceptance));
+}
+
+function readPendingLegalAcceptance(): LegalAcceptancePayload | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_LEGAL_ACCEPTANCE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LegalAcceptancePayload;
+    if (
+      parsed.termsAccepted === true &&
+      parsed.privacyAccepted === true &&
+      parsed.adsDisclosureAccepted === true
+    ) {
+      return parsed;
+    }
+  } catch {
+    /* noop */
+  }
+  return null;
+}
+
+function clearPendingLegalAcceptance() {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.removeItem(PENDING_LEGAL_ACCEPTANCE_KEY);
 }
 
 function normalizeNextPath(next: string | null): string {

@@ -113,9 +113,9 @@ export default function MarketingShell({ children }: { children: ReactNode }) {
             <p className="font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
               Legal
             </p>
-            <FooterLink href="/cookies">Cookies</FooterLink>
-            <FooterLink href="/privacy">Privacy</FooterLink>
-            <FooterLink href="/terms">Terms</FooterLink>
+            <FooterLink href="/terms">Terms of Use</FooterLink>
+            <FooterLink href="/privacy">Privacy Policy</FooterLink>
+            <FooterLink href="/cookies">Cookies Policy</FooterLink>
           </div>
           <div className="space-y-2">
             <p className="font-semibold" style={{ color: 'var(--sc-text-primary)' }}>
