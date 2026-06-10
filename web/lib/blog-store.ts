@@ -38,6 +38,7 @@ export type PublicBlogPost = {
 
 const PRIMARY_BLOG_DIR = path.join(process.cwd(), 'content', 'blog');
 const FALLBACK_BLOG_DIR = path.join(process.cwd(), 'web', 'content', 'blog');
+const MIN_PUBLIC_MARKDOWN_WORDS = 300;
 
 function getBlogDir() {
   if (fs.existsSync(PRIMARY_BLOG_DIR)) return PRIMARY_BLOG_DIR;
@@ -47,6 +48,7 @@ function getBlogDir() {
 function normalizeIso(value: unknown): string | null {
   if (!value) return null;
   if (typeof value === 'string') return value;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
   if (typeof value === 'object' && value && 'toDate' in value && typeof value.toDate === 'function') {
     return value.toDate().toISOString();
   }
@@ -56,6 +58,10 @@ function normalizeIso(value: unknown): string | null {
 function computeReadingMinutes(content: string): number {
   const words = content.trim().split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.round(words / 220));
+}
+
+function computeWordCount(content: string): number {
+  return content.trim().split(/\s+/).filter(Boolean).length;
 }
 
 function normalizeStatus(value: unknown): BlogPostStatus {
@@ -91,9 +97,9 @@ function parseMarkdownPost(slug: string): PublicBlogPost | null {
     parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
       ? (parsed.data as Record<string, unknown>)
       : {};
-  const date =
-    typeof data.date === 'string' ? data.date : typeof data.updated === 'string' ? data.updated : '';
+  const date = normalizeIso(data.date) ?? normalizeIso(data.updated) ?? '';
   if (!date || Boolean(data.draft)) return null;
+  if (computeWordCount(parsed.content ?? '') < MIN_PUBLIC_MARKDOWN_WORDS) return null;
 
   return {
     slug: safeSlug,

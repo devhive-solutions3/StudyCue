@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   alternates: { canonical: canonical('/terms') },
 };
 
+function sectionId(title: string) {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
 const sections = [
   {
     title: 'Acceptance of Terms',
@@ -118,7 +122,7 @@ const sections = [
   {
     title: 'Contact Information',
     body: [
-      'For questions about these Terms, contact hello@studycueplanner.com.',
+      'For questions about these Terms, contact support.studycue@gmail.com.',
     ],
   },
 ];
@@ -132,7 +136,7 @@ export default function TermsPage() {
           Terms of Use
         </h1>
         <p className="mt-4 text-base leading-7 text-text-secondary">
-          Last updated: June 1, 2026
+          Last updated: June 10, 2026
         </p>
         <p className="mt-4 text-base leading-8 text-text-secondary">
           These Terms explain the baseline rules for using StudyCue Planner during beta. They are
@@ -143,7 +147,7 @@ export default function TermsPage() {
 
       <div className="mt-10 space-y-10">
         {sections.map((section) => (
-          <section key={section.title} className="scroll-mt-24">
+          <section key={section.title} id={sectionId(section.title)} className="scroll-mt-24">
             <h2 className="font-serif text-2xl text-text-primary">{section.title}</h2>
             <div className="mt-4 space-y-4 text-base leading-8 text-text-secondary">
               {section.body.map((paragraph) => (

@@ -6,7 +6,8 @@ import { canonical } from '@/lib/site-config';
 
 export const metadata: Metadata = {
   title: 'Blog',
-  description: 'Read study planning guides, product explainers, and student workflow tips from StudyCue Planner.',
+  description:
+    'Read original StudyCue Planner guides for weekly schedules, exam preparation, focus sessions, group projects, notes, tasks, and deadlines.',
   alternates: { canonical: canonical('/blog') },
 };
 
@@ -28,13 +29,14 @@ export default async function BlogIndexPage() {
 
       <div className="rounded-2xl border border-border bg-surface px-5 py-6 shadow-[var(--sc-shadow-card)]">
         <p className="text-text-secondary">
-          StudyCue Planner is a smart study planner for students who want a calmer way to manage schoolwork. It brings
-          your calendar, class schedules, tasks, notes, focus timer, and Cue AI into one clean workspace.
+          StudyCue Planner is a smart study planner for students who want a calmer way to manage schoolwork. These
+          guides focus on practical planning: weekly schedules, exam prep, focus sessions, group projects, notes,
+          tasks, deadlines, and responsible use of Cue AI.
         </p>
         <p className="mt-4 text-text-secondary">
-          Use StudyCue Planner to plan your week, track what needs to be done, organize study materials, and stay
-          focused during review sessions. This blog collects product updates, feature guides, and practical study tips
-          so students can get more value from the planner over time.
+          Each article is written for real student workflows, including online classes, crowded weeks, and projects
+          that require more than a simple to-do list. Related guides link naturally back to StudyCue features where the
+          planner can help.
         </p>
       </div>
 
@@ -43,15 +45,13 @@ export default async function BlogIndexPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-accent">Featured</p>
           <h2 className="mt-3 text-2xl font-semibold text-text-primary">{featuredPost.title}</h2>
           <p className="mt-3 max-w-2xl text-text-secondary">
-            {featuredPost.slug === 'studycue-beta-access'
-              ? 'All current StudyCue features are free to use during beta testing. Sign up now to explore the full StudyCue Planner experience as a beta tester.'
-              : featuredPost.description}
+            {featuredPost.description}
           </p>
           <Link
             href={`/blog/${featuredPost.slug}`}
             className="mt-5 inline-flex rounded-full border border-accent/20 bg-accent-light px-4 py-2 text-sm font-semibold text-accent transition hover:border-accent/35"
           >
-            Read announcement
+            Read guide
           </Link>
         </section>
       ) : null}
@@ -59,8 +59,8 @@ export default async function BlogIndexPage() {
       <section className="rounded-2xl border border-border bg-surface px-5 py-6 shadow-[var(--sc-shadow-card)]">
         <h2 className="text-2xl font-semibold text-text-primary">What you can read here</h2>
         <p className="mt-3 text-text-secondary">
-          Expect posts about active recall, time blocking, class schedule planning, exam preparation, focus habits, and
-          how to use StudyCue Planner for day-to-day schoolwork.
+          Expect original posts about active recall, time blocking, class schedule planning, exam preparation, focus
+          habits, group project planning, and how to use StudyCue Planner for day-to-day schoolwork.
         </p>
       </section>
 

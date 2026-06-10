@@ -5,14 +5,14 @@ import { FREE_PLAN_FEATURES, STUDYCUE_PLUS_FEATURES, USER_PLAN_CONFIG } from '@/
 import { canonical } from '@/lib/site-config';
 
 export const metadata: Metadata = {
-  title: 'StudyCue Plans | Free Beta and Plus',
+  title: 'Pricing',
   description:
-    'Compare StudyCue Free, Beta, and StudyCue Plus plans. Core planning features stay available, with higher limits, no ads, customization, and exports planned for Plus.',
+    'StudyCue Planner pricing: Free at ₱0/month with ads, Beta Plus free during beta where available, and clear notes about future pricing changes.',
   alternates: { canonical: canonical('/pricing') },
   openGraph: {
-    title: 'StudyCue Plans | Free Beta and Plus',
+    title: 'StudyCue Planner Pricing',
     description:
-      'Compare StudyCue Free, Beta, and StudyCue Plus plans. Core planning features stay available, with higher limits, no ads, customization, and exports planned for Plus.',
+      'StudyCue Free is ₱0/month and may include ads. Beta Plus is free during beta where available, with future pricing subject to change.',
     url: canonical('/pricing'),
   },
 };
@@ -21,7 +21,7 @@ const FAQS = [
   {
     question: 'Is StudyCue free during beta?',
     answer:
-      'Yes. During beta, students can create an account and use current StudyCue features while helping test the platform.',
+      'Yes. During beta, students can create an account and use current StudyCue features while helping test the platform. Beta access does not mean all future paid features will remain free forever.',
   },
   {
     question: 'Will Beta users be charged automatically?',
@@ -29,19 +29,24 @@ const FAQS = [
       'No. There is no automatic charge and no payment flow connected right now.',
   },
   {
+    question: 'What does StudyCue Free include?',
+    answer:
+      'StudyCue Free includes the core planner, dashboard, calendar, tasks, basic notes, focus timer, cloud sync, starter storage, limited Cue AI usage, and access to supported study tools within free limits.',
+  },
+  {
+    question: 'Will the Free plan show ads?',
+    answer:
+      'Yes, Free plan experiences may be supported by advertising. Ads help keep StudyCue accessible while the product grows. StudyCue does not add manual ad blocks in the planner content.',
+  },
+  {
     question: 'Is StudyCue Plus available now?',
     answer:
-      'Not yet. StudyCue Plus is planned, and the current Plus button is marked Coming Soon.',
+      'StudyCue Plus is planned. During beta, Beta Plus-style access may be free where enabled, but future paid plans, limits, and features may change before public launch.',
   },
   {
-    question: 'Will core features be locked?',
+    question: 'Will pricing or features change after beta?',
     answer:
-      'Core planning features are intended to stay available. Plus focuses on higher limits, no ads, reports, customization, and future group planning.',
-  },
-  {
-    question: 'What is included in Free?',
-    answer:
-      'Free includes the core planner with starter limits and ads.',
+      'They may. StudyCue is still evolving, so storage limits, Cue AI limits, ad behavior, collaboration tools, exports, reports, and paid plan pricing can change after beta. Any material public changes should be reflected on this page.',
   },
 ] as const;
 
@@ -247,8 +252,19 @@ export default function PricingPage() {
       <section className="rounded-[30px] border border-border bg-surface px-6 py-7 shadow-[var(--sc-shadow-card)] md:px-8">
         <h2 className="text-2xl font-semibold text-text-primary">Core StudyCue features stay available.</h2>
         <p className="mt-4 max-w-4xl text-sm leading-7 text-text-secondary">
-          StudyCue&apos;s main planning workspace stays available across plans. Dashboard, calendar, tasks, basic notes, focus timer, cloud sync, and Cue AI planning context are part of the core experience. Plan differences focus on limits, customization, reports, storage, ads, and future collaboration tools.
+          StudyCue&apos;s main planning workspace stays available across plans. Dashboard, calendar, tasks, basic notes,
+          focus timer, cloud sync, and Cue AI planning context are part of the core experience. StudyCue Free is
+          ₱0/month and may include ads. Beta Plus access, where enabled, is 100% free during beta. Plan differences
+          focus on limits, customization, reports, storage, ads, and future collaboration tools.
         </p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link href="/features" className="rounded-xl border border-border px-4 py-2 text-sm font-semibold text-text-secondary hover:bg-surface-2">
+            Review features
+          </Link>
+          <Link href="/privacy" className="rounded-xl border border-border px-4 py-2 text-sm font-semibold text-text-secondary hover:bg-surface-2">
+            Advertising privacy
+          </Link>
+        </div>
       </section>
 
       <section className="rounded-[30px] border border-border bg-surface px-6 py-7 shadow-[var(--sc-shadow-card)] md:px-8">
