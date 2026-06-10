@@ -165,7 +165,7 @@ function TermsPrivacyAgreementDialog({
 
         <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-text-muted">
-            Last updated: June 1, 2026
+            Last updated: June 10, 2026
           </p>
           <button
             type="button"

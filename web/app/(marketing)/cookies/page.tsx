@@ -61,7 +61,7 @@ const sections = [
   },
   {
     title: 'Contact Information',
-    body: ['For cookie questions, contact hello@studycueplanner.com.'],
+    body: ['For cookie questions, contact support.studycue@gmail.com.'],
   },
 ];
 
@@ -74,7 +74,7 @@ export default function CookiesPage() {
           Cookies Policy
         </h1>
         <p className="mt-4 text-base leading-7 text-text-secondary">
-          Last updated: June 1, 2026
+          Last updated: June 10, 2026
         </p>
         <p className="mt-4 text-base leading-8 text-text-secondary">
           This policy explains how StudyCue Planner uses cookies and similar technologies for app

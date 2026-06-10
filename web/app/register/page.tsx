@@ -285,11 +285,14 @@ function RegisterForm() {
                 type="checkbox"
                 className="mt-1"
                 checked={legalAccepted}
-                disabled={!legalAccepted}
+                readOnly
                 required
-                onChange={(event) => {
-                  setLegalAccepted(event.target.checked);
-                  if (event.target.checked) setLegalErr(null);
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (!legalAccepted) {
+                    setLegalModalOpen(true);
+                    setLegalErr(null);
+                  }
                 }}
               />
               <span>
@@ -305,7 +308,7 @@ function RegisterForm() {
                 <Link href="/cookies" className="font-semibold text-accent underline underline-offset-4">
                   Cookies Policy
                 </Link>
-                .
+                , including the advertising disclosure for the Free plan.
               </span>
             </label>
             <button
@@ -313,7 +316,7 @@ function RegisterForm() {
               onClick={() => setLegalModalOpen(true)}
               className="sc-focus-ring mt-3 rounded-[12px] border border-border px-3 py-2 text-xs font-semibold text-text-primary hover:bg-surface"
             >
-              Read Conditions
+              Read Terms and Privacy
             </button>
           </div>
           <button

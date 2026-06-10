@@ -1,4 +1,4 @@
-export const LEGAL_VERSION = '2026-06-01';
+export const LEGAL_VERSION = '2026-06-10';
 export const TERMS_VERSION = LEGAL_VERSION;
 export const PRIVACY_VERSION = LEGAL_VERSION;
 export const COOKIES_VERSION = LEGAL_VERSION;
